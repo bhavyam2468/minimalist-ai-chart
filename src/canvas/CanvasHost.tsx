@@ -178,8 +178,26 @@ export function CanvasHost({ chatId }: { chatId: string }) {
   }, [sheetH]);
 
   const isVid = isVideo(res?.url);
+  const [pinned, setPinned] = useState(() => {
+    try {
+      return localStorage.getItem("atelier_canvas_pinned") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const togglePin = () => {
+    setPinned((p) => {
+      const next = !p;
+      try { localStorage.setItem("atelier_canvas_pinned", String(next)); } catch {}
+      return next;
+    });
+  };
+
   const [topHover, setTopHover] = useState(false);
   const [bottomHover, setBottomHover] = useState(false);
+  const topTimer = useRef<any>(null);
+  const bottomTimer = useRef<any>(null);
 
   const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
@@ -187,14 +205,47 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     const y = e.clientY - rect.top;
     const bottomY = rect.bottom - e.clientY;
 
-    setTopHover(y <= 46);
-    setBottomHover(bottomY <= 52);
-  }, []);
+    if (y <= 50) {
+      if (topTimer.current) { clearTimeout(topTimer.current); topTimer.current = null; }
+      setTopHover(true);
+    } else {
+      if (!topTimer.current && !pinned) {
+        topTimer.current = setTimeout(() => {
+          setTopHover(false);
+          topTimer.current = null;
+        }, 1000);
+      }
+    }
+
+    if (bottomY <= 54) {
+      if (bottomTimer.current) { clearTimeout(bottomTimer.current); bottomTimer.current = null; }
+      setBottomHover(true);
+    } else {
+      if (!bottomTimer.current && !pinned) {
+        bottomTimer.current = setTimeout(() => {
+          setBottomHover(false);
+          bottomTimer.current = null;
+        }, 1000);
+      }
+    }
+  }, [pinned]);
 
   const onCanvasPointerLeave = useCallback(() => {
-    setTopHover(false);
-    setBottomHover(false);
-  }, []);
+    if (!pinned) {
+      if (!topTimer.current) {
+        topTimer.current = setTimeout(() => {
+          setTopHover(false);
+          topTimer.current = null;
+        }, 1000);
+      }
+      if (!bottomTimer.current) {
+        bottomTimer.current = setTimeout(() => {
+          setBottomHover(false);
+          bottomTimer.current = null;
+        }, 1000);
+      }
+    }
+  }, [pinned]);
 
   const body = useMemo(() => {
     if (!target) return null;
@@ -245,14 +296,18 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     <div
       className="cv-win"
       style={style}
+      data-pinned={pinned ? "true" : "false"}
+      data-top-visible={pinned || topHover ? "true" : "false"}
+      data-bottom-visible={pinned || bottomHover ? "true" : "false"}
       data-top-hover={topHover}
       data-bottom-hover={bottomHover}
       onPointerMove={onCanvasPointerMove}
       onPointerLeave={onCanvasPointerLeave}
     >
-      {/* Integrated Top Window Bar */}
+      {/* Universal Top Window Header Bar */}
       <div
         className="cv-bar"
+        onMouseEnter={() => setTopHover(true)}
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest("button, a, input")) return;
           onPointerDown(e, "move");
@@ -278,6 +333,14 @@ export function CanvasHost({ chatId }: { chatId: string }) {
         <span style={{ flex: 1 }} />
 
         <div className="cv-win-ctrls">
+          <button
+            className={`cv-win-btn ${pinned ? "pinned" : ""}`}
+            data-active={pinned}
+            title={pinned ? "Bars are pinned (click to auto-hide)" : "Pin bars (keep always visible)"}
+            onClick={togglePin}
+          >
+            <I.pin size={12} />
+          </button>
           <button
             className="cv-win-btn"
             title="Reload"

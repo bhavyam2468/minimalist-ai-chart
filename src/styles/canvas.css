@@ -46,22 +46,59 @@
   pointer-events: auto;
 }
 
-/* ---- window top bar ---------------------------------------------------- */
+/* ---- universal top window bar ------------------------------------------ */
 .cv-bar {
   flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 42px;
-  padding: 0 14px 0 16px;
+  height: 38px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 12px 0 16px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--surface);
   cursor: grab;
   user-select: none;
   touch-action: none;
-  z-index: 20;
+  z-index: 60;
+  border-top-left-radius: var(--r);
+  border-top-right-radius: var(--r);
+  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease);
 }
 .cv-bar:active { cursor: grabbing; }
+
+/* In unpinned mode, top bar slides up and auto-hides */
+.cv-win[data-pinned="false"] .cv-bar,
+.cv-win:not([data-pinned="true"]) .cv-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(14, 16, 22, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cv-win[data-top-visible="true"] .cv-bar,
+.cv-win[data-pinned="false"] .cv-bar:hover,
+.cv-win:not([data-pinned="true"]) .cv-bar:hover {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* In pinned mode, top bar is permanently docked */
+.cv-win[data-pinned="true"] .cv-bar {
+  position: relative;
+  transform: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
 
 .cv-bar-left {
   display: inline-flex;
@@ -91,17 +128,17 @@
 .cv-win-ctrls {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 
 .cv-win-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--r-xs);
   background: transparent;
   border: 1px solid transparent;
@@ -116,6 +153,13 @@
   background: rgba(255, 255, 255, 0.08);
   color: var(--text);
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cv-win-btn.pinned,
+.cv-win-btn[data-active="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
 .cv-win-btn.close:hover {
@@ -174,7 +218,7 @@
 .cv-sheet .cv-bar { cursor: default; }
 
 /* ===========================================================================
-   File editor SDK & Contextual Floating Toolbar
+   File editor SDK & Contextual Footer Toolbar
    ========================================================================= */
 .fe {
   display: flex;
@@ -187,40 +231,55 @@
   overflow: hidden;
 }
 
-/* Floating contextual menu aligned to bottom */
+/* Contextual bottom footer bar */
 .fe-bar {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%) translateY(8px);
-  max-width: calc(100% - 36px);
+  flex: none;
+  height: 38px;
+  width: 100%;
   box-sizing: border-box;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px;
-  height: 40px;
-  background: rgba(16, 18, 24, 0.94);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 9999px;
-  box-shadow: 0 14px 40px -4px rgba(0, 0, 0, 0.8), 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  padding: 0 12px 0 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--line-soft);
+  border-bottom-left-radius: var(--r);
+  border-bottom-right-radius: var(--r);
   z-index: 55;
+  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease);
+}
+.fe-bar .grow { flex: 1; display: block; }
+
+/* In unpinned mode, footer slides down and auto-hides */
+.cv-win[data-pinned="false"] .fe-bar,
+.cv-win:not([data-pinned="true"]) .fe-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(14, 16, 22, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(100%);
   opacity: 0;
   pointer-events: none;
-  white-space: nowrap;
-  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
 }
-.fe-bar .grow { display: none; }
 
-/* Show ONLY when hovering bottom edge/area */
-.cv-win[data-bottom-hover="true"] .fe-bar,
-.cv-bottom-edge:hover ~ .cv-body .fe-bar,
-.fe-bar:hover {
+.cv-win[data-bottom-visible="true"] .fe-bar,
+.cv-win[data-pinned="false"] .fe-bar:hover,
+.cv-win:not([data-pinned="true"]) .fe-bar:hover {
+  transform: translateY(0);
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
   pointer-events: auto;
+}
+
+/* In pinned mode, footer is permanently docked at bottom */
+.cv-win[data-pinned="true"] .fe-bar {
+  position: relative;
+  transform: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .fe-tag {
@@ -228,7 +287,7 @@
   font-size: 11.5px;
   color: var(--text-faint);
   letter-spacing: .02em;
-  padding: 0 6px;
+  padding: 0 4px;
   white-space: nowrap;
 }
 
@@ -237,7 +296,7 @@
   align-items: center;
   gap: 2px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
+  border-radius: var(--r-sm);
   padding: 2px;
 }
 
@@ -245,8 +304,8 @@
   font-size: 12px;
   font-family: var(--font-sans);
   font-weight: 480;
-  padding: 4px 12px;
-  border-radius: 9999px;
+  padding: 3px 10px;
+  border-radius: var(--r-xs);
   color: var(--text-faint);
   transition: all var(--t-fast) var(--ease);
   cursor: pointer;
@@ -261,16 +320,16 @@
 }
 
 .fe-seg button[data-active="true"] {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.18);
   color: var(--text);
-  font-weight: 540;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  font-weight: 520;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .fe-bar .icon-btn.sm {
-  width: 28px;
-  height: 28px;
-  border-radius: 9999px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-xs);
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-dim);
@@ -286,9 +345,9 @@
 }
 
 .fe-bar .icon-btn.sm:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .fe-bar .icon-btn.sm[data-active="true"] {

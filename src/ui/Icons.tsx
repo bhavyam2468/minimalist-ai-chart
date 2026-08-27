@@ -36,4 +36,5 @@ export const I = {
   play: s(<><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" /></>),
   wrap: s(<><path d="M4 6h16M4 12h10a3 3 0 0 1 3 3v0a3 3 0 0 1-3 3H10" /><path d="M13 15l-3 3 3 3" /></>),
   save: s(<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></>),
+  pin: s(<><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-2l-2-2V5a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v8l-2 2v2z" /></>),
 };

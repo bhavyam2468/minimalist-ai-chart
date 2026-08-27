@@ -117,6 +117,7 @@ function SheetView({ text, path }: { text: string; path: string }) {
       <div className="fe">
         <div className="fe-bar">
           <span className="fe-tag">{rows.length} rows</span>
+          <span className="grow" />
           <div className="fe-seg">
             <button data-active={false} onClick={() => setRaw(false)}>grid</button>
             <button data-active={true} onClick={() => setRaw(true)}>raw</button>
@@ -143,6 +144,7 @@ function SheetView({ text, path }: { text: string; path: string }) {
             style={{ fontSize: "var(--fs-xs)", padding: "3px 8px", maxWidth: 160, background: "rgba(255, 255, 255, 0.06)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "var(--r-xs)", color: "var(--text)" }}
           />
         )}
+        <span className="grow" />
         <div className="fe-seg">
           <button data-active={true} onClick={() => setRaw(false)}>grid</button>
           <button data-active={false} onClick={() => setRaw(true)}>raw</button>
