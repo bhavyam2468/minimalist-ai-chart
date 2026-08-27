@@ -51,6 +51,158 @@ Rules
    decisions, unresolved tasks. Unrelated tangents move to \`notes/aside.md\`.`,
   },
   {
+    name: "generative-ui",
+    description:
+      "Render rich interactive charts with Google-style fluid animations, metric cards, multi-view switchers, interactive questions with custom inputs and skip buttons, and follow-up prompt chips inline in chat using <component> tags. Always enabled.",
+    always: true,
+    body: `# generative-ui
+You can embed rich, interactive, animated Generative UI directly inline in your responses using the \`<component>\` tag. These blend natively into the conversation, feature Google-quality fluid chart animations (smooth Bézier splines, gradient reveals, hover crosshairs, tooltips), and support full user interactivity.
+
+## Syntax
+Wrap a declarative JSON structure inside \`<component> ... </component>\`.
+
+\`\`\`html
+<component>
+{
+  "type": "chart",
+  "kind": "line",
+  ...
+}
+</component>
+\`\`\`
+
+## Supported Component Types
+
+### 1. Interactive Animated Charts (Google Quality)
+Kinds: \`"line"\`, \`"area"\`, \`"bar"\`, \`"hbar"\`, \`"donut"\`, \`"pie"\`, \`"scatter"\`.
+- Features smooth Bézier curves, fluid gradient reveals, staggered bar/dot animations, hover crosshairs, and tracking tooltips.
+
+Line / Area chart:
+\`\`\`json
+{
+  "type": "chart",
+  "kind": "line",
+  "title": "Throughput Over Time",
+  "data": [
+    { "label": "00:00", "value": 320 },
+    { "label": "04:00", "value": 450 },
+    { "label": "08:00", "value": 890 },
+    { "label": "12:00", "value": 1120 },
+    { "label": "16:00", "value": 980 },
+    { "label": "20:00", "value": 640 }
+  ]
+}
+\`\`\`
+
+Multi-series comparison:
+\`\`\`json
+{
+  "type": "chart",
+  "kind": "line",
+  "title": "Latency Percentiles",
+  "series": [
+    { "name": "p50", "points": [{ "x": "Scenario A", "y": 45 }, { "x": "Scenario B", "y": 72 }] },
+    { "name": "p99", "points": [{ "x": "Scenario A", "y": 180 }, { "x": "Scenario B", "y": 410 }] }
+  ]
+}
+\`\`\`
+
+### 2. Multi-View Switcher (Tabs to Switch Graphs & Dashboards)
+Allows the user to seamlessly toggle between multiple charts or views with a polished segmented switcher:
+\`\`\`json
+{
+  "type": "switcher",
+  "tabs": [
+    {
+      "label": "Latency",
+      "content": {
+        "type": "chart",
+        "kind": "line",
+        "title": "Latency by Scenario (ms)",
+        "data": [
+          { "label": "Baseline", "value": 120 },
+          { "label": "Stress 1k", "value": 340 },
+          { "label": "Stress 2k", "value": 780 }
+        ]
+      }
+    },
+    {
+      "label": "Throughput",
+      "content": {
+        "type": "chart",
+        "kind": "bar",
+        "title": "Throughput (RPS)",
+        "data": [
+          { "label": "Baseline", "value": 400 },
+          { "label": "Stress 1k", "value": 980 },
+          { "label": "Stress 2k", "value": 1190 }
+        ]
+      }
+    },
+    {
+      "label": "Errors",
+      "content": {
+        "type": "chart",
+        "kind": "line",
+        "title": "Error Rate (%)",
+        "data": [
+          { "label": "Baseline", "value": 0.1 },
+          { "label": "Stress 1k", "value": 1.4 },
+          { "label": "Stress 2k", "value": 12.5 }
+        ]
+      }
+    }
+  ]
+}
+\`\`\`
+
+### 3. Metric & Stat Cards
+\`\`\`json
+{
+  "type": "metrics",
+  "items": [
+    { "label": "ROWS", "value": "6" },
+    { "label": "AVG LATENCY", "value": "416.67 ms", "delta": "-12.5ms" },
+    { "label": "PEAK THROUGHPUT", "value": "1190 rps", "delta": "+14%" },
+    { "label": "MAX ERROR RATE", "value": "12.5%", "delta": "-2.1%" }
+  ]
+}
+\`\`\`
+
+### 4. Interactive Questions (with Skip & Custom Answer)
+Ask the user clarifying questions with one-click choices, a custom answer input, and a skip button:
+\`\`\`json
+{
+  "type": "question",
+  "id": "scenario_choice",
+  "question": "Which test scenario should we run next?",
+  "options": [
+    { "id": "stress", "label": "Stress Test (High Load)", "description": "Ramp up to 2,000 rps over 5 mins" },
+    { "id": "soak", "label": "Soak Test (Longevity)", "description": "Sustain 500 rps over 24 hours" },
+    { "id": "spike", "label": "Spike Test", "description": "Instant burst to 5,000 rps" }
+  ],
+  "allowCustom": true,
+  "skipButton": true
+}
+\`\`\`
+
+### 5. Follow-Up Prompts (Clickable Suggestion Chips)
+\`\`\`json
+{
+  "type": "followups",
+  "prompts": [
+    "Simulate 5,000 rps load",
+    "Analyze database query bottlenecks",
+    "Export CSV performance report"
+  ]
+}
+\`\`\`
+
+### 6. Full Dashboards
+Combine cards, switcher, and follow-ups in a single \`<component>\` by wrapping them in an array or an object with \`metrics\`, \`switcher\`, \`followups\`.
+Always prefer \`<component>\` when presenting benchmarks, status reports, quantitative data, or actionable next steps!`,
+  },
+  {
     name: "workspace-files",
     description:
       "Create, read, patch and organise files in the agent workspace. Use for any code, notes, data or artefact that should outlive one message.",

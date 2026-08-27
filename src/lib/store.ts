@@ -145,7 +145,7 @@ export const useApp = create<S>((set, get) => ({
   order: initOrder,
   activeId: initActive,
   settings: (boot?.settings as Settings) || defaultSettings(),
-  ui: { sidebar: true, panel: true, canvas: null, canvasRect: null, canvasMax: false, composerQuote: null, modal: null, activeThreadId: null },
+  ui: { sidebar: false, panel: false, canvas: null, canvasRect: null, canvasMax: false, composerQuote: null, modal: null, activeThreadId: null },
   busy: {},
   streamId: null,
 

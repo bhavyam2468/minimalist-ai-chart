@@ -32,7 +32,8 @@ export type Block =
   | { t: "details"; summary: Inline[]; blocks: Block[]; open: boolean }
   | { t: "media"; kind: "youtube" | "video" | "image"; src: string; caption?: string }
   | { t: "html"; html: string }
-  | { t: "fndef"; id: string; kids: Inline[] };
+  | { t: "fndef"; id: string; kids: Inline[] }
+  | { t: "component"; raw: string; attrs?: string; open: boolean };
 
 export interface ListItem {
   checked: boolean | null;
@@ -282,6 +283,45 @@ export function parseBlocks(src: string): Block[] {
       continue;
     }
 
+    /* split inline <component tag if glued to preceding text */
+    if (line.includes("<component") && !line.trim().startsWith("<component")) {
+      const idx = line.indexOf("<component");
+      const before = line.slice(0, idx);
+      const after = line.slice(idx);
+      lines.splice(i, 1, before, after);
+      continue;
+    }
+
+    /* <component> */
+    if (/^\s*<component/i.test(line)) {
+      const body: string[] = [];
+      let closed = false;
+      const tagM = line.match(/^\s*<component([^>]*)>([\s\S]*)$/i);
+      const attrs = tagM ? tagM[1].trim() : "";
+      const inlineRest = tagM ? tagM[2] : "";
+      if (/<\/component>/i.test(inlineRest)) {
+        body.push(inlineRest.replace(/<\/component>[\s\S]*$/i, ""));
+        closed = true;
+        i++;
+      } else {
+        if (inlineRest.trim()) body.push(inlineRest);
+        i++;
+        while (i < lines.length) {
+          const l = lines[i];
+          if (/<\/component>/i.test(l)) {
+            body.push(l.replace(/<\/component>[\s\S]*$/i, ""));
+            closed = true;
+            i++;
+            break;
+          }
+          body.push(l);
+          i++;
+        }
+      }
+      out.push({ t: "component", raw: body.join("\n").trim(), attrs, open: !closed });
+      continue;
+    }
+
     /* thematic break */
     if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(line)) { out.push({ t: "hr" }); i++; continue; }
 
@@ -391,7 +431,7 @@ export function parseBlocks(src: string): Block[] {
     while (i < lines.length) {
       const l = lines[i];
       if (!l.trim()) break;
-      if (/^\s{0,3}(#{1,6}\s|>|```|~~~|\$\$|<details)/.test(l)) break;
+      if (/^\s{0,3}(#{1,6}\s|>|```|~~~|\$\$|<details|<component)/i.test(l)) break;
       if (/^(\s*)([-*+]|\d{1,9}[.)])\s+/.test(l)) break;
       if (l.trim().startsWith("|")) break;
       if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(l)) break;

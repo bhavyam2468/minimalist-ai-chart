@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { Markdown } from "../md/Markdown";
+import { useApp } from "../lib/store";
+import { send } from "../lib/agent";
+import { I } from "../ui/Icons";
 import type { CanvasBlock } from "../lib/types";
 
 /* ===========================================================================
@@ -70,6 +73,28 @@ const fmt = (n: number) => {
   if (Math.abs(n) >= 1_000) return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
   return String(Math.round(n * 100) / 100);
 };
+
+function getBezierPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
+  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+
+  let d = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(i - 1, 0)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(i + 2, points.length - 1)];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
 
 /* ------------------------------------------------------------- tooltips */
 interface TooltipState {
@@ -205,12 +230,12 @@ function Chart({ b }: { b: CanvasBlock }) {
   if (kind === "hbar") {
     const max = Math.max(...data.map((d) => d.value), 1);
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {data.map((d, i) => (
           <div key={i}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-sm)", color: "var(--text-dim)", marginBottom: 4 }}>
               <span style={{ fontWeight: 500 }}>{d.label}</span>
-              <b style={{ color: "var(--text)" }}>{fmt(d.value)}</b>
+              <b style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{fmt(d.value)}</b>
             </div>
             <div style={{ height: 8, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
               <div
@@ -220,7 +245,7 @@ function Chart({ b }: { b: CanvasBlock }) {
                   background: PALETTE[i % PALETTE.length],
                   borderRadius: 4,
                   transformOrigin: "left",
-                  animation: `sweep .7s ${i * 50}ms var(--ease) both`,
+                  animation: `chart-hbar-wipe 0.65s cubic-bezier(0.16, 1, 0.3, 1) ${i * 45}ms both`,
                 }}
               />
             </div>
@@ -240,6 +265,38 @@ function Chart({ b }: { b: CanvasBlock }) {
     const n = Math.max(...ss.map((s) => s.points.length), 2);
     const X = (i: number) => PAD + (i / (n - 1)) * (W - PAD * 2);
     const Y = (v: number) => H - PAD - ((v - min) / (max - min || 1)) * (H - PAD * 2);
+    const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+    const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const relX = (mouseX / rect.width) * W;
+      const clampedX = Math.max(PAD, Math.min(W - PAD, relX));
+      const closestIdx = Math.max(0, Math.min(n - 1, Math.round(((clampedX - PAD) / (W - PAD * 2)) * (n - 1))));
+      setHoverIdx(closestIdx);
+
+      const items = ss.map((s, si) => ({
+        label: s.name,
+        value: fmt(s.points[closestIdx]?.y ?? 0),
+        color: PALETTE[si % PALETTE.length],
+      }));
+
+      const tipX = (X(closestIdx) / W) * rect.width;
+      const firstY = Y(ss[0]?.points[closestIdx]?.y ?? 0);
+      const tipY = (firstY / H) * rect.height;
+
+      setTip({
+        x: tipX,
+        y: tipY,
+        title: String(ss[0]?.points[closestIdx]?.x ?? `Point ${closestIdx + 1}`),
+        items,
+      });
+    };
+
+    const handleMouseLeave = () => {
+      setHoverIdx(null);
+      setTip(null);
+    };
 
     return (
       <div style={{ position: "relative" }}>
@@ -271,13 +328,14 @@ function Chart({ b }: { b: CanvasBlock }) {
         <svg
           width="100%"
           viewBox={`0 0 ${W} ${H}`}
-          style={{ overflow: "visible" }}
-          onMouseLeave={() => setTip(null)}
+          style={{ overflow: "visible", cursor: "crosshair" }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
         >
           <defs>
             {ss.map((_, si) => (
               <linearGradient key={si} id={`area-grad-${si}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={PALETTE[si % PALETTE.length]} stopOpacity="0.28" />
+                <stop offset="0%" stopColor={PALETTE[si % PALETTE.length]} stopOpacity="0.32" />
                 <stop offset="100%" stopColor={PALETTE[si % PALETTE.length]} stopOpacity="0.0" />
               </linearGradient>
             ))}
@@ -291,59 +349,109 @@ function Chart({ b }: { b: CanvasBlock }) {
           ))}
 
           {ss.map((s, si) => {
-            const pts = s.points.map((p, i) => `${X(i)},${Y(p.y)}`).join(" ");
+            const pts = s.points.map((p, i) => ({ x: X(i), y: Y(p.y) }));
+            const lineD = getBezierPath(pts);
+            const areaD = `${lineD} L ${X(s.points.length - 1)},${H - PAD} L ${X(0)},${H - PAD} Z`;
             const col = PALETTE[si % PALETTE.length];
             return (
               <g key={si}>
                 {kind === "area" && s.points.length > 1 && (
-                  <polygon
-                    points={`${PAD},${H - PAD} ${pts} ${X(s.points.length - 1)},${H - PAD}`}
+                  <path
+                    d={areaD}
                     fill={`url(#area-grad-${si})`}
+                    style={{ animation: "chart-area-fade 0.85s cubic-bezier(0.16, 1, 0.3, 1) both" }}
                   />
                 )}
                 {kind !== "scatter" && (
-                  <polyline
-                    points={pts}
+                  <path
+                    d={lineD}
                     fill="none"
                     stroke={col}
-                    strokeWidth="2.2"
+                    strokeWidth="2.4"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     strokeDasharray="2400"
                     strokeDashoffset="2400"
-                    style={{ animation: "draw 1s var(--ease) forwards" }}
+                    style={{ animation: "chart-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
                   />
                 )}
-                {s.points.map((p, i) => (
-                  <circle
-                    key={i}
-                    cx={X(i)}
-                    cy={Y(p.y)}
-                    r={kind === "scatter" ? 4.5 : 3}
-                    fill={col}
-                    stroke="var(--surface)"
-                    strokeWidth="1.5"
-                    style={{ cursor: "pointer", animation: `fade-in .3s ${200 + i * 20}ms both` }}
-                    onMouseEnter={(e) => {
-                      const rect = (e.target as SVGElement).getBoundingClientRect();
-                      const parent = (e.target as SVGElement).closest("svg")?.getBoundingClientRect();
-                      if (parent) {
-                        setTip({
-                          x: rect.left - parent.left + rect.width / 2,
-                          y: rect.top - parent.top,
-                          title: String(p.x),
-                          items: [{ label: s.name, value: fmt(p.y), color: col }],
-                        });
-                      }
-                    }}
-                  />
-                ))}
+                {s.points.map((p, i) => {
+                  const isHovered = hoverIdx === i;
+                  return (
+                    <circle
+                      key={i}
+                      cx={X(i)}
+                      cy={Y(p.y)}
+                      r={kind === "scatter" ? 4.5 : (isHovered ? 4.8 : 3.2)}
+                      fill={col}
+                      stroke="var(--surface)"
+                      strokeWidth={isHovered ? 2 : 1.5}
+                      style={{
+                        cursor: "pointer",
+                        transformOrigin: `${X(i)}px ${Y(p.y)}px`,
+                        animation: `chart-dot-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${200 + i * 30}ms both`,
+                        transition: "r 0.16s ease, stroke-width 0.16s ease",
+                      }}
+                    />
+                  );
+                })}
               </g>
             );
           })}
 
+          {/* Google-style vertical crosshair and active pulsing dots */}
+          {hoverIdx !== null && (
+            <g pointerEvents="none">
+              <line
+                x1={X(hoverIdx)}
+                x2={X(hoverIdx)}
+                y1={PAD - 4}
+                y2={H - PAD}
+                stroke="rgba(255, 255, 255, 0.22)"
+                strokeWidth="1.2"
+                strokeDasharray="3 3"
+              />
+              {ss.map((s, si) => {
+                const pt = s.points[hoverIdx];
+                if (!pt) return null;
+                const cy = Y(pt.y);
+                const col = PALETTE[si % PALETTE.length];
+                return (
+                  <g key={si}>
+                    <circle
+                      cx={X(hoverIdx)}
+                      cy={cy}
+                      r={8}
+                      fill={col}
+                      opacity="0.35"
+                      style={{ animation: "chart-pulse 1.4s ease-in-out infinite" }}
+                    />
+                    <circle
+                      cx={X(hoverIdx)}
+                      cy={cy}
+                      r={3.8}
+                      fill={col}
+                      stroke="var(--surface)"
+                      strokeWidth="2"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
           {ss[0]?.points.map((p, i) => (i % Math.max(1, Math.ceil(n / 8)) === 0 ? (
-            <text key={i} x={X(i)} y={H - 10} textAnchor="middle" fill="var(--text-faint)" fontSize="10">{String(p.x).slice(0, 10)}</text>
+            <text
+              key={i}
+              x={X(i)}
+              y={H - 10}
+              textAnchor="middle"
+              fill={hoverIdx === i ? "var(--text)" : "var(--text-faint)"}
+              fontWeight={hoverIdx === i ? 600 : 400}
+              fontSize="10"
+            >
+              {String(p.x).slice(0, 10)}
+            </text>
           ) : null))}
         </svg>
         <ChartTooltip tip={tip} />
@@ -360,6 +468,7 @@ function Chart({ b }: { b: CanvasBlock }) {
   const maxVal = Math.max(...allVals, 1);
   const catWidth = (W - PAD * 2) / numCats;
   const barWidth = Math.min(38, (catWidth - 12) / numSeries);
+  const [hoverBar, setHoverBar] = useState<number | null>(null);
 
   return (
     <div style={{ position: "relative" }}>
@@ -377,7 +486,7 @@ function Chart({ b }: { b: CanvasBlock }) {
       <svg
         width="100%"
         viewBox={`0 0 ${W} ${H}`}
-        onMouseLeave={() => setTip(null)}
+        onMouseLeave={() => { setTip(null); setHoverBar(null); }}
       >
         {[0, 0.5, 1].map((t, i) => (
           <line key={i} x1={PAD} x2={W - PAD} y1={PAD + t * (H - PAD * 2)} y2={PAD + t * (H - PAD * 2)} stroke="var(--line-soft)" strokeDasharray="3 3" />
@@ -394,6 +503,7 @@ function Chart({ b }: { b: CanvasBlock }) {
                   const bx = groupX + si * barWidth;
                   const by = H - PAD - h;
                   const col = PALETTE[si % PALETTE.length];
+                  const isHovered = hoverBar === ci;
                   return (
                     <rect
                       key={si}
@@ -403,9 +513,15 @@ function Chart({ b }: { b: CanvasBlock }) {
                       height={h}
                       rx={4}
                       fill={col}
-                      opacity={0.92}
-                      style={{ cursor: "pointer", transformOrigin: `center ${H - PAD}px`, animation: `grow-y .5s ${ci * 30 + si * 40}ms var(--ease) both` }}
+                      opacity={hoverBar === null || isHovered ? 0.95 : 0.6}
+                      style={{
+                        cursor: "pointer",
+                        transformOrigin: `center ${H - PAD}px`,
+                        animation: `chart-bar-grow .65s cubic-bezier(0.16, 1, 0.3, 1) ${ci * 35 + si * 40}ms both`,
+                        transition: "opacity 0.15s ease",
+                      }}
                       onMouseEnter={(e) => {
+                        setHoverBar(ci);
                         const rect = (e.target as SVGElement).getBoundingClientRect();
                         const parent = (e.target as SVGElement).closest("svg")?.getBoundingClientRect();
                         if (parent) {
@@ -427,6 +543,7 @@ function Chart({ b }: { b: CanvasBlock }) {
                   const bx = PAD + (ci + 0.5) * catWidth - barWidth / 2;
                   const by = H - PAD - h;
                   const col = PALETTE[ci % PALETTE.length];
+                  const isHovered = hoverBar === ci;
                   return (
                     <g>
                       <rect
@@ -436,9 +553,15 @@ function Chart({ b }: { b: CanvasBlock }) {
                         height={h}
                         rx={4}
                         fill={col}
-                        opacity={0.92}
-                        style={{ cursor: "pointer", transformOrigin: `center ${H - PAD}px`, animation: `grow-y .5s ${ci * 40}ms var(--ease) both` }}
+                        opacity={hoverBar === null || isHovered ? 0.95 : 0.6}
+                        style={{
+                          cursor: "pointer",
+                          transformOrigin: `center ${H - PAD}px`,
+                          animation: `chart-bar-grow .65s cubic-bezier(0.16, 1, 0.3, 1) ${ci * 35}ms both`,
+                          transition: "opacity 0.15s ease",
+                        }}
                         onMouseEnter={(e) => {
+                          setHoverBar(ci);
                           const rect = (e.target as SVGElement).getBoundingClientRect();
                           const parent = (e.target as SVGElement).closest("svg")?.getBoundingClientRect();
                           if (parent) {
@@ -456,7 +579,7 @@ function Chart({ b }: { b: CanvasBlock }) {
                   );
                 })()
               )}
-              <text x={PAD + (ci + 0.5) * catWidth} y={H - PAD + 16} textAnchor="middle" fill="var(--text-faint)" fontSize="10">
+              <text x={PAD + (ci + 0.5) * catWidth} y={H - PAD + 16} textAnchor="middle" fill={hoverBar === ci ? "var(--text)" : "var(--text-faint)"} fontSize="10">
                 {cat.slice(0, 10)}
               </text>
             </g>
@@ -554,35 +677,37 @@ function DataTable({ b }: { b: CanvasBlock }) {
   );
 }
 
-/* ------------------------------------------------------------- tabs block */
-function TabsBlock({ b }: { b: CanvasBlock }) {
-  const tabs: { label: string; blocks: CanvasBlock[] }[] = b.tabs || [];
+/* ------------------------------------------------------------- tabs & switcher block */
+export function TabsBlock({ b }: { b: CanvasBlock }) {
+  const rawTabs: any[] = b.tabs || [];
   const [active, setActive] = useState(0);
-  if (!tabs.length) return null;
+  if (!rawTabs.length) return null;
+
+  const currentTab = rawTabs[active];
+  const contentBlocks: CanvasBlock[] =
+    currentTab?.blocks ||
+    (currentTab?.content ? (Array.isArray(currentTab.content) ? currentTab.content : [currentTab.content]) : null) ||
+    (currentTab?.block ? (Array.isArray(currentTab.block) ? currentTab.block : [currentTab.block]) : null) ||
+    (currentTab?.chart ? [{ type: "chart", ...currentTab.chart }] : null) ||
+    [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-      <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", padding: 3, borderRadius: "var(--r-sm)", width: "fit-content" }}>
-        {tabs.map((t, idx) => (
-          <button
-            key={idx}
-            data-active={active === idx}
-            onClick={() => setActive(idx)}
-            style={{
-              padding: "4px 12px",
-              fontSize: "var(--fs-xs)",
-              borderRadius: "var(--r-xs)",
-              background: active === idx ? "var(--surface)" : "transparent",
-              color: active === idx ? "var(--text)" : "var(--text-dim)",
-              fontWeight: active === idx ? 540 : 400,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="comp-switcher-bar">
+        <div className="comp-switcher">
+          {rawTabs.map((t, idx) => (
+            <button
+              key={idx}
+              data-active={active === idx}
+              onClick={() => setActive(idx)}
+            >
+              {t.label || t.title || `Tab ${idx + 1}`}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-        {(tabs[active]?.blocks || []).map((sub, i) => (
+      <div key={active} style={{ display: "flex", flexDirection: "column", gap: 8, animation: "chart-fade-switch 240ms var(--ease-out) both" }}>
+        {contentBlocks.map((sub: any, i: number) => (
           <BlockR key={i} b={sub} />
         ))}
       </div>
@@ -824,15 +949,267 @@ function Counter({ b }: { b: CanvasBlock }) {
   );
 }
 
+/* -------------------------------------------------------- question block */
+export function QuestionBlock({ b }: { b: CanvasBlock }) {
+  const q = b.question || b.title || "Select an option:";
+  const rawOptions = b.options || b.items || [];
+  const options: { id: string; label: string; description?: string }[] = rawOptions.map((o: any, i: number) =>
+    typeof o === "string" ? { id: String(i), label: o } : { id: o.id || String(i), label: o.label || o.title || String(o), description: o.description }
+  );
+  const allowCustom = b.allowCustom !== false;
+  const showSkip = b.skipButton !== false && b.skip !== false;
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customVal, setCustomVal] = useState("");
+  const [answered, setAnswered] = useState<string | null>(null);
+
+  const handleSelect = (opt: { id: string; label: string }) => {
+    setSelected(opt.id);
+    setAnswered(opt.label);
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      send(activeId, opt.label, []);
+    }
+  };
+
+  const handleCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customVal.trim()) return;
+    const text = customVal.trim();
+    setAnswered(text);
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      send(activeId, text, []);
+    }
+  };
+
+  const handleSkip = () => {
+    setAnswered("Skipped");
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      send(activeId, `Skipped: ${q}`, []);
+    }
+  };
+
+  if (answered) {
+    return (
+      <div className="comp-question-card" style={{ borderLeftColor: "var(--ok)", padding: "10px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "var(--ok)", fontWeight: 600 }}>✓</span>
+            <span style={{ color: "var(--text)", fontWeight: 540 }}>{answered}</span>
+          </span>
+          <button
+            className="comp-action-btn"
+            style={{ fontSize: "11px", padding: "2px 7px" }}
+            onClick={() => setAnswered(null)}
+          >
+            change
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="comp-question-card">
+      <div className="comp-question-title">{q}</div>
+      <div className="comp-question-options">
+        {options.map((opt) => (
+          <button
+            key={opt.id}
+            className="comp-question-opt"
+            data-selected={selected === opt.id}
+            onClick={() => handleSelect(opt)}
+          >
+            <span className="comp-question-radio" />
+            <div className="comp-question-opt-info">
+              <span className="comp-question-opt-label">{opt.label}</span>
+              {opt.description && <span className="comp-question-opt-desc">{opt.description}</span>}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="comp-question-footer">
+        {customOpen ? (
+          <form className="comp-custom-input-wrap" onSubmit={handleCustomSubmit}>
+            <input
+              className="comp-custom-input"
+              type="text"
+              autoFocus
+              placeholder="Type your custom response..."
+              value={customVal}
+              onChange={(e) => setCustomVal(e.target.value)}
+            />
+            <button className="btn primary" type="submit" style={{ padding: "4px 10px", fontSize: "11px" }}>
+              Send
+            </button>
+            <button
+              className="comp-action-btn"
+              type="button"
+              onClick={() => { setCustomOpen(false); setCustomVal(""); }}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <>
+            {allowCustom && (
+              <button className="comp-action-btn" onClick={() => setCustomOpen(true)}>
+                + Custom answer
+              </button>
+            )}
+            <span style={{ flex: 1 }} />
+            {showSkip && (
+              <button className="comp-action-btn skip" onClick={handleSkip}>
+                Skip
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- follow-up prompts */
+export function FollowupsBlock({ b }: { b: CanvasBlock }) {
+  const prompts: string[] = b.prompts || b.items || b.followups || [];
+  if (!prompts.length) return null;
+
+  const handlePromptClick = (p: string) => {
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      send(activeId, p, []);
+    }
+  };
+
+  return (
+    <div className="comp-followups-wrap">
+      {prompts.map((p, idx) => (
+        <button
+          key={idx}
+          className="comp-prompt-chip"
+          onClick={() => handlePromptClick(p)}
+          title={`Send prompt: "${p}"`}
+        >
+          <span>{p}</span>
+          <span className="chip-arrow">↗</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------- generative component */
+export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: string; open?: boolean }) {
+  const data = useMemo(() => {
+    let clean = raw.trim();
+    if (clean.startsWith("```")) {
+      clean = clean.replace(/^```[a-z]*\s*/i, "").replace(/\s*```$/, "").trim();
+    }
+    return repairPartialJson(clean);
+  }, [raw]);
+
+  if (!data && open) {
+    return (
+      <div className="component-block" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-faint)", fontSize: "var(--fs-xs)" }}>
+        <span className="spinner sm" />
+        <span>Rendering component...</span>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="component-block" style={{ padding: "10px 14px", color: "var(--text-dim)", fontSize: "var(--fs-xs)" }}>
+        {raw.trim() ? raw : "Empty component"}
+      </div>
+    );
+  }
+
+  if (Array.isArray(data)) {
+    return (
+      <div className="component-block" data-inline="true">
+        <div className="component-body">
+          {data.map((b, i) => <BlockR key={i} b={b} />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (data.type) {
+    return (
+      <div className="component-block" data-inline="true">
+        <div className="component-body">
+          <BlockR b={data} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="component-block">
+      {data.title && (
+        <div className="component-header">
+          <span className="component-title">
+            <span style={{ color: "var(--accent)" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="12" width="4" height="8" rx="1" /><rect x="10" y="6" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="17" rx="1" /></svg>
+            </span>
+            <span>{data.title}</span>
+          </span>
+        </div>
+      )}
+      <div className="component-body">
+        {data.reference && (
+          <BlockR b={{ type: "callout", tone: "info", title: data.reference.title || "Reference", text: data.reference.text || data.reference }} />
+        )}
+        {data.callout && (
+          <BlockR b={{ type: "callout", ...data.callout }} />
+        )}
+        {data.metrics && (
+          <BlockR b={{ type: "metrics", items: data.metrics }} />
+        )}
+        {data.switcher && (
+          <BlockR b={{ type: "tabs", ...(typeof data.switcher === "object" ? data.switcher : {}) }} />
+        )}
+        {data.chart && (
+          <BlockR b={{ type: "chart", ...data.chart }} />
+        )}
+        {data.question && (
+          <BlockR b={{ type: "question", ...data.question }} />
+        )}
+        {data.followups && (
+          <BlockR b={{ type: "followups", prompts: data.followups }} />
+        )}
+        {data.prompts && (
+          <BlockR b={{ type: "followups", prompts: data.prompts }} />
+        )}
+        {Array.isArray(data.blocks) && data.blocks.map((b: any, i: number) => (
+          <BlockR key={i} b={b} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------- main renderer */
 export function BlockR({ b }: { b: CanvasBlock }) {
   switch (b.type) {
     case "heading": {
       const H = (`h${Math.min(b.level || 2, 4)}`) as any;
-      return <H className={`md-h md-h${b.level || 2}`}>{b.text}</H>;
+      return <H className={`md-h md-h${b.level || 2}`} style={{ margin: "2px 0 4px 0" }}>{b.text}</H>;
     }
     case "text": return <Markdown text={b.text || ""} animate={false} />;
     case "markdown": return <Markdown text={b.content || ""} animate={false} />;
+    case "question":
+    case "ask": return <QuestionBlock b={b} />;
+    case "followups":
+    case "prompts": return <FollowupsBlock b={b} />;
+    case "switcher": return <TabsBlock b={b} />;
+    case "component": return <ComponentBlock raw={b.raw || b.content || JSON.stringify(b)} attrs={b.attrs} open={b.open} />;
     case "metric":
       return (
         <div className="canvas-card">
@@ -1008,7 +1385,7 @@ export function BlocksView({ content }: { content: string }) {
     );
   }
   return (
-    <div className="canvas-inner" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+    <div className="canvas-inner" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {blocks.map((b, i) => <BlockR key={i} b={b} />)}
       {!blocks.length && <div className="empty-hint">no blocks</div>}
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { I } from "./Icons";
 import { mainPath, useApp } from "../lib/store";
-import { compactChat } from "../lib/agent";
+import { compactChat, contextTokenCount } from "../lib/agent";
 import { hostOf } from "../lib/web";
 import { exportChatZip } from "../lib/xml";
 import { VIEW_LABEL, viewOf } from "../canvas/view";
@@ -54,10 +54,7 @@ export function Panel({ chat }: { chat: Chat }) {
   const files = Object.values(chat.files);
   const artifacts = Object.values(chat.artifacts ?? {}).sort((a, b) => b.createdAt - a.createdAt);
   const sources = chat.sources.slice().reverse();
-  const approxTokens = Math.round(
-    (mainPath(chat).filter((n) => !n.hidden).reduce((a, n) => a + n.content.length + (n.toolCalls || []).reduce((x, t) => x + (t.output?.length || 0), 0), 0) +
-      files.filter((f) => f.state === "context").reduce((a, f) => a + f.content.length, 0)) / 4
-  );
+  const approxTokens = contextTokenCount(chat);
 
   return (
     <aside className="panel" data-collapsed={!ui.panel}>

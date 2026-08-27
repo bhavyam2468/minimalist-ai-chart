@@ -293,7 +293,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
              onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
           {uiMode === "edit"
             ? <CodeArea value={draft} onChange={change} lang="json" wrap={wrap} />
-            : <div className="fe-preview" style={{ height: "100%", overflow: "auto" }}><BlocksView content={draft} /></div>}
+            : <div style={{ height: "100%", overflow: "auto" }}><BlocksView content={draft} /></div>}
         </div>
       </div>
     );

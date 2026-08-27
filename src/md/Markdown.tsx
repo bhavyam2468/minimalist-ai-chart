@@ -37,7 +37,7 @@ function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: 
 /* ------------------------------------------------------- syntax highlight */
 import { highlight } from "./highlight";
 import { copyToClipboard } from "../lib/clipboard";
-import { BlocksView } from "../canvas/Blocks";
+import { BlocksView, ComponentBlock } from "../canvas/Blocks";
 
 /* ---------------------------------------------------------------- helpers */
 function copy(text: string) { return copyToClipboard(text); }
@@ -232,7 +232,7 @@ function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open:
         </div>
       </div>
       {mode === "preview" ? (
-        <div className="inline-ui-wrap" style={{ padding: "16px", overflowX: "auto" }}>
+        <div className="inline-ui-wrap" style={{ padding: "10px 12px", overflowX: "auto" }}>
           <BlocksView content={code} />
         </div>
       ) : (
@@ -456,6 +456,7 @@ const BlockView = memo(function BlockView({ b, ctx }: { b: Block; ctx: Ctx }) {
       );
     }
     case "html": return <div className="a-blk" dangerouslySetInnerHTML={{ __html: b.html }} />;
+    case "component": return <ComponentBlock raw={b.raw} attrs={b.attrs} open={b.open} />;
     default: return null;
   }
 });

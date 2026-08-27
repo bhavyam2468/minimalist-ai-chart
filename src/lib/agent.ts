@@ -7,7 +7,7 @@ import type { Chat, Node, ToolCallRecord } from "./types";
 const S = () => useApp.getState();
 
 /* ---------------------------------------------------------- system prompt */
-function systemPrompt(c: Chat): string {
+export function systemPrompt(c: Chat): string {
   const pinned = new Set(c.enabledSkills ?? []);
   const always = SKILLS.filter((s) => s.always || pinned.has(s.name)).map((s) => s.body).join("\n\n");
   const files = Object.values(c.files);
@@ -42,16 +42,26 @@ conversation that holds files (with a real editor), web pages and artefacts.
 Use \`artifact\` when a chart, dashboard, tool or embed communicates better than prose.
 Keep context lean with add_context / remove_context / compact_context.
 
-## Summoning Tools & Generative UI Inline
+## Summoning Tools & Inline Generative UI (<component> and C1)
 - **Summon Tools Inline**: Prefer doing over describing. You have tools: \`web_search\`, \`web_fetch\`, \`run_python\`, \`read_file\`, \`edit_file\`, \`write_file\`, \`list_files\`, \`open_canvas\`, etc. Summon them whenever freshness, computations, or workspace actions are needed.
-- **Inline Generative UI (C1 by Thesys)**: Whenever a chart, metric breakdown, or interactive widget communicates data better than prose, summon an interactive UI block inline in your response using \`\`\`ui (or \`\`\`c1 / \`\`\`blocks) fences containing declarative JSON.
-  Available blocks:
-  - \`{ "type": "chart", "kind": "bar"|"line"|"area"|"pie"|"donut"|"scatter"|"hbar", "title": str, "data": [{ "label": str, "value": num }] }\`
-  - \`{ "type": "metrics", "items": [{ "label": str, "value": str, "delta": str }] }\`
-  - \`{ "type": "table", "columns": [str], "rows": [[str|num]] }\`
-  - \`{ "type": "tabs", "tabs": [{ "label": str, "blocks": [...] }] }\`
-  - \`{ "type": "callout", "kind": "info"|"success"|"warn"|"err", "title": str, "text": str }\`
-  - Sliders, accordions, lists, and markdown blocks.
+- **Inline Generative UI (<component>)**: Whenever a chart, metric breakdown, interactive question, follow-up prompt list, or multi-view switcher communicates data better than prose, summon an interactive UI block inline in your response using the \`<component>\` tag containing declarative JSON:
+  \`\`\`html
+  <component>
+  {
+    "type": "chart",
+    "kind": "line",
+    "title": "Throughput Over Time",
+    "data": [{ "label": "00:00", "value": 120 }, { "label": "04:00", "value": 450 }]
+  }
+  </component>
+  \`\`\`
+  Supported component types:
+  - **Charts with Google-Style Fluid Animations**: \`"line"\`, \`"area"\`, \`"bar"\`, \`"hbar"\`, \`"pie"\`, \`"donut"\`, \`"scatter"\` (smooth Bézier splines, gradient wipe, hover crosshairs, and tracking tooltips).
+  - **Multi-View Switcher**: \`{ "type": "switcher", "tabs": [{ "label": "Latency", "content": ... }, { "label": "Throughput", "content": ... }] }\` to let users toggle views without page reloads.
+  - **Metric Cards**: \`{ "type": "metrics", "items": [{ "label": "AVG LATENCY", "value": "416 ms", "delta": "-12ms" }] }\`.
+  - **Interactive Questions**: \`{ "type": "question", "question": "...", "options": [{ "id": "1", "label": "..." }], "allowCustom": true, "skipButton": true }\`.
+  - **Follow-up Prompt Chips**: \`{ "type": "followups", "prompts": ["Run benchmark again", "Analyze bottlenecks"] }\`.
+  - **Full Dashboards**: Combine \`metrics\`, \`switcher\`, \`chart\`, \`followups\` in a single \`<component>\`.
   These render as rich, interactive, animated components directly inline in the user's chat!
 
 ## Search Efficiency & Anti-Looping
@@ -70,6 +80,23 @@ ${skillIndex()}
 ${list}
 
 ${bodies ? `## Files currently in context\n${bodies}` : ""}`;
+}
+
+export function contextTokenCount(c: Chat): number {
+  try {
+    const sys = systemPrompt(c);
+    const mcpServers = S()?.settings?.mcp || [];
+    const tools = JSON.stringify([...baseToolDefs(), ...mcpToolDefs(mcpServers)]);
+    const msgsLen = mainPath(c)
+      .filter((n) => !n.hidden)
+      .reduce((a, n) => a + n.content.length + (n.toolCalls || []).reduce((x, t) => x + (t.output?.length || 0), 0), 0);
+    const filesLen = Object.values(c.files)
+      .filter((f) => f.state === "context")
+      .reduce((a, f) => a + f.content.length, 0);
+    return Math.max(1, Math.round((sys.length + tools.length + msgsLen + filesLen) / 4));
+  } catch {
+    return 1200;
+  }
 }
 
 /* -------------------------------------------------------------- messages */
