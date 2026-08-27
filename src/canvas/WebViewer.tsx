@@ -23,13 +23,11 @@ export function WebViewer({
   title,
   tab: controlledTab,
   onTabChange,
-  hideBar = false,
 }: {
   url: string;
   title?: string;
   tab?: WebTab;
   onTabChange?: (tab: WebTab) => void;
-  hideBar?: boolean;
 }) {
   const key = useApp((s) => s.settings.firecrawlKey);
 
@@ -103,38 +101,28 @@ export function WebViewer({
 
   return (
     <div className="fe" style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* Top bar is only shown when hideBar is false (e.g. non-floating full view) */}
-      {!hideBar && (
-        <div className="fe-bar">
-          <img className="src-fav" src={faviconUrl} alt="" />
-          <span
-            className="fe-tag"
-            style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-          >
-            {ytId ? "YouTube" : hostOf(url)}
-          </span>
-          <span className="grow" />
-          <div className="fe-seg">
-            {hasVideo && (
-              <button data-active={tab === "video"} onClick={() => setTab("video")}>
-                video
-              </button>
-            )}
-            <button data-active={tab === "reader"} onClick={() => setTab("reader")}>
-              {hasVideo ? "notes" : "reader"}
+      {/* Floating contextual bar aligned to the bottom */}
+      <div className="fe-bar">
+        <div className="fe-seg">
+          {hasVideo && (
+            <button data-active={tab === "video"} onClick={() => setTab("video")}>
+              video
             </button>
-            <button data-active={tab === "live"} onClick={() => setTab("live")}>
-              live
-            </button>
-          </div>
-          <button className="icon-btn sm" title="Copy link" onClick={() => copyToClipboard(url)}>
-            <I.copy size={13} />
+          )}
+          <button data-active={tab === "reader"} onClick={() => setTab("reader")}>
+            {hasVideo ? "notes" : "reader"}
           </button>
-          <a className="icon-btn sm" href={url} target="_blank" rel="noreferrer noopener" title="Open in a new tab">
-            ↗
-          </a>
+          <button data-active={tab === "live"} onClick={() => setTab("live")}>
+            live
+          </button>
         </div>
-      )}
+        <button className="icon-btn sm" title="Copy link" onClick={() => copyToClipboard(url)}>
+          <I.copy size={13} />
+        </button>
+        <a className="icon-btn sm" href={url} target="_blank" rel="noreferrer noopener" title="Open in a new tab">
+          ↗
+        </a>
+      </div>
 
       <div
         className="fe-body"

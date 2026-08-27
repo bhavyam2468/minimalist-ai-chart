@@ -178,53 +178,34 @@ export function CanvasHost({ chatId }: { chatId: string }) {
   }, [sheetH]);
 
   const isVid = isVideo(res?.url);
-  const [webTab, setWebTab] = useState<"video" | "reader" | "live">(isVid ? "video" : "reader");
-  const [copied, setCopied] = useState(false);
+  const [topHover, setTopHover] = useState(false);
+  const [bottomHover, setBottomHover] = useState(false);
 
-  // Keep webTab in sync when target URL changes
-  useEffect(() => {
-    if (res?.url && isVideo(res.url)) setWebTab("video");
-  }, [res?.url]);
+  const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const bottomY = rect.bottom - e.clientY;
 
-  // Floating controls visibility management (appear on hover / activity)
-  const [controlsVisible, setControlsVisible] = useState(true);
-  const hideTimer = useRef<any>(null);
-
-  const onPointerActivity = useCallback(() => {
-    setControlsVisible(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      setControlsVisible(false);
-    }, 2800);
+    setTopHover(y <= 46);
+    setBottomHover(bottomY <= 52);
   }, []);
 
-  useEffect(() => {
-    onPointerActivity();
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, [onPointerActivity, target]);
+  const onCanvasPointerLeave = useCallback(() => {
+    setTopHover(false);
+    setBottomHover(false);
+  }, []);
 
   const body = useMemo(() => {
     if (!target) return null;
-    if (res?.url) {
-      return (
-        <WebViewer
-          url={res.url}
-          title={res.title}
-          tab={webTab}
-          onTabChange={setWebTab}
-          hideBar={true}
-        />
-      );
-    }
+    if (res?.url) return <WebViewer url={res.url} title={res.title} />;
     const path = res?.path;
     if (!path) return <div className="empty-hint" style={{ padding: 20 }}>nothing to show</div>;
     const v = viewOf(path, file);
     if (v === "project") return <ProjectView chatId={chatId} path={path} />;
     if (v === "ui") return <FileEditor chatId={chatId} path={path} view="ui" />;
     return <FileEditor chatId={chatId} path={path} />;
-  }, [target, res, file, chatId, webTab]);
+  }, [target, res, file, chatId]);
 
   if (!target || !res) return null;
 
@@ -264,140 +245,72 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     <div
       className="cv-win"
       style={style}
-      onPointerMove={onPointerActivity}
-      onMouseEnter={() => setControlsVisible(true)}
-      onMouseLeave={() => {
-        if (hideTimer.current) clearTimeout(hideTimer.current);
-        setControlsVisible(false);
-      }}
+      data-top-hover={topHover}
+      data-bottom-hover={bottomHover}
+      onPointerMove={onCanvasPointerMove}
+      onPointerLeave={onCanvasPointerLeave}
     >
-      {/* Floating Controls Panel with Soft Shadow that appears on hover */}
+      {/* Top Edge Hover Detection Strip */}
+      <div className="cv-top-edge" onMouseEnter={() => setTopHover(true)} />
+
+      {/* Floating Top Window Controls Bar — ONLY shows on top hover */}
       <div
-        className="cv-floating-panel"
-        data-visible={controlsVisible}
+        className="cv-floating-bar"
+        onMouseEnter={() => setTopHover(true)}
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest("button, a, input")) return;
           onPointerDown(e, "move");
         }}
       >
-        {/* Row 1: Identity & Window Controls */}
-        <div className="cv-floating-row top">
-          <div className="cv-floating-info">
-            <span className="cv-floating-icon">
-              {res.url ? (
-                isVid ? <I.video size={14} /> : <I.globe size={14} />
-              ) : res.path && viewOf(res.path, file) === "project" ? (
-                <I.canvas size={14} />
-              ) : (
-                <I.file size={14} />
-              )}
-            </span>
-            <div className="cv-floating-titles">
-              <span className="cv-floating-title" title={res.title}>
-                {res.title}
-              </span>
-              {res.url && (
-                <span className="cv-floating-meta">
-                  {hostOf(res.url)}
-                </span>
-              )}
-              {!res.url && res.path && (
-                <span className="cv-floating-meta">
-                  {res.path}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="cv-floating-win-ctrls">
-            <button
-              className="cv-floating-btn"
-              title="Reload"
-              onClick={() => setRect((r) => (r ? { ...r } : r))}
-            >
-              <I.refresh size={13} />
-            </button>
-            <button
-              className="cv-floating-btn"
-              title={maximized ? "Restore" : "Maximise"}
-              onClick={() => setUI({ canvasMax: !maximized })}
-            >
-              {maximized ? "▫" : "▢"}
-            </button>
-            <button
-              className="cv-floating-btn close"
-              title="Close (Esc)"
-              onClick={closeCanvas}
-            >
-              <I.x size={14} />
-            </button>
-          </div>
+        <div className="cv-floating-left">
+          {res.url ? (
+            isVid ? <I.video size={13} /> : <I.globe size={13} />
+          ) : res.path && viewOf(res.path, file) === "project" ? (
+            <I.canvas size={13} />
+          ) : (
+            <I.file size={13} />
+          )}
+          <span className="cv-floating-title" title={res.title}>
+            {res.title}
+          </span>
+          {res.url && <span className="cv-floating-meta">{hostOf(res.url)}</span>}
+          {!res.url && res.path && res.path !== res.title && (
+            <span className="cv-floating-meta">{res.path}</span>
+          )}
         </div>
 
-        {/* Row 2: View Modes & Quick Actions (shown when applicable) */}
-        {res.url && (
-          <div className="cv-floating-row bottom">
-            <div className="cv-floating-tabs">
-              {isVid && (
-                <button
-                  data-active={webTab === "video"}
-                  onClick={() => setWebTab("video")}
-                  className="cv-floating-tab"
-                  title="Video player"
-                >
-                  <I.video size={12} />
-                  <span className="cv-tab-text">video</span>
-                </button>
-              )}
-              <button
-                data-active={webTab === "reader"}
-                onClick={() => setWebTab("reader")}
-                className="cv-floating-tab"
-                title={isVid ? "Video notes" : "Reader view"}
-              >
-                <I.file size={12} />
-                <span className="cv-tab-text">{isVid ? "notes" : "reader"}</span>
-              </button>
-              <button
-                data-active={webTab === "live"}
-                onClick={() => setWebTab("live")}
-                className="cv-floating-tab"
-                title="Live web view"
-              >
-                <I.globe size={12} />
-                <span className="cv-tab-text">live</span>
-              </button>
-            </div>
+        <span style={{ flex: 1 }} />
 
-            <div className="cv-floating-actions">
-              <button
-                className="cv-floating-action-pill"
-                title={copied ? "Copied to clipboard" : "Copy link"}
-                onClick={() => {
-                  copyToClipboard(res.url!);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1600);
-                }}
-              >
-                {copied ? <I.check size={12} /> : <I.copy size={12} />}
-                <span className="cv-pill-text">{copied ? "copied" : "copy link"}</span>
-              </button>
-              <a
-                className="cv-floating-action-pill"
-                href={res.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                title="Open in new tab"
-              >
-                <span className="cv-pill-text">open</span>
-                <span style={{ fontSize: 11, lineHeight: 1 }}>↗</span>
-              </a>
-            </div>
-          </div>
-        )}
+        <div className="cv-floating-win-ctrls">
+          <button
+            className="cv-floating-btn"
+            title="Reload"
+            onClick={() => setRect((r) => (r ? { ...r } : r))}
+          >
+            <I.refresh size={12} />
+          </button>
+          <button
+            className="cv-floating-btn"
+            title={maximized ? "Restore" : "Maximise"}
+            onClick={() => setUI({ canvasMax: !maximized })}
+          >
+            {maximized ? "▫" : "▢"}
+          </button>
+          <button
+            className="cv-floating-btn close"
+            title="Close (Esc)"
+            onClick={closeCanvas}
+          >
+            <I.x size={13} />
+          </button>
+        </div>
       </div>
 
+      {/* Canvas Body — full bleed immersion */}
       <div className="cv-body">{body}</div>
+
+      {/* Bottom Edge Hover Detection Strip */}
+      <div className="cv-bottom-edge" onMouseEnter={() => setBottomHover(true)} />
 
       {!maximized && handles.map((d) => (
         <div key={d} className={`cv-h cv-h-${d}`} onPointerDown={(e) => onPointerDown(e, d)} />
