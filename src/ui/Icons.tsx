@@ -1,5 +1,18 @@
-const s = (d: React.ReactNode, size = 15) => (p: { size?: number }) => (
-  <svg width={p.size ?? size} height={p.size ?? size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+const s = (d: React.ReactNode, size = 15) => (p: { size?: number; className?: string; style?: React.CSSProperties }) => (
+  <svg
+    width={p.size ?? size}
+    height={p.size ?? size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={p.className}
+    style={p.style}
+  >
+    {d}
+  </svg>
 );
 
 export const I = {

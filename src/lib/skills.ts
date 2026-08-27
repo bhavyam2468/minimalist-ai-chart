@@ -24,18 +24,25 @@ export const SKILLS: Skill[] = [
     body: `# generative-ui
 This app does NOT use bloated monolithic widgets or pre-baked slide templates. It uses a small set of fundamental, nestable building blocks inspired by Gamma, linked with a reactive programming engine.
 
+## Core Design Principles
+1. **Radical Minimalism & Anti-Clutter**: Never stack redundant kickers, badges, and labels saying the same thing. If the metric is \`25:00\`, do NOT add a badge "FOCUS" and a kicker "POMODORO" and a label "Time Remaining". Let the number speak for itself. Use centered metrics with subtle contextual status.
+2. **Perimeter Border Progress**: Instead of separate bulky horizontal progress bars or squashed oval progress dials, use \`borderProgress\` on the card. An animated SVG progress line wraps cleanly around the card's perimeter (or circular ring if \`shape: "circle"\`).
+3. **Directly Editable Metrics**: Users can click directly on any timer or metric to edit its value in place! Add \`bind: "key"\` so inline edits update reactive state immediately.
+4. **Cross-Component State Sharing**: Multiple \`<component>\` tags in the same message automatically share state! If you split UI across text or math sections, use \`<component id="timer">\` on the master card and \`<component link="timer">\` on a downstream button to let it control the timer.
+5. **Auto-Adaptive Layout**: Adjacent buttons are automatically grouped and balanced across the row. Odd items in grids auto-span to eliminate awkward holes. Long labels smoothly marquee on hover without breaking words.
+
 ## Fundamental Composable Blocks
-- **card**: Liquid container with optional \`title\`, \`subtitle\`, \`badge\`, \`variant\` ("default"|"outline"|"glass"|"tint"), \`state\`, \`tick\`, \`onTick\`, and nested child \`blocks\`.
-- **grid**: Composable multi-column layout (\`cols\`: 1-6, \`gap\`, and child \`blocks\`).
+- **card**: Liquid container with optional \`title\`, \`subtitle\`, \`badge\`, \`centered\` (boolean), \`borderProgress\` (0-100), \`progressColor\`, \`shape\` ("rect"|"circle"), \`state\`, \`tick\`, \`onTick\`, \`id\`, and nested \`blocks\`.
+- **grid**: Composable multi-column layout (\`cols\`: 1-6, \`gap\`, and child \`blocks\`). Automatically balances odd items.
 - **text**: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
-- **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`).
-- **button**: Reactive action trigger (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
+- **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`, \`bind\`, \`centered\`, \`editable\`). Supports click-to-edit!
+- **button**: Reactive action trigger (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`). Consecutive buttons automatically flow together into a balanced row.
 - **slider**: Precision expansion slider (hairline track expanding to 26px on drag with precision readout, \`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, and \`bind\`).
 - **input**: Text/number input (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
 - **dropdown**: Select menu (\`label\`, \`options\`, \`bind\`).
 - **switch**: Boolean toggle switch (\`label\`, \`description\`, \`bind\`).
 - **checkbox**: Boolean checkbox (\`label\`, \`description\`, \`bind\`).
-- **progress**: Progress meter (\`value\`, \`max\`, \`label\`, \`unit\`).
+- **progress**: Clean progress meter (\`value\`, \`max\`, \`label\`, \`unit\`).
 - **chart**: Composable charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
 - **table**: Clean data table (\`headers\`, \`rows\`).
 - **badge**: Status pill (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
@@ -49,65 +56,86 @@ Any \`card\` or UI document can declare reactive state and dynamic ticking:
 - \`tick\`: Interval in ms (e.g. \`1000\` for 1s ticks, \`100\` for 0.1s ticks).
 - \`onTick\`: JS script executed every tick (e.g. \`"if (running) seconds++"\`).
 - \`onClick\`: JS script executed on button click (e.g. \`"running = !running"\` or \`"seconds = 0; running = false"\`).
-- \`bind\`: Two-way binding attribute on sliders, inputs, switches, dropdowns, and checkboxes linking directly to a key in \`state\`.
+- \`bind\`: Two-way binding attribute on sliders, inputs, metrics, switches, dropdowns, and checkboxes linking directly to a key in \`state\`.
 - \`\${...}\` / \`{...}\`: Dynamic template interpolation in any label, value, text, badge, or chart. Built-in helpers: \`pad(n)\`, \`Math\`, \`Date\`.
 - \`submitToChat\`: On buttons, sends a message back to chat with interpolated state (e.g. \`"Forecast submitted: ARR=\${users * price * 12}"\`).
 
-## Composable Recipes (Build Any Widget or Presentation)
-1. **Stopwatch**:
+## Composable Recipes
+
+1. **Minimal Stopwatch (Centered with Perimeter Border Progress)**:
 \`\`\`json
 {
   "type": "card",
+  "centered": true,
+  "borderProgress": "\${(seconds % 60) * (100 / 60)}",
   "state": { "seconds": 0, "running": false },
   "tick": 1000,
   "onTick": "if (running) seconds++",
   "blocks": [
-    { "type": "badge", "text": "\${running ? 'RUNNING' : 'PAUSED'}", "color": "\${running ? 'ok' : 'faint'}" },
-    { "type": "metric", "label": "Elapsed Time", "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}" },
-    {
-      "type": "grid",
-      "cols": 2,
-      "blocks": [
-        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
-        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
-      ]
-    }
+    { "type": "metric", "bind": "seconds", "centered": true, "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}", "sub": "\${running ? 'Active' : seconds > 0 ? 'Paused' : 'Click time to edit'}" },
+    { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
+    { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
   ]
 }
 \`\`\`
 
-2. **Pomodoro Timer**:
+2. **Cross-Component Linked UI (Split Across Chat / Math)**:
+Master Timer Card:
+\`\`\`xml
+<component id="timer">
+{
+  "type": "card",
+  "centered": true,
+  "borderProgress": "\${((1500 - timeLeft) / 1500) * 100}",
+  "state": { "timeLeft": 1500, "running": false },
+  "tick": 1000,
+  "onTick": "if (running && timeLeft > 0) timeLeft--",
+  "blocks": [
+    { "type": "metric", "bind": "timeLeft", "centered": true, "value": "\${pad(Math.floor(timeLeft / 60))}:\${pad(timeLeft % 60)}", "sub": "\${running ? 'Focus Session' : 'Paused'}" }
+  ]
+}
+</component>
+\`\`\`
+... intermediate markdown text, formulas, or math ...
+Downstream Linked Action Button:
+\`\`\`xml
+<component link="timer">
+{
+  "type": "button",
+  "text": "\${running ? 'Pause Timer' : 'Start Timer'}",
+  "variant": "primary",
+  "onClick": "running = !running"
+}
+</component>
+\`\`\`
+
+3. **Minimal Pomodoro (Border Progress & Direct Inline Editing)**:
 \`\`\`json
 {
   "type": "card",
+  "centered": true,
+  "borderProgress": "\${mode === 'work' ? ((1500 - timeLeft) / 1500) * 100 : ((300 - timeLeft) / 300) * 100}",
+  "progressColor": "\${mode === 'work' ? 'var(--accent)' : 'var(--ok)'}",
   "state": { "timeLeft": 1500, "running": false, "mode": "work" },
   "tick": 1000,
   "onTick": "if (running && timeLeft > 0) timeLeft--; else if (running && timeLeft === 0) { mode = (mode === 'work' ? 'break' : 'work'); timeLeft = (mode === 'work' ? 1500 : 300); }",
   "blocks": [
-    { "type": "badge", "text": "\${mode === 'work' ? 'Focus Session' : 'Short Break'}", "color": "\${mode === 'work' ? 'accent' : 'ok'}" },
-    { "type": "metric", "label": "Time Remaining", "value": "\${pad(Math.floor(timeLeft / 60))}:\${pad(timeLeft % 60)}" },
-    { "type": "progress", "value": "\${mode === 'work' ? ((1500 - timeLeft) / 1500) * 100 : ((300 - timeLeft) / 300) * 100}" },
-    {
-      "type": "grid",
-      "cols": 2,
-      "blocks": [
-        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
-        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "timeLeft = 1500; running = false; mode = 'work'" }
-      ]
-    }
+    { "type": "metric", "bind": "timeLeft", "centered": true, "value": "\${pad(Math.floor(timeLeft / 60))}:\${pad(timeLeft % 60)}", "sub": "\${mode === 'work' ? (running ? 'Focus Session' : 'Focus (Paused)') : (running ? 'Short Break' : 'Break (Paused)')}" },
+    { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
+    { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "timeLeft = 1500; running = false; mode = 'work'" }
   ]
 }
 \`\`\`
 
-3. **Interactive Pricing Calculator**:
+4. **Interactive Scenario Calculator**:
 \`\`\`json
 {
   "type": "card",
   "title": "SaaS Scenario Calculator",
   "state": { "users": 150, "price": 49 },
   "blocks": [
-    { "type": "slider", "label": "Active Users: \${users}", "min": 10, "max": 1000, "step": 10, "bind": "users" },
-    { "type": "slider", "label": "Price/Month: $\${price}", "min": 10, "max": 200, "step": 5, "bind": "price" },
+    { "type": "slider", "label": "Active Users", "min": 10, "max": 1000, "step": 10, "bind": "users" },
+    { "type": "slider", "label": "Price/Month", "min": 10, "max": 200, "step": 5, "unit": "$", "bind": "price" },
     {
       "type": "grid",
       "cols": 2,
@@ -121,7 +149,7 @@ Any \`card\` or UI document can declare reactive state and dynamic ticking:
 }
 \`\`\`
 
-4. **Gamma-Style Presentation Card / Slide**:
+5. **Gamma-Style Presentation Card / Slide**:
 \`\`\`json
 {
   "type": "card",

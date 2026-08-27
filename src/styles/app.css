@@ -740,6 +740,16 @@ html.lenis, html.lenis body { height: auto; }
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
 }
+.block-card-circular {
+  border-radius: 9999px !important;
+  aspect-ratio: 1 / 1;
+  max-width: 260px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
 .block-grid {
   display: grid;
   width: 100%;
@@ -772,4 +782,118 @@ html.lenis, html.lenis body { height: auto; }
 }
 .comp-btn:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+/* Button Group / FlowRow Auto-Adaptive Layout */
+.comp-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.comp-button-group .comp-btn {
+  width: 100%;
+}
+
+/* Directly Editable Metric */
+.metric-v-editable {
+  cursor: pointer;
+  border-radius: var(--r-xs);
+  transition: background var(--t-fast), box-shadow var(--t-fast);
+}
+
+.metric-v-editable:hover {
+  background: var(--surface-3);
+}
+
+.metric-v-editable:hover .metric-edit-hint {
+  opacity: 0.8 !important;
+}
+
+/* Adaptive Marquee & Overflow Protection */
+@keyframes marquee-hover {
+  0%, 18% {
+    transform: translateX(0);
+  }
+  82%, 100% {
+    transform: translateX(calc(-1 * var(--overflow-dist, 0px)));
+  }
+}
+
+.adaptive-text-box {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  position: relative;
+}
+
+.adaptive-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  min-width: 0;
+  will-change: transform;
+}
+
+.adaptive-marquee-active:hover .adaptive-marquee {
+  animation: marquee-hover var(--marquee-dur, 3s) cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+.adaptive-marquee-active:hover .adaptive-fade-edge {
+  opacity: 0;
+}
+
+/* Container Queries for Adaptive UI Components */
+.block-card,
+.comp-slider-card,
+.block-metric,
+.canvas-card {
+  container-type: inline-size;
+}
+
+@container (max-width: 200px) {
+  .comp-slider-card {
+    padding: 6px 9px !important;
+  }
+  .slider-header {
+    font-size: 11px !important;
+    gap: 4px !important;
+  }
+  .slider-readout {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+  }
+  .block-metric {
+    padding: 8px 10px !important;
+  }
+  .block-metric .metric-v {
+    font-size: 1.25rem !important;
+  }
+}
+
+@container (max-width: 145px) {
+  .comp-slider-card {
+    padding: 5px 6px !important;
+  }
+  .slider-header {
+    font-size: 10px !important;
+  }
+  .slider-readout {
+    font-size: 9.5px !important;
+  }
+  .block-metric .metric-v {
+    font-size: 1.1rem !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .block-grid-cols-3,
+  .block-grid-cols-4,
+  .block-grid-cols-5,
+  .block-grid-cols-6 {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
 }

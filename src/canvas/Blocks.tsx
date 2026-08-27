@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, createContext, useContext, useCallback } from "react";
 import { Markdown } from "../md/Markdown";
 import { useApp } from "../lib/store";
 import { send } from "../lib/agent";
@@ -22,6 +22,7 @@ export interface ReactiveContextType {
   runAction: (code: string, extra?: Record<string, any>) => void;
   interpolate: (val: any) => any;
   isReactive: boolean;
+  scopeId?: string;
 }
 
 export const ReactiveContext = createContext<ReactiveContextType>({
@@ -35,6 +36,70 @@ export const ReactiveContext = createContext<ReactiveContextType>({
 
 export function useReactive(): ReactiveContextType {
   return useContext(ReactiveContext);
+}
+
+/**
+ * Global shared reactive store registry.
+ * Enables cross-component state synchronization across a chat message or across
+ * multiple `<component>` blocks.
+ */
+type StoreSubscriber = () => void;
+
+interface ReactiveStoreInstance {
+  id: string;
+  state: ReactiveState;
+  subscribers: Set<StoreSubscriber>;
+  tick?: number;
+  onTick?: string;
+  timerId?: any;
+}
+
+const sharedStores = new Map<string, ReactiveStoreInstance>();
+
+export function getOrCreateSharedStore(
+  id: string = "default",
+  initial?: ReactiveState,
+  tick?: number,
+  onTick?: string
+): ReactiveStoreInstance {
+  let store = sharedStores.get(id);
+  if (!store) {
+    store = {
+      id,
+      state: initial ? { ...initial } : {},
+      subscribers: new Set(),
+      tick,
+      onTick,
+    };
+    sharedStores.set(id, store);
+  } else if (initial) {
+    let changed = false;
+    for (const k of Object.keys(initial)) {
+      if (store.state[k] === undefined) {
+        store.state[k] = initial[k];
+        changed = true;
+      }
+    }
+    if (changed) {
+      store.subscribers.forEach((fn) => fn());
+    }
+  }
+
+  // Manage tick timer on the shared store
+  if (tick && onTick && (!store.timerId || store.tick !== tick || store.onTick !== onTick)) {
+    if (store.timerId) clearInterval(store.timerId);
+    store.tick = tick;
+    store.onTick = onTick;
+    const intervalMs = Math.max(16, Number(tick) || 1000);
+    store.timerId = setInterval(() => {
+      if (store && store.onTick) {
+        store.state = runSafeCode(store.onTick, store.state);
+        store.subscribers.forEach((fn) => fn());
+      }
+    }, intervalMs);
+  }
+
+  return store;
 }
 
 /**
@@ -141,38 +206,62 @@ export function interpolateValue(val: any, state: ReactiveState): any {
 }
 
 export function ReactiveProvider({
+  scopeId = "default",
   initialState,
   tick,
   onTick,
   children,
 }: {
+  scopeId?: string;
   initialState?: ReactiveState;
   tick?: number;
   onTick?: string;
   children: React.ReactNode;
 }) {
-  const [state, setState] = useState<ReactiveState>(() => initialState || {});
+  const parent = useContext(ReactiveContext);
+  const effectiveId = scopeId !== "default" ? scopeId : parent.isReactive && parent.scopeId ? parent.scopeId : "default";
+
+  const store = useMemo(() => {
+    return getOrCreateSharedStore(effectiveId, initialState, tick, onTick);
+  }, [effectiveId]);
+
+  const [state, setStateLocal] = useState<ReactiveState>(() => ({ ...store.state }));
+
+  useEffect(() => {
+    if (initialState || tick || onTick) {
+      getOrCreateSharedStore(effectiveId, initialState, tick, onTick);
+    }
+    const onUpdate = () => {
+      setStateLocal({ ...store.state });
+    };
+    store.subscribers.add(onUpdate);
+    setStateLocal({ ...store.state });
+    return () => {
+      store.subscribers.delete(onUpdate);
+    };
+  }, [store, effectiveId, initialState, tick, onTick]);
 
   const updateState = useCallback((key: string, val: any) => {
-    setState((prev) => ({ ...prev, [key]: val }));
-  }, []);
+    store.state[key] = val;
+    store.subscribers.forEach((fn) => fn());
+  }, [store]);
+
+  const setState = useCallback((action: React.SetStateAction<ReactiveState>) => {
+    if (typeof action === "function") {
+      store.state = action(store.state);
+    } else {
+      store.state = action;
+    }
+    store.subscribers.forEach((fn) => fn());
+  }, [store]);
 
   const runAction = useCallback((code: string, extra?: Record<string, any>) => {
     if (!code || typeof code !== "string") return;
-    setState((prev) => runSafeCode(code, prev, extra));
-  }, []);
+    store.state = runSafeCode(code, store.state, extra);
+    store.subscribers.forEach((fn) => fn());
+  }, [store]);
 
-  // Tick loop for stopwatches, timers, countdowns, simulations
-  useEffect(() => {
-    if (!tick || !onTick) return;
-    const intervalMs = Math.max(16, Number(tick) || 1000);
-    const timerId = setInterval(() => {
-      setState((prev) => runSafeCode(onTick, prev));
-    }, intervalMs);
-    return () => clearInterval(timerId);
-  }, [tick, onTick]);
-
-  const boundInterpolate = useCallback((val: any) => interpolateValue(val, state), [state]);
+  const boundInterpolate = useCallback((val: any) => interpolateValue(val, store.state), [store]);
 
   const value = useMemo<ReactiveContextType>(
     () => ({
@@ -182,8 +271,9 @@ export function ReactiveProvider({
       runAction,
       interpolate: boundInterpolate,
       isReactive: true,
+      scopeId: effectiveId,
     }),
-    [state, updateState, runAction, boundInterpolate]
+    [state, updateState, setState, runAction, boundInterpolate, effectiveId]
   );
 
   return <ReactiveContext.Provider value={value}>{children}</ReactiveContext.Provider>;
@@ -1855,6 +1945,134 @@ export function FollowupsBlock({ b }: { b: CanvasBlock }) {
   );
 }
 
+/* -------------------------------------------------- auto-adaptive text & grouping */
+
+export function AdaptiveText({
+  text,
+  className = "",
+  style,
+  as: Component = "span",
+}: {
+  text: string;
+  className?: string;
+  style?: React.CSSProperties;
+  as?: any;
+}) {
+  const containerRef = useRef<HTMLElement | null>(null);
+  const textRef = useRef<HTMLElement | null>(null);
+  const [overflow, setOverflow] = useState(0);
+
+  const checkOverflow = useCallback(() => {
+    const c = containerRef.current;
+    const t = textRef.current;
+    if (c && t) {
+      const diff = t.scrollWidth - c.clientWidth;
+      setOverflow(diff > 2 ? diff : 0);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    checkOverflow();
+  }, [text, checkOverflow]);
+
+  useEffect(() => {
+    const c = containerRef.current;
+    if (!c || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => checkOverflow());
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, [checkOverflow]);
+
+  const hasOverflow = overflow > 0;
+  const marqueeDur = `${Math.max(2.5, overflow / 18)}s`;
+
+  return (
+    <Component
+      ref={containerRef}
+      className={`adaptive-text-box ${hasOverflow ? "adaptive-marquee-active" : ""} ${className}`}
+      style={{
+        ...style,
+        ["--overflow-dist" as any]: `${overflow + 14}px`,
+        ["--marquee-dur" as any]: marqueeDur,
+      }}
+    >
+      <span ref={textRef} className="adaptive-marquee">
+        {text}
+      </span>
+      {hasOverflow && (
+        <span
+          className="adaptive-fade-edge"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 16,
+            background: "linear-gradient(to right, transparent, var(--surface))",
+            pointerEvents: "none",
+            transition: "opacity 0.2s ease",
+          }}
+        />
+      )}
+    </Component>
+  );
+}
+
+export function ButtonGroupBlock({ blocks }: { blocks: any[] }) {
+  if (!blocks || blocks.length === 0) return null;
+  const count = blocks.length;
+
+  return (
+    <div
+      className="comp-button-group a-blk"
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
+        gap: 8,
+        width: "100%",
+        margin: "4px 0",
+      }}
+    >
+      {blocks.map((b, i) => (
+        <div key={i} style={{ minWidth: 0, width: "100%", display: "flex" }}>
+          <ButtonBlock b={{ ...b, style: { width: "100%", ...b.style } }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function normalizeAdaptiveBlocks(blocks: any[]): any[] {
+  if (!Array.isArray(blocks)) return [];
+  const normalized: any[] = [];
+  let buttonAccum: any[] = [];
+
+  const flushButtons = () => {
+    if (buttonAccum.length === 1) {
+      normalized.push(buttonAccum[0]);
+    } else if (buttonAccum.length > 1) {
+      normalized.push({
+        type: "button_group",
+        blocks: [...buttonAccum],
+      });
+    }
+    buttonAccum = [];
+  };
+
+  for (const b of blocks) {
+    if (!b) continue;
+    const type = String(b.type || b.kind || "").toLowerCase();
+    if (type === "button" || type === "btn") {
+      buttonAccum.push(b);
+    } else {
+      flushButtons();
+      normalized.push(b);
+    }
+  }
+  flushButtons();
+  return normalized;
+}
+
 /* -------------------------------------------------- composable primitives */
 
 export function SliderBlock({ b }: { b: any }) {
@@ -1863,11 +2081,17 @@ export function SliderBlock({ b }: { b: any }) {
   const max = Number(b.max ?? 100);
   const step = Number(b.step ?? 1);
   const unit = b.unit ?? "";
-  const label = interpolate(b.label || b.title || "Slider");
+  const rawLabel = interpolate(b.label || b.title || "Slider");
 
   const boundVal = b.bind && state[b.bind] !== undefined ? Number(state[b.bind]) : undefined;
   const [internalVal, setInternalVal] = useState<number>(() => Number(b.value ?? Math.round((min + max) / 2)));
   const val = boundVal !== undefined ? boundVal : internalVal;
+
+  // Clean label of redundant value readout if present (e.g. "Work: 25 min" -> "Work")
+  const cleanLabel = useMemo(() => {
+    if (typeof rawLabel !== "string") return rawLabel;
+    return rawLabel.replace(/[:\-]?\s*\d+\s*(?:min|mins|sec|secs|s|m|%|px)?\s*$/i, "").trim() || rawLabel;
+  }, [rawLabel]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -1919,12 +2143,12 @@ export function SliderBlock({ b }: { b: any }) {
         userSelect: "none",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 540, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <I.sliders size={13} />
-          {label}
+      <div className="slider-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, minWidth: 0, gap: 8 }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 540, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+          <I.sliders size={13} style={{ flexShrink: 0 }} />
+          <AdaptiveText text={cleanLabel} />
         </span>
-        <span style={{ fontSize: "var(--fs-xs)", fontFamily: "var(--mono)", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
+        <span className="slider-readout" style={{ fontSize: "var(--fs-xs)", fontFamily: "var(--mono)", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
           {val}{unit}
         </span>
       </div>
@@ -2069,6 +2293,7 @@ export function ButtonBlock({ b }: { b: any }) {
         opacity: b.disabled ? 0.6 : 1,
         transform: clicked ? "scale(0.96)" : "scale(1)",
         transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease",
+        ...b.style,
       }}
     >
       <span>{text}</span>
@@ -2415,38 +2640,178 @@ export function CardBlock({ b }: { b: any }) {
   const subtitle = interpolate(b.subtitle || b.desc || b.description);
   const badge = interpolate(b.badge);
   const variant = b.variant || "default";
+  const align = b.align || (b.centered ? "center" : undefined);
+  const isCircular = b.shape === "circle" || b.circular === true;
 
-  const children = b.blocks || b.children || b.items || [];
+  // Progress around card perimeter or circular ring
+  const rawProgress = b.borderProgress ?? b.progress;
+  const progressVal = rawProgress != null ? Number(interpolate(rawProgress)) : undefined;
+  const progressColor = interpolate(b.progressColor || "var(--accent)");
+
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [dims, setDims] = useState({ w: 0, h: 0 });
+
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setDims({ w: rect.width, h: rect.height });
+    };
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => update());
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, []);
+
+  const rawChildren = b.blocks || b.children || b.items || [];
+  const children = useMemo(() => normalizeAdaptiveBlocks(rawChildren), [rawChildren]);
+
+  const hasPerimeter = progressVal != null && !isNaN(progressVal);
+  const clampedProgress = hasPerimeter ? Math.min(100, Math.max(0, progressVal)) : 0;
 
   const inner = (
     <div
-      className={`block-card block-card-${variant}`}
+      ref={cardRef}
+      className={`block-card block-card-${variant} ${isCircular ? "block-card-circular" : ""}`}
       style={{
-        padding: b.padding != null ? (typeof b.padding === "number" ? `${b.padding}px` : b.padding) : undefined,
+        position: "relative",
+        padding: b.padding != null ? (typeof b.padding === "number" ? `${b.padding}px` : b.padding) : isCircular ? "24px 20px" : undefined,
         gap: b.gap != null ? (typeof b.gap === "number" ? `${b.gap}px` : b.gap) : undefined,
+        textAlign: align as any,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: align === "center" ? "center" : undefined,
+        justifyContent: align === "center" ? "center" : undefined,
+        borderRadius: isCircular ? "9999px" : "var(--r)",
+        aspectRatio: isCircular ? "1 / 1" : undefined,
+        maxWidth: isCircular ? 260 : undefined,
+        margin: isCircular ? "0 auto" : undefined,
+        overflow: "visible",
       }}
     >
+      {/* Perimeter / Border Progress Ring SVG */}
+      {hasPerimeter && dims.w > 0 && dims.h > 0 && (
+        <svg
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: -1,
+            width: "calc(100% + 2px)",
+            height: "calc(100% + 2px)",
+            pointerEvents: "none",
+            zIndex: 1,
+            overflow: "visible",
+          }}
+        >
+          {isCircular ? (
+            <>
+              <circle
+                cx={dims.w / 2 + 1}
+                cy={dims.h / 2 + 1}
+                r={Math.max(10, Math.min(dims.w, dims.h) / 2 - 3)}
+                fill="none"
+                stroke="var(--line-soft)"
+                strokeWidth="2.5"
+              />
+              <circle
+                cx={dims.w / 2 + 1}
+                cy={dims.h / 2 + 1}
+                r={Math.max(10, Math.min(dims.w, dims.h) / 2 - 3)}
+                fill="none"
+                stroke={progressColor}
+                strokeWidth="2.5"
+                strokeDasharray="100"
+                strokeDashoffset={100 - clampedProgress}
+                pathLength="100"
+                strokeLinecap="round"
+                transform={`rotate(-90 ${dims.w / 2 + 1} ${dims.h / 2 + 1})`}
+                style={{
+                  transition: "stroke-dashoffset 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <rect
+                x="1.5"
+                y="1.5"
+                width={Math.max(0, dims.w - 1)}
+                height={Math.max(0, dims.h - 1)}
+                rx={10}
+                ry={10}
+                fill="none"
+                stroke="var(--line-soft)"
+                strokeWidth="2"
+              />
+              <rect
+                x="1.5"
+                y="1.5"
+                width={Math.max(0, dims.w - 1)}
+                height={Math.max(0, dims.h - 1)}
+                rx={10}
+                ry={10}
+                fill="none"
+                stroke={progressColor}
+                strokeWidth="2.5"
+                strokeDasharray="100"
+                strokeDashoffset={100 - clampedProgress}
+                pathLength="100"
+                strokeLinecap="round"
+                style={{
+                  transition: "stroke-dashoffset 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              />
+            </>
+          )}
+        </svg>
+      )}
+
       {(title || badge || subtitle) && (
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 2 }}>
-          <div>
-            {title && <div style={{ fontSize: "var(--fs-base)", fontWeight: 600, color: "var(--text)", letterSpacing: "-0.01em" }}>{title}</div>}
-            {subtitle && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>{subtitle}</div>}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: align === "center" ? "column" : "row",
+            alignItems: align === "center" ? "center" : "flex-start",
+            justifyContent: align === "center" ? "center" : "space-between",
+            gap: align === "center" ? 4 : 10,
+            marginBottom: 2,
+            width: "100%",
+            textAlign: align as any,
+          }}
+        >
+          <div style={{ textAlign: align as any }}>
+            {title && (
+              <div style={{ fontSize: "var(--fs-base)", fontWeight: 600, color: "var(--text)", letterSpacing: "-0.01em" }}>
+                <AdaptiveText text={title} />
+              </div>
+            )}
+            {subtitle && (
+              <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>
+                <AdaptiveText text={subtitle} />
+              </div>
+            )}
           </div>
           {badge && (
             <BadgeBlock b={typeof badge === "string" ? { text: badge } : badge} />
           )}
         </div>
       )}
+
       {Array.isArray(children) && children.map((child: any, i: number) => (
         <BlockR key={i} b={child} />
       ))}
     </div>
   );
 
-  // If card specifies state or tick loop, wrap in its own reactive scope
-  if (b.state || b.tick || b.onTick) {
+  const scopeId = b.id || b.scope || b.link;
+
+  // If card specifies state or tick loop, or explicit scopeId, wrap in its own reactive scope
+  if (b.state || b.tick || b.onTick || scopeId) {
     return (
-      <ReactiveProvider initialState={b.state} tick={b.tick} onTick={b.onTick}>
+      <ReactiveProvider scopeId={scopeId} initialState={b.state} tick={b.tick} onTick={b.onTick}>
         {inner}
       </ReactiveProvider>
     );
@@ -2459,20 +2824,30 @@ export function GridBlock({ b }: { b: any }) {
   const cols = Math.min(6, Math.max(1, Number(b.cols || b.columns || 2)));
   const gap = b.gap != null ? (typeof b.gap === "number" ? `${b.gap}px` : b.gap) : "8px";
   const items = b.blocks || b.items || b.children || [];
+  const total = items.length;
 
   return (
     <div
-      className="block-grid"
+      className={`block-grid block-grid-cols-${cols}`}
       style={{
+        display: "grid",
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
         gap,
+        width: "100%",
       }}
     >
-      {items.map((item: any, i: number) => (
-        <div key={i} style={{ minWidth: 0 }}>
-          <BlockR b={item} />
-        </div>
-      ))}
+      {items.map((item: any, i: number) => {
+        // Auto-balance odd dangling items:
+        // If 3 items in a 2-col grid, the 3rd item spans 2 columns to eliminate awkward holes!
+        const isOddDangler = cols === 2 && total % 2 !== 0 && i === total - 1;
+        const gridSpan = isOddDangler ? "1 / -1" : undefined;
+
+        return (
+          <div key={i} style={{ minWidth: 0, gridColumn: gridSpan }}>
+            <BlockR b={item} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2481,39 +2856,208 @@ export function TextBlock({ b }: { b: any }) {
   const { interpolate } = useReactive();
   const text = interpolate(b.text || b.content || "");
   const variant = b.variant || "body";
-  const align = b.align || "left";
+  const align = b.align || (b.centered ? "center" : "left");
 
   if (variant === "title") {
-    return <h2 style={{ fontSize: "1.25rem", fontWeight: 650, margin: "2px 0 6px", textAlign: align, letterSpacing: "-0.015em", color: "var(--text)" }}>{text}</h2>;
+    return (
+      <h2 style={{ fontSize: "1.25rem", fontWeight: 650, margin: "2px 0 6px", textAlign: align as any, letterSpacing: "-0.015em", color: "var(--text)" }}>
+        <AdaptiveText text={text} />
+      </h2>
+    );
   }
   if (variant === "sub" || variant === "subtitle") {
-    return <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", margin: "2px 0 6px", textAlign: align, lineHeight: 1.5 }}>{text}</p>;
+    return (
+      <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", margin: "2px 0 6px", textAlign: align as any, lineHeight: 1.5 }}>
+        <AdaptiveText text={text} />
+      </p>
+    );
   }
   if (variant === "kicker") {
-    return <div style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "2px 0", textAlign: align }}>{text}</div>;
+    return (
+      <div style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "2px 0", textAlign: align as any }}>
+        <AdaptiveText text={text} />
+      </div>
+    );
   }
   if (variant === "code") {
     return <pre style={{ fontFamily: "var(--mono)", fontSize: "12px", background: "var(--surface-3)", padding: "8px 12px", borderRadius: "var(--r-sm)", overflowX: "auto" }}><code>{text}</code></pre>;
   }
-  return <div style={{ textAlign: align }}><Markdown text={text} animate={false} /></div>;
+  return <div style={{ textAlign: align as any }}><Markdown text={text} animate={false} /></div>;
 }
 
 export function MetricBlock({ b }: { b: any }) {
-  const { interpolate } = useReactive();
+  const { interpolate, state, updateState } = useReactive();
   const label = interpolate(b.label || b.title || "");
   const rawValue = interpolate(b.value != null ? b.value : "");
-  const value = typeof rawValue === "number" ? Number(rawValue.toFixed(2)).toString() : rawValue;
+  const value = typeof rawValue === "number" ? Number(rawValue.toFixed(2)).toString() : String(rawValue);
   const delta = interpolate(b.delta);
   const sub = interpolate(b.sub || b.hint);
+  const align = b.align || (b.centered ? "center" : "left");
+
+  // In-place directly editable metric
+  const isEditable = b.editable !== false;
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setEditValue(value);
+    }
+  }, [value, isEditing]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  // Determine state key to write to if edited
+  const boundKey = useMemo(() => {
+    if (b.bind) return b.bind;
+    if (typeof b.value === "string") {
+      const match = b.value.match(/\b(seconds|timeLeft|time|left|duration|counter|count|val|score)\b/);
+      if (match && state[match[1]] !== undefined) {
+        return match[1];
+      }
+      for (const k of Object.keys(state)) {
+        if (b.value.includes(k)) return k;
+      }
+    }
+    return null;
+  }, [b.bind, b.value, state]);
+
+  const handleCommit = () => {
+    setIsEditing(false);
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === value) return;
+
+    // Parse timecode MM:SS or HH:MM:SS or plain seconds/number
+    let parsedVal: any = trimmed;
+    if (trimmed.includes(":")) {
+      const parts = trimmed.split(":").map((p) => Number(p) || 0);
+      if (parts.length === 2) {
+        parsedVal = parts[0] * 60 + parts[1];
+      } else if (parts.length === 3) {
+        parsedVal = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+    } else if (!isNaN(Number(trimmed))) {
+      parsedVal = Number(trimmed);
+    }
+
+    if (boundKey) {
+      updateState(boundKey, parsedVal);
+    }
+    if (b.onEdit) {
+      b.onEdit(parsedVal);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleCommit();
+    } else if (e.key === "Escape") {
+      setIsEditing(false);
+      setEditValue(value);
+    }
+  };
 
   const isNeg = delta != null && String(delta).trim().startsWith("-");
+  const canEdit = isEditable && (boundKey != null || b.onEdit != null);
 
   return (
-    <div className="canvas-card block-metric" style={{ padding: "10px 12px" }}>
-      {label && <div className="metric-k">{label}</div>}
-      <div className="metric-v" style={{ fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    <div
+      className="canvas-card block-metric"
+      style={{
+        padding: "10px 12px",
+        textAlign: align as any,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: align === "center" ? "center" : "flex-start",
+      }}
+    >
+      {label && (
+        <div className="metric-k" style={{ textAlign: align as any }}>
+          <AdaptiveText text={label} />
+        </div>
+      )}
+
+      {isEditing ? (
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 4, margin: "2px 0" }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleCommit}
+            onKeyDown={handleKeyDown}
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              width: `${Math.max(5, editValue.length + 1)}ch`,
+              maxWidth: "100%",
+              padding: "0 4px",
+              textAlign: align as any,
+              background: "var(--surface-3)",
+              border: "1px solid var(--accent-line)",
+              borderRadius: "var(--r-xs)",
+              color: "var(--text)",
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleCommit}
+            title="Save value"
+            style={{
+              height: 26,
+              padding: "0 7px",
+              fontSize: "11px",
+              background: "var(--accent)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "var(--r-xs)",
+              cursor: "pointer",
+            }}
+          >
+            ✓
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={canEdit ? () => setIsEditing(true) : undefined}
+          className={`metric-v ${canEdit ? "metric-v-editable" : ""}`}
+          title={canEdit ? "Click to directly edit value" : undefined}
+          style={{
+            fontVariantNumeric: "tabular-nums",
+            textAlign: align as any,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            position: "relative",
+          }}
+        >
+          <span>{value}</span>
+          {canEdit && (
+            <span
+              className="metric-edit-hint"
+              style={{
+                fontSize: "11px",
+                opacity: 0,
+                color: "var(--text-faint)",
+                transition: "opacity 0.15s ease",
+              }}
+            >
+              ✎
+            </span>
+          )}
+        </div>
+      )}
+
       {(delta != null || sub) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: align === "center" ? "center" : "flex-start", gap: 6, marginTop: 4 }}>
           {delta != null && (
             <span
               style={{
@@ -2529,7 +3073,11 @@ export function MetricBlock({ b }: { b: any }) {
               <span>{delta}</span>
             </span>
           )}
-          {sub && <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>{sub}</span>}
+          {sub && (
+            <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>
+              <AdaptiveText text={sub} />
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -2686,6 +3234,14 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
     );
   }
 
+  const scopeId =
+    data.id ||
+    data.scope ||
+    data.link ||
+    data.target ||
+    (data.attrs && (data.attrs.id || data.attrs.link)) ||
+    "default";
+
   const wrapped = (
     <div className={`component-block ${streamCls}`} data-inline="true">
       <div className="component-body">
@@ -2696,13 +3252,14 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
 
   return (
     <ErrorBoundary name={data.type || "component"}>
-      {data.state || data.tick || data.onTick ? (
-        <ReactiveProvider initialState={data.state} tick={data.tick} onTick={data.onTick}>
-          {wrapped}
-        </ReactiveProvider>
-      ) : (
-        wrapped
-      )}
+      <ReactiveProvider
+        scopeId={scopeId}
+        initialState={data.state}
+        tick={data.tick}
+        onTick={data.onTick}
+      >
+        {wrapped}
+      </ReactiveProvider>
     </ErrorBoundary>
   );
 }
@@ -2725,6 +3282,11 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
     case "row":
     case "layout":
       return <GridBlock b={b} />;
+
+    case "button_group":
+    case "button-group":
+    case "buttons":
+      return <ButtonGroupBlock blocks={b.blocks || (b as any).items || []} />;
 
     case "text":
     case "markdown":
@@ -2817,16 +3379,22 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
-            title: b.label || "Stopwatch",
+            centered: true,
+            borderProgress: "${(seconds % 60) * (100 / 60)}",
+            progressColor: "var(--accent)",
             state: { seconds: 0, running: false },
             tick: 1000,
             onTick: "if (running) seconds++",
             blocks: [
-              { type: "badge", text: "${running ? 'RUNNING' : 'PAUSED'}", color: "${running ? 'ok' : 'faint'}" },
-              { type: "metric", label: "Elapsed Time", value: "${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}" },
               {
-                type: "grid",
-                cols: 2,
+                type: "metric",
+                bind: "seconds",
+                centered: true,
+                value: "${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}",
+                sub: "${running ? 'Active' : seconds > 0 ? 'Paused' : 'Ready'}",
+              },
+              {
+                type: "button_group",
                 blocks: [
                   { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
                   { type: "button", text: "Reset", variant: "secondary", onClick: "seconds = 0; running = false" },
@@ -2837,55 +3405,72 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         />
       );
 
-    case "timer":
+    case "timer": {
+      const initialTimerSec = Number(b.seconds) || 300;
       return (
         <CardBlock
           b={{
             type: "card",
-            title: b.label || "Timer",
-            state: { left: b.seconds || 300, running: false },
+            centered: true,
+            borderProgress: "${((total - left) / total) * 100}",
+            progressColor: "var(--accent)",
+            state: { total: initialTimerSec, left: initialTimerSec, running: false },
             tick: 1000,
             onTick: "if (running && left > 0) left--",
             blocks: [
-              { type: "metric", label: "Time Remaining", value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}" },
               {
-                type: "grid",
-                cols: 2,
+                type: "metric",
+                bind: "left",
+                centered: true,
+                value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
+                sub: "${running ? 'Counting down' : left === 0 ? 'Completed' : 'Click time to edit'}",
+              },
+              {
+                type: "button_group",
                 blocks: [
                   { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", text: "Reset", variant: "secondary", onClick: `left = ${b.seconds || 300}; running = false` },
+                  { type: "button", text: "Reset", variant: "secondary", onClick: `left = total; running = false` },
                 ],
               },
             ],
           }}
         />
       );
+    }
 
-    case "pomodoro":
+    case "pomodoro": {
+      const workSec = Number(b.work) || 1500;
+      const breakSec = Number(b.break) || 300;
       return (
         <CardBlock
           b={{
             type: "card",
-            title: b.label || "Pomodoro Focus",
-            state: { left: b.work || 1500, running: false, mode: "work" },
+            centered: true,
+            borderProgress: "${mode === 'work' ? ((work - left) / work) * 100 : ((brk - left) / brk) * 100}",
+            progressColor: "${mode === 'work' ? 'var(--accent)' : 'var(--ok)'}",
+            state: { work: workSec, brk: breakSec, left: workSec, running: false, mode: "work" },
             tick: 1000,
-            onTick: "if (running && left > 0) left--; else if (running && left === 0) { mode = (mode === 'work' ? 'break' : 'work'); left = (mode === 'work' ? 1500 : 300); }",
+            onTick: `if (running && left > 0) left--; else if (running && left === 0) { mode = (mode === 'work' ? 'break' : 'work'); left = (mode === 'work' ? work : brk); }`,
             blocks: [
-              { type: "badge", text: "${mode === 'work' ? 'Focus Session' : 'Short Break'}", color: "${mode === 'work' ? 'accent' : 'ok'}" },
-              { type: "metric", label: "Time Remaining", value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}" },
-              { type: "progress", value: "${mode === 'work' ? ((1500 - left) / 1500) * 100 : ((300 - left) / 300) * 100}" },
               {
-                type: "grid",
-                cols: 2,
+                type: "metric",
+                bind: "left",
+                centered: true,
+                value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
+                sub: "${mode === 'work' ? (running ? 'Focus Session' : 'Focus (Paused)') : (running ? 'Short Break' : 'Break (Paused)')}",
+              },
+              {
+                type: "button_group",
                 blocks: [
                   { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", text: "Reset", variant: "secondary", onClick: "left = 1500; running = false; mode = 'work'" },
+                  { type: "button", text: "Reset", variant: "secondary", onClick: `left = work; running = false; mode = 'work'` },
                 ],
               },
             ],
           }}
         />
       );
+    }
 
     case "weather":
       return (
