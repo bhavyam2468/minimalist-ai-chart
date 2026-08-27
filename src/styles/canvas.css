@@ -52,50 +52,41 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 38px;
   width: 100%;
   box-sizing: border-box;
   padding: 0 12px 0 16px;
-  border-bottom: 1px solid var(--line-soft);
   background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+  border-top-left-radius: var(--r);
+  border-top-right-radius: var(--r);
   cursor: grab;
   user-select: none;
   touch-action: none;
-  z-index: 60;
-  border-top-left-radius: var(--r);
-  border-top-right-radius: var(--r);
-  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease);
+  z-index: 20;
+  height: 38px;
+  overflow: hidden;
+  box-shadow: none !important;
+  transition: height 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease,
+              opacity 0.18s ease;
 }
 .cv-bar:active { cursor: grabbing; }
 
-/* In unpinned mode, top bar slides up and auto-hides */
-.cv-win[data-pinned="false"] .cv-bar,
-.cv-win:not([data-pinned="true"]) .cv-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: rgba(14, 16, 22, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  transform: translateY(-100%);
-  opacity: 0;
-  pointer-events: none;
+/* In unpinned mode when not hovered: collapses to 0 height, content pushes up */
+.cv-win[data-pinned="false"]:not([data-top-visible="true"]) .cv-bar,
+.cv-win:not([data-pinned="true"]):not([data-top-visible="true"]) .cv-bar {
+  height: 0 !important;
+  border-bottom-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
+/* When top area is hovered or pinned: extends down from top border pushing content downwards */
 .cv-win[data-top-visible="true"] .cv-bar,
-.cv-win[data-pinned="false"] .cv-bar:hover,
-.cv-win:not([data-pinned="true"]) .cv-bar:hover {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* In pinned mode, top bar is permanently docked */
-.cv-win[data-pinned="true"] .cv-bar {
-  position: relative;
-  transform: none !important;
+.cv-win[data-pinned="true"] .cv-bar,
+.cv-bar:hover {
+  height: 38px !important;
+  border-bottom-color: var(--line-soft) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
@@ -158,8 +149,6 @@
 .cv-win-btn.pinned,
 .cv-win-btn[data-active="true"] {
   color: var(--accent);
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
 }
 
 .cv-win-btn.close:hover {
@@ -231,10 +220,16 @@
   overflow: hidden;
 }
 
+.fe-body {
+  flex: 1;
+  min-height: 0;
+  order: 1;
+}
+
 /* Contextual bottom footer bar */
 .fe-bar {
   flex: none;
-  height: 38px;
+  order: 99;
   width: 100%;
   box-sizing: border-box;
   display: flex;
@@ -245,39 +240,31 @@
   border-top: 1px solid var(--line-soft);
   border-bottom-left-radius: var(--r);
   border-bottom-right-radius: var(--r);
-  z-index: 55;
-  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease);
+  z-index: 20;
+  height: 38px;
+  overflow: hidden;
+  box-shadow: none !important;
+  transition: height 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease,
+              opacity 0.18s ease;
 }
 .fe-bar .grow { flex: 1; display: block; }
 
-/* In unpinned mode, footer slides down and auto-hides */
-.cv-win[data-pinned="false"] .fe-bar,
-.cv-win:not([data-pinned="true"]) .fe-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(14, 16, 22, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
-  transform: translateY(100%);
-  opacity: 0;
-  pointer-events: none;
+/* In unpinned mode when not hovered: collapses to 0 height pushing content down */
+.cv-win[data-pinned="false"]:not([data-bottom-visible="true"]) .fe-bar,
+.cv-win:not([data-pinned="true"]):not([data-bottom-visible="true"]) .fe-bar {
+  height: 0 !important;
+  border-top-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
+/* When bottom area is hovered or pinned: extends up from bottom border pushing content upwards */
 .cv-win[data-bottom-visible="true"] .fe-bar,
-.cv-win[data-pinned="false"] .fe-bar:hover,
-.cv-win:not([data-pinned="true"]) .fe-bar:hover {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* In pinned mode, footer is permanently docked at bottom */
-.cv-win[data-pinned="true"] .fe-bar {
-  position: relative;
-  transform: none !important;
+.cv-win[data-pinned="true"] .fe-bar,
+.fe-bar:hover {
+  height: 38px !important;
+  border-top-color: var(--line-soft) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
