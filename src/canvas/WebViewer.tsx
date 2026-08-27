@@ -103,6 +103,10 @@ export function WebViewer({
     <div className="fe" style={{ width: "100%", height: "100%", position: "relative" }}>
       {/* Floating contextual bar aligned to the bottom */}
       <div className="fe-bar">
+        <span className="fe-tag" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          {hasVideo ? <I.video size={12} /> : <I.globe size={12} />}
+          <span>{hostOf(url)}</span>
+        </span>
         <div className="fe-seg">
           {hasVideo && (
             <button data-active={tab === "video"} onClick={() => setTab("video")}>
