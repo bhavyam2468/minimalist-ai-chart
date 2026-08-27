@@ -2030,7 +2030,8 @@ export function ButtonGroupBlock({ blocks }: { blocks: any[] }) {
         gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
         gap: 8,
         width: "100%",
-        margin: "4px 0",
+        maxWidth: 260,
+        margin: "6px auto 0",
       }}
     >
       {blocks.map((b, i) => (
@@ -2678,8 +2679,8 @@ export function CardBlock({ b }: { b: any }) {
       className={`block-card block-card-${variant} ${isCircular ? "block-card-circular" : ""}`}
       style={{
         position: "relative",
-        padding: b.padding != null ? (typeof b.padding === "number" ? `${b.padding}px` : b.padding) : isCircular ? "24px 20px" : undefined,
-        gap: b.gap != null ? (typeof b.gap === "number" ? `${b.gap}px` : b.gap) : undefined,
+        padding: b.padding != null ? (typeof b.padding === "number" ? `${b.padding}px` : b.padding) : isCircular ? "28px 20px" : undefined,
+        gap: b.gap != null ? (typeof b.gap === "number" ? `${b.gap}px` : b.gap) : isCircular ? 8 : undefined,
         textAlign: align as any,
         display: "flex",
         flexDirection: "column",
@@ -2687,86 +2688,81 @@ export function CardBlock({ b }: { b: any }) {
         justifyContent: align === "center" ? "center" : undefined,
         borderRadius: isCircular ? "9999px" : "var(--r)",
         aspectRatio: isCircular ? "1 / 1" : undefined,
-        maxWidth: isCircular ? 260 : undefined,
-        margin: isCircular ? "0 auto" : undefined,
-        overflow: "visible",
+        maxWidth: isCircular ? 280 : undefined,
+        width: "100%",
+        margin: isCircular ? "12px auto" : undefined,
+        overflow: "hidden",
       }}
     >
-      {/* Perimeter / Border Progress Ring SVG */}
-      {hasPerimeter && dims.w > 0 && dims.h > 0 && (
+      {/* 1. Circular Card Progress Ring Dial */}
+      {hasPerimeter && isCircular && dims.w > 0 && dims.h > 0 && (
         <svg
           aria-hidden="true"
           style={{
             position: "absolute",
-            inset: -1,
-            width: "calc(100% + 2px)",
-            height: "calc(100% + 2px)",
+            inset: 0,
+            width: "100%",
+            height: "100%",
             pointerEvents: "none",
             zIndex: 1,
             overflow: "visible",
           }}
         >
-          {isCircular ? (
-            <>
-              <circle
-                cx={dims.w / 2 + 1}
-                cy={dims.h / 2 + 1}
-                r={Math.max(10, Math.min(dims.w, dims.h) / 2 - 3)}
-                fill="none"
-                stroke="var(--line-soft)"
-                strokeWidth="2.5"
-              />
-              <circle
-                cx={dims.w / 2 + 1}
-                cy={dims.h / 2 + 1}
-                r={Math.max(10, Math.min(dims.w, dims.h) / 2 - 3)}
-                fill="none"
-                stroke={progressColor}
-                strokeWidth="2.5"
-                strokeDasharray="100"
-                strokeDashoffset={100 - clampedProgress}
-                pathLength="100"
-                strokeLinecap="round"
-                transform={`rotate(-90 ${dims.w / 2 + 1} ${dims.h / 2 + 1})`}
-                style={{
-                  transition: "stroke-dashoffset 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              />
-            </>
-          ) : (
-            <>
-              <rect
-                x="1.5"
-                y="1.5"
-                width={Math.max(0, dims.w - 1)}
-                height={Math.max(0, dims.h - 1)}
-                rx={10}
-                ry={10}
-                fill="none"
-                stroke="var(--line-soft)"
-                strokeWidth="2"
-              />
-              <rect
-                x="1.5"
-                y="1.5"
-                width={Math.max(0, dims.w - 1)}
-                height={Math.max(0, dims.h - 1)}
-                rx={10}
-                ry={10}
-                fill="none"
-                stroke={progressColor}
-                strokeWidth="2.5"
-                strokeDasharray="100"
-                strokeDashoffset={100 - clampedProgress}
-                pathLength="100"
-                strokeLinecap="round"
-                style={{
-                  transition: "stroke-dashoffset 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              />
-            </>
-          )}
+          {/* Background Track Ring */}
+          <circle
+            cx={dims.w / 2}
+            cy={dims.h / 2}
+            r={Math.max(10, Math.min(dims.w, dims.h) / 2 - 4)}
+            fill="none"
+            stroke="var(--line-soft)"
+            strokeWidth="3.5"
+          />
+          {/* Active Progress Dial */}
+          <circle
+            cx={dims.w / 2}
+            cy={dims.h / 2}
+            r={Math.max(10, Math.min(dims.w, dims.h) / 2 - 4)}
+            fill="none"
+            stroke={progressColor}
+            strokeWidth="3.5"
+            strokeDasharray="100"
+            strokeDashoffset={100 - clampedProgress}
+            pathLength="100"
+            strokeLinecap="round"
+            transform={`rotate(-90 ${dims.w / 2} ${dims.h / 2})`}
+            style={{
+              transition: "stroke-dashoffset 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          />
         </svg>
+      )}
+
+      {/* 2. Rectangular Card Top Border Progress Bar */}
+      {hasPerimeter && !isCircular && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            background: "var(--line-soft)",
+            borderTopLeftRadius: "var(--r)",
+            borderTopRightRadius: "var(--r)",
+            overflow: "hidden",
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${clampedProgress}%`,
+              background: progressColor,
+              transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          />
+        </div>
       )}
 
       {(title || badge || subtitle) && (
@@ -2777,14 +2773,22 @@ export function CardBlock({ b }: { b: any }) {
             alignItems: align === "center" ? "center" : "flex-start",
             justifyContent: align === "center" ? "center" : "space-between",
             gap: align === "center" ? 4 : 10,
-            marginBottom: 2,
+            marginBottom: isCircular ? 0 : 2,
             width: "100%",
             textAlign: align as any,
           }}
         >
-          <div style={{ textAlign: align as any }}>
+          <div style={{ textAlign: align as any, width: "100%" }}>
             {title && (
-              <div style={{ fontSize: "var(--fs-base)", fontWeight: 600, color: "var(--text)", letterSpacing: "-0.01em" }}>
+              <div
+                style={{
+                  fontSize: isCircular ? "12px" : "var(--fs-base)",
+                  fontWeight: 600,
+                  color: isCircular ? "var(--text-dim)" : "var(--text)",
+                  letterSpacing: isCircular ? "0.06em" : "-0.01em",
+                  textTransform: isCircular ? "uppercase" : "none",
+                }}
+              >
                 <AdaptiveText text={title} />
               </div>
             )}
@@ -2794,7 +2798,7 @@ export function CardBlock({ b }: { b: any }) {
               </div>
             )}
           </div>
-          {badge && (
+          {badge && !isCircular && (
             <BadgeBlock b={typeof badge === "string" ? { text: badge } : badge} />
           )}
         </div>
@@ -2886,7 +2890,7 @@ export function TextBlock({ b }: { b: any }) {
 }
 
 export function MetricBlock({ b }: { b: any }) {
-  const { interpolate, state, updateState } = useReactive();
+  const { interpolate } = useReactive();
   const label = interpolate(b.label || b.title || "");
   const rawValue = interpolate(b.value != null ? b.value : "");
   const value = typeof rawValue === "number" ? Number(rawValue.toFixed(2)).toString() : String(rawValue);
@@ -2894,170 +2898,58 @@ export function MetricBlock({ b }: { b: any }) {
   const sub = interpolate(b.sub || b.hint);
   const align = b.align || (b.centered ? "center" : "left");
 
-  // In-place directly editable metric
-  const isEditable = b.editable !== false;
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(value);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setEditValue(value);
-    }
-  }, [value, isEditing]);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  // Determine state key to write to if edited
-  const boundKey = useMemo(() => {
-    if (b.bind) return b.bind;
-    if (typeof b.value === "string") {
-      const match = b.value.match(/\b(seconds|timeLeft|time|left|duration|counter|count|val|score)\b/);
-      if (match && state[match[1]] !== undefined) {
-        return match[1];
-      }
-      for (const k of Object.keys(state)) {
-        if (b.value.includes(k)) return k;
-      }
-    }
-    return null;
-  }, [b.bind, b.value, state]);
-
-  const handleCommit = () => {
-    setIsEditing(false);
-    const trimmed = editValue.trim();
-    if (!trimmed || trimmed === value) return;
-
-    // Parse timecode MM:SS or HH:MM:SS or plain seconds/number
-    let parsedVal: any = trimmed;
-    if (trimmed.includes(":")) {
-      const parts = trimmed.split(":").map((p) => Number(p) || 0);
-      if (parts.length === 2) {
-        parsedVal = parts[0] * 60 + parts[1];
-      } else if (parts.length === 3) {
-        parsedVal = parts[0] * 3600 + parts[1] * 60 + parts[2];
-      }
-    } else if (!isNaN(Number(trimmed))) {
-      parsedVal = Number(trimmed);
-    }
-
-    if (boundKey) {
-      updateState(boundKey, parsedVal);
-    }
-    if (b.onEdit) {
-      b.onEdit(parsedVal);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleCommit();
-    } else if (e.key === "Escape") {
-      setIsEditing(false);
-      setEditValue(value);
-    }
-  };
-
   const isNeg = delta != null && String(delta).trim().startsWith("-");
-  const canEdit = isEditable && (boundKey != null || b.onEdit != null);
+  const isCentered = align === "center";
 
   return (
     <div
-      className="canvas-card block-metric"
+      className="block-metric a-blk"
       style={{
-        padding: "10px 12px",
+        padding: isCentered ? "2px 0" : "8px 10px",
         textAlign: align as any,
         display: "flex",
         flexDirection: "column",
-        alignItems: align === "center" ? "center" : "flex-start",
+        alignItems: isCentered ? "center" : "flex-start",
+        width: "100%",
+        minWidth: 0,
+        ...b.style,
       }}
     >
       {label && (
-        <div className="metric-k" style={{ textAlign: align as any }}>
+        <div className="metric-k" style={{ textAlign: align as any, whiteSpace: "nowrap", width: "100%" }}>
           <AdaptiveText text={label} />
         </div>
       )}
 
-      {isEditing ? (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 4, margin: "2px 0" }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleCommit}
-            onKeyDown={handleKeyDown}
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              width: `${Math.max(5, editValue.length + 1)}ch`,
-              maxWidth: "100%",
-              padding: "0 4px",
-              textAlign: align as any,
-              background: "var(--surface-3)",
-              border: "1px solid var(--accent-line)",
-              borderRadius: "var(--r-xs)",
-              color: "var(--text)",
-              outline: "none",
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleCommit}
-            title="Save value"
-            style={{
-              height: 26,
-              padding: "0 7px",
-              fontSize: "11px",
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--r-xs)",
-              cursor: "pointer",
-            }}
-          >
-            ✓
-          </button>
-        </div>
-      ) : (
-        <div
-          onClick={canEdit ? () => setIsEditing(true) : undefined}
-          className={`metric-v ${canEdit ? "metric-v-editable" : ""}`}
-          title={canEdit ? "Click to directly edit value" : undefined}
-          style={{
-            fontVariantNumeric: "tabular-nums",
-            textAlign: align as any,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            position: "relative",
-          }}
-        >
-          <span>{value}</span>
-          {canEdit && (
-            <span
-              className="metric-edit-hint"
-              style={{
-                fontSize: "11px",
-                opacity: 0,
-                color: "var(--text-faint)",
-                transition: "opacity 0.15s ease",
-              }}
-            >
-              ✎
-            </span>
-          )}
-        </div>
-      )}
+      <div
+        className="metric-v"
+        style={{
+          fontVariantNumeric: "tabular-nums",
+          textAlign: align as any,
+          whiteSpace: "nowrap",
+          wordBreak: "keep-all",
+          display: "block",
+          fontSize: isCentered ? "2.4rem" : undefined,
+          lineHeight: 1.12,
+          letterSpacing: "-0.025em",
+          fontWeight: 650,
+          margin: isCentered ? "4px 0" : "2px 0",
+        }}
+      >
+        {value}
+      </div>
 
       {(delta != null || sub) && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: align === "center" ? "center" : "flex-start", gap: 6, marginTop: 4 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: isCentered ? "center" : "flex-start",
+            gap: 6,
+            marginTop: 2,
+            whiteSpace: "nowrap",
+          }}
+        >
           {delta != null && (
             <span
               style={{
@@ -3074,7 +2966,7 @@ export function MetricBlock({ b }: { b: any }) {
             </span>
           )}
           {sub && (
-            <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>
+            <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)", whiteSpace: "nowrap" }}>
               <AdaptiveText text={sub} />
             </span>
           )}
@@ -3379,7 +3271,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
+            shape: "circle",
             centered: true,
+            title: b.label || "Stopwatch",
             borderProgress: "${(seconds % 60) * (100 / 60)}",
             progressColor: "var(--accent)",
             state: { seconds: 0, running: false },
@@ -3388,7 +3282,6 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
             blocks: [
               {
                 type: "metric",
-                bind: "seconds",
                 centered: true,
                 value: "${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}",
                 sub: "${running ? 'Active' : seconds > 0 ? 'Paused' : 'Ready'}",
@@ -3411,7 +3304,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
+            shape: "circle",
             centered: true,
+            title: b.label || "Timer",
             borderProgress: "${((total - left) / total) * 100}",
             progressColor: "var(--accent)",
             state: { total: initialTimerSec, left: initialTimerSec, running: false },
@@ -3420,10 +3315,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
             blocks: [
               {
                 type: "metric",
-                bind: "left",
                 centered: true,
                 value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
-                sub: "${running ? 'Counting down' : left === 0 ? 'Completed' : 'Click time to edit'}",
+                sub: "${running ? 'Counting down' : left === 0 ? 'Completed' : 'Paused'}",
               },
               {
                 type: "button_group",
@@ -3445,7 +3339,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
+            shape: "circle",
             centered: true,
+            title: b.label || "Pomodoro",
             borderProgress: "${mode === 'work' ? ((work - left) / work) * 100 : ((brk - left) / brk) * 100}",
             progressColor: "${mode === 'work' ? 'var(--accent)' : 'var(--ok)'}",
             state: { work: workSec, brk: breakSec, left: workSec, running: false, mode: "work" },
@@ -3454,10 +3350,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
             blocks: [
               {
                 type: "metric",
-                bind: "left",
                 centered: true,
                 value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
-                sub: "${mode === 'work' ? (running ? 'Focus Session' : 'Focus (Paused)') : (running ? 'Short Break' : 'Break (Paused)')}",
+                sub: "${mode === 'work' ? (running ? 'Focus' : 'Focus (Paused)') : (running ? 'Break' : 'Break (Paused)')}",
               },
               {
                 type: "button_group",

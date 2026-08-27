@@ -315,7 +315,15 @@ html.lenis, html.lenis body { height: auto; }
   margin-top: 2px !important;
   margin-bottom: 4px !important;
 }
-.metric-v { font-size: var(--fs-xl); font-weight: 560; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.metric-v {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
 .metric-k { font-size: var(--fs-xs); color: var(--text-faint); letter-spacing: .08em; text-transform: uppercase; }
 .canvas-thumb {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
@@ -796,19 +804,11 @@ html.lenis, html.lenis body { height: auto; }
   width: 100%;
 }
 
-/* Directly Editable Metric */
-.metric-v-editable {
-  cursor: pointer;
-  border-radius: var(--r-xs);
-  transition: background var(--t-fast), box-shadow var(--t-fast);
-}
-
-.metric-v-editable:hover {
-  background: var(--surface-3);
-}
-
-.metric-v-editable:hover .metric-edit-hint {
-  opacity: 0.8 !important;
+.block-card .block-metric {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Adaptive Marquee & Overflow Protection */
@@ -844,49 +844,6 @@ html.lenis, html.lenis body { height: auto; }
 
 .adaptive-marquee-active:hover .adaptive-fade-edge {
   opacity: 0;
-}
-
-/* Container Queries for Adaptive UI Components */
-.block-card,
-.comp-slider-card,
-.block-metric,
-.canvas-card {
-  container-type: inline-size;
-}
-
-@container (max-width: 200px) {
-  .comp-slider-card {
-    padding: 6px 9px !important;
-  }
-  .slider-header {
-    font-size: 11px !important;
-    gap: 4px !important;
-  }
-  .slider-readout {
-    font-size: 10px !important;
-    padding: 1px 4px !important;
-  }
-  .block-metric {
-    padding: 8px 10px !important;
-  }
-  .block-metric .metric-v {
-    font-size: 1.25rem !important;
-  }
-}
-
-@container (max-width: 145px) {
-  .comp-slider-card {
-    padding: 5px 6px !important;
-  }
-  .slider-header {
-    font-size: 10px !important;
-  }
-  .slider-readout {
-    font-size: 9.5px !important;
-  }
-  .block-metric .metric-v {
-    font-size: 1.1rem !important;
-  }
 }
 
 @media (max-width: 520px) {
