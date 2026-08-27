@@ -343,33 +343,36 @@ export function CanvasHost({ chatId }: { chatId: string }) {
                   data-active={webTab === "video"}
                   onClick={() => setWebTab("video")}
                   className="cv-floating-tab"
+                  title="Video player"
                 >
                   <I.video size={12} />
-                  <span>video</span>
+                  <span className="cv-tab-text">video</span>
                 </button>
               )}
               <button
                 data-active={webTab === "reader"}
                 onClick={() => setWebTab("reader")}
                 className="cv-floating-tab"
+                title={isVid ? "Video notes" : "Reader view"}
               >
                 <I.file size={12} />
-                <span>{isVid ? "notes" : "reader"}</span>
+                <span className="cv-tab-text">{isVid ? "notes" : "reader"}</span>
               </button>
               <button
                 data-active={webTab === "live"}
                 onClick={() => setWebTab("live")}
                 className="cv-floating-tab"
+                title="Live web view"
               >
                 <I.globe size={12} />
-                <span>live</span>
+                <span className="cv-tab-text">live</span>
               </button>
             </div>
 
             <div className="cv-floating-actions">
               <button
                 className="cv-floating-action-pill"
-                title="Copy link"
+                title={copied ? "Copied to clipboard" : "Copy link"}
                 onClick={() => {
                   copyToClipboard(res.url!);
                   setCopied(true);
@@ -377,7 +380,7 @@ export function CanvasHost({ chatId }: { chatId: string }) {
                 }}
               >
                 {copied ? <I.check size={12} /> : <I.copy size={12} />}
-                <span>{copied ? "copied" : "copy link"}</span>
+                <span className="cv-pill-text">{copied ? "copied" : "copy link"}</span>
               </button>
               <a
                 className="cv-floating-action-pill"
@@ -386,8 +389,8 @@ export function CanvasHost({ chatId }: { chatId: string }) {
                 rel="noreferrer noopener"
                 title="Open in new tab"
               >
-                <span>open</span>
-                <span style={{ fontSize: 11 }}>↗</span>
+                <span className="cv-pill-text">open</span>
+                <span style={{ fontSize: 11, lineHeight: 1 }}>↗</span>
               </a>
             </div>
           </div>
