@@ -211,11 +211,14 @@ export function CanvasHost({ chatId }: { chatId: string }) {
   }
 
   /* ------------------------------------------------------ desktop window */
+  const isVid = isVideo(res?.url);
   const style: React.CSSProperties = maximized
     ? { left: PAD, top: PAD, width: `calc(100vw - ${PAD * 2}px)`, height: `calc(100vh - ${PAD * 2}px)` }
     : rect
       ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h }
-      : { right: PAD, top: PAD, width: 880, height: 660 };
+      : isVid
+        ? { right: PAD, top: PAD, width: 780, height: 490 }
+        : { right: PAD, top: PAD, width: 880, height: 660 };
 
   const handles: Dir[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 
@@ -225,7 +228,7 @@ export function CanvasHost({ chatId }: { chatId: string }) {
         if ((e.target as HTMLElement).closest("button,a")) return;
         onPointerDown(e, "move");
       }}>
-        {res.url ? <I.globe size={14} /> : res.path && viewOf(res.path, file) === "project" ? <I.canvas size={14} /> : <I.file size={14} />}
+        {res.url ? (isVid ? <I.video size={14} /> : <I.globe size={14} />) : res.path && viewOf(res.path, file) === "project" ? <I.canvas size={14} /> : <I.file size={14} />}
         <span className="cv-title">{res.title}</span>
         <span className="chip">{res.badge}</span>
         <span style={{ flex: 1 }} />

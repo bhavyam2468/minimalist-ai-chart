@@ -32,4 +32,6 @@ export const I = {
   plug: s(<><path d="M9 3v6M15 3v6M6 9h12v3a6 6 0 0 1-12 0z" /><path d="M12 18v3" /></>),
   spark: s(<><path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z" /></>),
   thread: s(<><path d="M4 6h16M4 11h10M8 16h12M8 16l-3 3M8 16l-3-3" /></>),
+  video: s(<><rect x="2" y="4" width="14" height="16" rx="2" /><path d="M16 8l5-3v14l-5-3" /></>),
+  play: s(<><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" /></>),
 };
