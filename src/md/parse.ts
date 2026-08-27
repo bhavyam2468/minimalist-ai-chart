@@ -295,12 +295,29 @@ export function parseBlocks(src: string): Block[] {
 
     /* <component> */
     if (/^\s*<component/i.test(line)) {
+      // Check immediate self-closing tag: <component ... /> or <component .../>
+      const selfClosing = line.match(/^\s*<component([^>]*?)\s*\/>([\s\S]*)$/i);
+      if (selfClosing) {
+        const attrs = selfClosing[1].trim();
+        const inlineRest = selfClosing[2].trim();
+        out.push({ t: "component", raw: "", attrs, open: false });
+        if (inlineRest) {
+          lines.splice(i + 1, 0, inlineRest);
+        }
+        i++;
+        continue;
+      }
+
       const body: string[] = [];
       let closed = false;
       const tagM = line.match(/^\s*<component([^>]*)>([\s\S]*)$/i);
-      const attrs = tagM ? tagM[1].trim() : "";
+      let attrs = tagM ? tagM[1].trim() : "";
+      if (attrs.endsWith("/")) {
+        attrs = attrs.slice(0, -1).trim();
+        closed = true;
+      }
       const inlineRest = tagM ? tagM[2] : "";
-      if (/<\/component>/i.test(inlineRest)) {
+      if (closed || /<\/component>/i.test(inlineRest)) {
         body.push(inlineRest.replace(/<\/component>[\s\S]*$/i, ""));
         closed = true;
         i++;

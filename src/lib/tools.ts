@@ -1,7 +1,7 @@
 import { useApp, uid } from "./store";
 import { findSkills, skillByName, SKILLS } from "./skills";
 import { searchComponents, getComponentDef } from "./ui-library";
-import { hostOf, siteSearch, webCrawl, webFetch, webSearch } from "./web";
+import { hostOf, webCrawl, webFetch, webSearch } from "./web";
 import type { Artifact, WFile } from "./types";
 
 export interface ToolCtx {
@@ -55,10 +55,10 @@ export function baseToolDefs() {
     { name: "open_canvas", description: "Show something in the user's canvas right now: a workspace file path, a folder, an artifact id, or an http(s) url. Creates nothing.", parameters: P({ target: str("file path, folder, artifact id, or url"), title: str("optional label") }, ["target"]) },
     {
       name: "search_components",
-      description: "Search the UI Component Marketplace & Library for interactive components, form elements (sliders, buttons, checkboxes, dropdowns, switches, steppers), charts, math/science visualizers, and dashboards. Search by type name, category, or semantic tags.",
+      description: "Search the UI Component Marketplace & Library of 90+ components across interactive controls, precision sliders, charts, presentation slides, visualizers, and data cards. Search by type name, category, or semantic tags.",
       parameters: P({
-        query: str("search query, tag, or component type (e.g. 'slider', 'form', 'button', 'chart', 'ios volume', 'math', 'chemistry')"),
-        category: { type: "string", enum: ["form", "chart", "math-science", "data", "feedback", "layout", "interactive"], description: "optional category filter" },
+        query: str("search query, tag, or component type (e.g. 'slider', 'button', 'chart', 'roadmap', 'math', 'metrics')"),
+        category: { type: "string", enum: ["interactive", "chart", "slides", "visualizer", "data", "layout"], description: "optional category filter" },
         tag: str("optional specific tag to filter by"),
       }),
     },

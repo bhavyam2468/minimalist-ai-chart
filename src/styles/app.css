@@ -386,6 +386,44 @@ html.lenis, html.lenis body { height: auto; }
   animation: fade-in var(--t-fast) var(--ease-out) both;
 }
 
+.comp-streaming-in {
+  position: relative;
+  animation: comp-stream-reveal 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes comp-stream-reveal {
+  from {
+    opacity: 0.85;
+    filter: blur(1.5px);
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0);
+  }
+}
+
+.comp-streaming-in::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: var(--r) var(--r) 0 0;
+  animation: comp-stream-shimmer 1.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes comp-stream-shimmer {
+  0% { transform: translateX(-100%); opacity: 0.2; }
+  50% { opacity: 0.8; }
+  100% { transform: translateX(100%); opacity: 0.2; }
+}
+
 .component-block[data-inline="true"] {
   background: transparent;
   border: none;
@@ -427,17 +465,53 @@ html.lenis, html.lenis body { height: auto; }
   margin-top: 4px;
 }
 
+/* Minimalist component card with hover-revealed metadata */
+.comp-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+.comp-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.comp-card-hover-tray {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid transparent;
+  transition: opacity 0.2s var(--ease), max-height 0.22s var(--ease), border-color 0.2s var(--ease), margin-top 0.2s var(--ease);
+}
+
+.comp-card:hover .comp-card-hover-tray {
+  opacity: 1;
+  max-height: 160px;
+  border-top-color: var(--line-soft);
+  margin-top: 6px;
+  padding-top: 8px;
+}
+
 .comp-prompt-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
-  font-size: var(--fs-xs);
-  font-family: var(--font-sans);
-  color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
+  padding: 5px 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
   cursor: pointer;
   transition: all var(--t-fast) var(--ease);
   text-align: left;

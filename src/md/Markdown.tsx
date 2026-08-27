@@ -156,46 +156,48 @@ function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open:
   const onOpenCanvas = () => {
     import("../lib/store").then(({ useApp, uid }) => {
       const state = useApp.getState();
-      const chatId = state.activeChatId;
+      const chatId = state.activeId;
       if (!chatId) return;
       const fileName = `dash-${uid("ui")}.ui.json`;
       state.putFile(chatId, {
         path: fileName,
         content: code,
         size: code.length,
-        kind: "ui",
-        state: "idle",
-        updatedAt: Date.now(),
+        mime: "application/json",
+        kind: "data",
+        state: "local",
+        origin: "agent",
+        createdAt: Date.now(),
       });
       state.openCanvas({ kind: "file", path: fileName });
     });
   };
 
-  if (open) {
+  if (open && !code.trim()) {
     return (
       <div
-        className="inline-ui-block comp-streaming-card"
+        className="inline-ui-block comp-streaming-in"
         style={{
-          margin: "10px 0",
-          padding: "14px 18px",
-          borderRadius: "var(--r)",
+          margin: "8px 0",
+          padding: "8px 12px",
+          borderRadius: "var(--r-sm)",
           border: "1px solid var(--line-soft)",
           background: "var(--surface)",
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
-          gap: 10,
+          gap: 8,
         }}
       >
-        <span className="spinner sm" style={{ flexShrink: 0, borderColor: "var(--accent)", borderRightColor: "transparent" }} />
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>
-          Rendering {title || "interactive interface"}...
+        <span className="spinner sm" style={{ width: 11, height: 11, borderWidth: 1.5 }} />
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>
+          Streaming {title || "interface"}...
         </span>
       </div>
     );
   }
 
   return (
-    <div className="inline-ui-block a-blk" style={{ margin: "14px 0", borderRadius: "var(--r)", border: "1px solid var(--line-soft)", overflow: "hidden", background: "var(--surface)" }}>
+    <div className={`inline-ui-block a-blk ${open ? "comp-streaming-in" : ""}`} style={{ margin: "14px 0", borderRadius: "var(--r)", border: "1px solid var(--line-soft)", overflow: "hidden", background: "var(--surface)" }}>
       <div
         className="inline-ui-bar"
         style={{
@@ -325,7 +327,7 @@ function InlineToolBlock({
 
   const toolCall = useApp((s) => {
     if (!id) return null;
-    const chat = s.chats[s.activeChatId || ""];
+    const chat = s.chats[s.activeId || ""];
     if (!chat) return null;
     for (const n of Object.values(chat.nodes)) {
       const found = n.toolCalls?.find((t) => t.id === id);

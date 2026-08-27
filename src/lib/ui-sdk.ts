@@ -3,7 +3,7 @@
  * Programmatic interface for constructing, searching, and serializing Generative UI components.
  */
 
-import { COMPONENT_CATALOG, UIComponentDef, searchComponents, getComponentDef } from "./ui-library";
+import { COMPONENT_CATALOG, searchComponents, getComponentDef } from "./ui-library";
 
 export interface ComponentBuilder<T = Record<string, any>> {
   type: string;
@@ -49,7 +49,7 @@ export const UI = {
   list: () => COMPONENT_CATALOG,
 
   /**
-   * Form Components (individual types)
+   * Interactive Controls & Inputs
    */
   slider: (props: {
     value?: number;
@@ -58,14 +58,21 @@ export const UI = {
     step?: number;
     unit?: string;
     label?: string;
-    icon?: string;
   }) => createBuilder("slider", { value: 50, min: 0, max: 100, unit: "%", ...props }),
+
+  rangeSlider: (props: {
+    min?: number;
+    max?: number;
+    low?: number;
+    high?: number;
+    unit?: string;
+    label?: string;
+  }) => createBuilder("range-slider", props),
 
   button: (props: {
     label: string;
     variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "pill";
     size?: "sm" | "md" | "lg";
-    icon?: string;
     loading?: boolean;
     disabled?: boolean;
   }) => createBuilder("button", props),
@@ -74,7 +81,6 @@ export const UI = {
     label: string;
     description?: string;
     checked?: boolean;
-    disabled?: boolean;
   }) => createBuilder("checkbox", props),
 
   radio: (props: {
@@ -88,7 +94,6 @@ export const UI = {
     placeholder?: string;
     value?: string;
     options: Array<{ label: string; value: string }>;
-    searchable?: boolean;
   }) => createBuilder("dropdown", props),
 
   switchToggle: (props: {
@@ -101,7 +106,6 @@ export const UI = {
     label?: string;
     placeholder?: string;
     value?: string;
-    clearable?: boolean;
   }) => createBuilder("input", props),
 
   stepper: (props: {
@@ -125,6 +129,27 @@ export const UI = {
     label?: string;
     unit?: string;
   }) => createBuilder("progress", props),
+
+  /**
+   * Presentation & Slides
+   */
+  slideTitle: (props: { title: string; subtitle?: string; presenter?: string }) =>
+    createBuilder("slide:title", props),
+
+  slideHero: (props: { headline: string; lead?: string }) =>
+    createBuilder("slide:hero", props),
+
+  slideSplit: (props: { leftTitle: string; rightTitle: string; leftItems: string[]; rightItems: string[] }) =>
+    createBuilder("slide:split", props),
+
+  slideFeatures: (props: { title: string; items: Array<{ title: string; description: string }> }) =>
+    createBuilder("slide:features", props),
+
+  slideStats: (props: { title: string; stats: Array<{ number: string; label: string }> }) =>
+    createBuilder("slide:stats", props),
+
+  slideRoadmap: (props: { title: string; phases: Array<{ phase: string; title: string; items: string[] }> }) =>
+    createBuilder("slide:roadmap", props),
 
   /**
    * Data & Visualizations

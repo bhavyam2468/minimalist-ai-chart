@@ -166,7 +166,6 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
   const toPxX = useCallback((x: number) => ((x - domain.xmin) / (domain.xmax - domain.xmin)) * W, [domain.xmin, domain.xmax]);
   const toPxY = useCallback((y: number) => H - ((y - domain.ymin) / (domain.ymax - domain.ymin)) * H, [domain.ymin, domain.ymax]);
   const toMathX = useCallback((px: number) => domain.xmin + (px / W) * (domain.xmax - domain.xmin), [domain.xmin, domain.xmax]);
-  const toMathY = useCallback((py: number) => domain.ymin + ((H - py) / H) * (domain.ymax - domain.ymin), [domain.ymin, domain.ymax]);
 
   // Pan controls
   const handleMouseDown = (e: React.MouseEvent) => {

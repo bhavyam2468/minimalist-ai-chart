@@ -397,10 +397,10 @@ function Chart({ b }: { b: CanvasBlock }) {
             strokeWidth="12"
             strokeLinecap="round"
           />
-          <text x={cx} y={cy - 2} textAnchor="middle" fill="var(--text)" fontSize="26" fontWeight="600" fontVariantNumeric="tabular-nums">
+          <text x={cx} y={cy - 2} textAnchor="middle" fill="var(--text)" fontSize="26" fontWeight="600" style={{ fontVariantNumeric: "tabular-nums" }}>
             {fmt(clamped)}{unit}
           </text>
-          <text x={cx} y={cy + 18} textAnchor="middle" fill="var(--text-faint)" fontSize="11" letterSpacing="0.04em" textTransform="uppercase">
+          <text x={cx} y={cy + 18} textAnchor="middle" fill="var(--text-faint)" fontSize="11" letterSpacing="0.04em" style={{ textTransform: "uppercase" }}>
             {b.title || b.label || (data[0]?.label ?? "Value")}
           </text>
           <text x={x1 - 4} y={y1 + 16} textAnchor="middle" fill="var(--text-faint)" fontSize="10">{min}</text>
@@ -1195,31 +1195,6 @@ export function TabsBlock({ b }: { b: CanvasBlock }) {
 }
 
 /* --------------------------------------------------------- interactive sliders & forms */
-function Slider({ b }: { b: CanvasBlock }) {
-  const min = Number(b.min ?? 0);
-  const max = Number(b.max ?? 100);
-  const step = Number(b.step ?? 1);
-  const [val, setVal] = useState(Number(b.value ?? min));
-
-  return (
-    <div className="canvas-card" style={{ gap: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-sm)" }}>
-        <span className="metric-k">{b.label}</span>
-        <b style={{ fontVariantNumeric: "tabular-nums" }}>{val}{b.unit ? ` ${b.unit}` : ""}</b>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={val}
-        onChange={(e) => setVal(Number(e.target.value))}
-        style={{ width: "100%", accentColor: "var(--accent)" }}
-      />
-    </div>
-  );
-}
-
 function Callout({ b }: { b: CanvasBlock }) {
   const kind = b.tone || b.kind || "info"; // info | success | warn | err
   const colorMap: Record<string, string> = {
@@ -1419,21 +1394,6 @@ function TodoList({ b }: { b: CanvasBlock }) {
   );
 }
 
-function Counter({ b }: { b: CanvasBlock }) {
-  const [v, setV] = useState<number>(Number(b.value ?? 0));
-  return (
-    <div className="canvas-card">
-      {b.label && <div className="metric-k">{b.label}</div>}
-      <div className="metric-v">{v}</div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <button className="btn" onClick={() => setV((x) => x - (b.step ?? 1))}>−</button>
-        <button className="btn" onClick={() => setV((x) => x + (b.step ?? 1))}>+</button>
-        <button className="btn" onClick={() => setV(b.value ?? 0)}>reset</button>
-      </div>
-    </div>
-  );
-}
-
 /* -------------------------------------------------------- question block */
 export function QuestionBlock({ b }: { b: CanvasBlock }) {
   const q = b.question || b.title || "Select an option:";
@@ -1597,6 +1557,7 @@ export function SliderBlock({ b }: { b: any }) {
   const label = b.label || b.title || "Slider";
   const [val, setVal] = useState<number>(() => Number(b.value ?? Math.round((min + max) / 2)));
   const [isDragging, setIsDragging] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   const pct = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
@@ -1628,17 +1589,19 @@ export function SliderBlock({ b }: { b: any }) {
   return (
     <div
       className="comp-slider-card a-blk"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
-        padding: "12px 16px",
+        padding: "10px 14px",
         background: "var(--surface)",
         border: "1px solid var(--line-soft)",
         borderRadius: "var(--r)",
-        margin: "8px 0",
+        margin: "6px 0",
         userSelect: "none",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 540, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <I.sliders size={13} />
           {label}
         </span>
@@ -1646,57 +1609,68 @@ export function SliderBlock({ b }: { b: any }) {
           {val}{unit}
         </span>
       </div>
-      {/* iOS Volume-Style Fluid Slider Pill */}
+
+      {/* Precision Expansion Track: thin by default (6px), thickens on hold/drag (26px) for precision */}
       <div
-        ref={trackRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        className="ios-slider-pill"
-        data-active={isDragging}
         style={{
-          position: "relative",
-          height: 38,
-          background: "var(--surface-2)",
-          borderRadius: 9999,
+          height: 30,
+          display: "flex",
+          alignItems: "center",
           cursor: "ew-resize",
-          overflow: "hidden",
-          border: "1px solid var(--line-soft)",
-          touchAction: "none",
-          transform: isDragging ? "scaleY(1.12)" : "scaleY(1)",
-          transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s ease",
         }}
       >
-        {/* Fill level */}
         <div
+          ref={trackRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          className="comp-slider-track"
+          data-active={isDragging}
           style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: `${pct}%`,
-            background: "var(--accent)",
-            opacity: 0.88,
+            position: "relative",
+            width: "100%",
+            height: isDragging ? 26 : isHovered ? 9 : 6,
+            background: "var(--surface-3)",
             borderRadius: 9999,
-            transition: isDragging ? "none" : "width 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
-          }}
-        />
-        {/* Icon & readout */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 14px",
-            pointerEvents: "none",
-            color: "var(--text)",
-            mixBlendMode: "difference",
+            overflow: "hidden",
+            touchAction: "none",
+            transition: "height 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease",
           }}
         >
-          <I.volume size={14} />
-          <span style={{ fontSize: "11.5px", fontWeight: 600, fontFamily: "var(--mono)" }}>{Math.round(pct)}%</span>
+          {/* Fill Bar */}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${pct}%`,
+              background: "var(--accent)",
+              borderRadius: 9999,
+              transition: isDragging ? "none" : "width 0.12s ease",
+            }}
+          />
+
+          {/* Precision readout inside track when thickened on drag */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0 10px",
+              pointerEvents: "none",
+              color: "var(--text)",
+              mixBlendMode: "difference",
+              opacity: isDragging ? 1 : 0,
+              transition: "opacity 0.15s ease",
+            }}
+          >
+            <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: "var(--mono)" }}>{min}{unit}</span>
+            <span style={{ fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)" }}>{val}{unit}</span>
+            <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: "var(--mono)" }}>{max}{unit}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1895,7 +1869,7 @@ export function SwitchBlock({ b }: { b: any }) {
         <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title}</span>
         {b.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{b.description}</span>}
       </div>
-      {/* iOS Switch Track */}
+      {/* Fluid Switch Track */}
       <div
         style={{
           width: 44,
@@ -2232,57 +2206,43 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
     return res;
   }, [raw, attrs]);
 
-  if (open) {
-    const rawKind = String(data?.type || data?.kind || attrs || "component").toLowerCase();
-    let label = "interactive dashboard";
-    if (rawKind.includes("chart") || rawKind.includes("graph")) label = "chart";
-    else if (rawKind.includes("question") || rawKind.includes("ask")) label = "question card";
-    else if (rawKind.includes("chemistry") || rawKind.includes("molecule")) label = "molecular structure";
-    else if (rawKind.includes("math") || rawKind.includes("desmos") || rawKind.includes("plot")) label = "function plot";
-    else if (rawKind.includes("switcher")) label = "multi-view dashboard";
-
-    const title = data?.title || data?.question;
-
+  // When streaming and no data parsed yet, show a calm, minimal 1-line stream status
+  if (open && !data) {
     return (
       <div
-        className="component-block comp-streaming-card"
+        className="component-block comp-streaming-in"
         style={{
-          padding: "12px 16px",
+          padding: "8px 12px",
           background: "var(--surface)",
           border: "1px solid var(--line-soft)",
           borderRadius: "var(--r)",
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
-          gap: 10,
-          minHeight: 52,
-          boxSizing: "border-box",
+          gap: 8,
+          color: "var(--text-faint)",
+          fontSize: "var(--fs-xs)",
         }}
       >
-        <span className="spinner sm" style={{ flexShrink: 0, borderColor: "var(--accent)", borderRightColor: "transparent" }} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <span style={{ fontSize: "var(--fs-xs)", fontWeight: 540, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {title ? String(title) : `Rendering ${label}...`}
-          </span>
-          <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
-            Building interactive interface...
-          </span>
-        </div>
+        <span className="spinner sm" style={{ width: 11, height: 11, borderWidth: 1.5 }} />
+        <span>Streaming component...</span>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="component-block" style={{ padding: "10px 14px", color: "var(--text-dim)", fontSize: "var(--fs-xs)" }}>
+      <div className="component-block" style={{ padding: "8px 12px", color: "var(--text-dim)", fontSize: "var(--fs-xs)" }}>
         {raw && raw.trim() ? raw : "Empty component"}
       </div>
     );
   }
 
+  const streamCls = open ? "comp-streaming-in" : "";
+
   if (Array.isArray(data)) {
     return (
       <ErrorBoundary name="Component group">
-        <div className="component-block" data-inline="true">
+        <div className={`component-block ${streamCls}`} data-inline="true">
           <div className="component-body">
             {data.map((b, i) => <BlockR key={i} b={b} />)}
           </div>
@@ -2297,7 +2257,7 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
   if (compType === "chemistry" || compType === "molecule" || data.smiles || data.molecule) {
     return (
       <ErrorBoundary name="Chemistry diagram">
-        <div className="component-block" data-inline="true">
+        <div className={`component-block ${streamCls}`} data-inline="true">
           <ChemistryBlock b={data} />
         </div>
       </ErrorBoundary>
@@ -2308,7 +2268,7 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
   if (compType === "math" || compType === "plot" || compType === "desmos" || data.fn || data.formula || data.equation) {
     return (
       <ErrorBoundary name="Math function plot">
-        <div className="component-block" data-inline="true">
+        <div className={`component-block ${streamCls}`} data-inline="true">
           <MathPlotBlock b={data} />
         </div>
       </ErrorBoundary>
@@ -2318,7 +2278,7 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
   if (data.type) {
     return (
       <ErrorBoundary name={data.type}>
-        <div className="component-block" data-inline="true">
+        <div className={`component-block ${streamCls}`} data-inline="true">
           <div className="component-body">
             <BlockR b={data} />
           </div>
@@ -2329,7 +2289,7 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
 
   return (
     <ErrorBoundary name="Dashboard component">
-      <div className="component-block">
+      <div className={`component-block ${streamCls}`}>
         {data.title && (
           <div className="component-header">
             <span className="component-title">
@@ -2513,6 +2473,133 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
               {col.map((x: CanvasBlock, j: number) => <BlockR key={j} b={x} />)}
             </div>
           ))}
+        </div>
+      );
+    /* ---- presentation slides ---- */
+    case "slide:title":
+      return (
+        <div className="canvas-card" style={{ padding: "24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {b.presenter && <div style={{ fontSize: "var(--fs-xs)", color: "var(--accent)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase" }}>{b.presenter}</div>}
+          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", margin: 0, lineHeight: 1.25 }}>{b.title}</h2>
+          {b.subtitle && <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", lineHeight: 1.4 }}>{b.subtitle}</div>}
+        </div>
+      );
+    case "slide:hero":
+      return (
+        <div className="canvas-card" style={{ padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{b.headline || b.title}</div>
+          {b.lead && <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", lineHeight: 1.4 }}>{b.lead}</div>}
+        </div>
+      );
+    case "slide:split":
+      return (
+        <div className="canvas-card" style={{ padding: "16px" }}>
+          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+              <div style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>{b.leftTitle || "Option A"}</div>
+              <ul className="md-list" style={{ paddingLeft: 16, margin: 0 }}>
+                {(b.leftItems || []).map((x: any, i: number) => <li key={i} style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>{String(x)}</li>)}
+              </ul>
+            </div>
+            <div style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+              <div style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--accent)", marginBottom: 6 }}>{b.rightTitle || "Option B"}</div>
+              <ul className="md-list" style={{ paddingLeft: 16, margin: 0 }}>
+                {(b.rightItems || []).map((x: any, i: number) => <li key={i} style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>{String(x)}</li>)}
+              </ul>
+            </div>
+          </div>
+        </div>
+      );
+    case "slide:features":
+      return (
+        <div className="canvas-card" style={{ padding: "16px" }}>
+          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+            {(b.items || []).map((it: any, i: number) => (
+              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{it.title || it.label}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-dim)", lineHeight: 1.35 }}>{it.description || it.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case "slide:stats":
+      return (
+        <div className="canvas-card" style={{ padding: "16px" }}>
+          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+            {(b.stats || []).map((s: any, i: number) => (
+              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+                <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>{s.number || s.value}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-faint)", marginTop: 4 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case "slide:roadmap":
+    case "slide:timeline":
+      return (
+        <div className="canvas-card" style={{ padding: "16px" }}>
+          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+            {(b.phases || b.steps || []).map((p: any, i: number) => (
+              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+                <span className="chip" data-on="true" style={{ fontSize: "10px", padding: "1px 6px", marginBottom: 6, display: "inline-block" }}>{p.phase || p.step || `Phase ${i+1}`}</span>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>{p.title}</div>
+                <ul className="md-list" style={{ paddingLeft: 14, margin: 0 }}>
+                  {(p.items || []).map((x: any, j: number) => <li key={j} style={{ fontSize: "11px", color: "var(--text-dim)" }}>{String(x)}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case "slide:quote":
+      return (
+        <div className="canvas-card" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: "var(--fs-md)", fontStyle: "italic", color: "var(--text)", lineHeight: 1.4 }}>"{b.quote}"</div>
+          <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>— {b.author}{b.role ? `, ${b.role}` : ""}</div>
+        </div>
+      );
+    case "slide:bullets":
+    case "slide:takeaways":
+    case "slide:agenda":
+      return (
+        <div className="canvas-card" style={{ padding: "16px" }}>
+          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 10 }}>{b.title}</div>}
+          <ul className="md-list" style={{ paddingLeft: 18, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            {(b.items || []).map((it: any, i: number) => (
+              <li key={i} style={{ fontSize: "var(--fs-xs)", color: "var(--text)" }}>
+                {typeof it === "string" ? it : <span><strong>{it.heading || it.title}: </strong>{it.detail || it.description}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "slide:team":
+      return (
+        <div className="canvas-card" style={{ padding: "16px" }}>
+          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+            {(b.members || []).map((m: any, i: number) => (
+              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)", textAlign: "center" }}>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>{m.name}</div>
+                <div style={{ fontSize: "11px", color: "var(--accent)", marginTop: 2 }}>{m.role}</div>
+                {m.bio && <div style={{ fontSize: "10px", color: "var(--text-dim)", marginTop: 4 }}>{m.bio}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case "slide:cta":
+      return (
+        <div className="canvas-card" style={{ padding: "24px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", margin: 0 }}>{b.title}</h2>
+          {b.subtitle && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", maxWidth: 420 }}>{b.subtitle}</div>}
+          {b.buttonText && <button type="button" className="btn btn-primary" style={{ marginTop: 6 }}>{b.buttonText}</button>}
         </div>
       );
     default: return null;

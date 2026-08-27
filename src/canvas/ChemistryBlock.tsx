@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SmilesDrawer from "smiles-drawer";
 import { copyToClipboard } from "../lib/clipboard";
 import { I } from "../ui/Icons";
@@ -60,7 +60,7 @@ export function ChemistryBlock({ b }: { b: ChemistryProps | any }) {
   const query = (b.smiles || b.structure || b.formula || b.molecule || b.name || "").trim();
   const normalizedKey = query.toLowerCase().replace(/[\s-_]+/g, "_");
   const smiles = MOLECULES[normalizedKey] || (query.includes("=") || query.includes("(") || query.includes("c") || query.includes("C") ? query : query);
-  const displayName = b.title || b.name || (MOLECULES[normalizedKey] ? query.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Molecular Structure");
+  const displayName = b.title || b.name || (MOLECULES[normalizedKey] ? query.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "Molecular Structure");
 
   useEffect(() => {
     if (!smiles) {

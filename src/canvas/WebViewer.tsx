@@ -95,10 +95,6 @@ export function WebViewer({
     return `${base}/embed/${ytId}?autoplay=1&rel=0&playsinline=1`;
   }, [ytId, useNocookie]);
 
-  const faviconUrl = ytId
-    ? "https://www.youtube.com/s/desktop/9b47a06f/img/favicon_32x32.png"
-    : `https://www.google.com/s2/favicons?domain=${hostOf(url)}&sz=32`;
-
   return (
     <div className="fe" style={{ width: "100%", height: "100%", position: "relative" }}>
       {/* Contextual bottom footer bar */}
@@ -265,7 +261,7 @@ export function WebViewer({
               </div>
             )}
             {md && (
-              <div className="fe-preview" style={{ paddingTop: hideBar ? 48 : undefined }}>
+              <div className="fe-preview">
                 <h1 className="md-h md-h1" style={{ marginBottom: 6 }}>
                   {head}
                 </h1>

@@ -773,7 +773,7 @@ export async function siteSearch(site: string, query: string, limit = 6, key?: s
   return webSearch(query, { site, limit, key, signal });
 }
 
-export async function webCrawl(url: string, limit = 4, key?: string, signal?: AbortSignal): Promise<Array<{ url: string; title: string; markdown: string }>> {
+export async function webCrawl(url: string, _limit = 4, key?: string, signal?: AbortSignal): Promise<Array<{ url: string; title: string; markdown: string }>> {
   const root = await webFetch(url, { key, signal });
   return [{ url, title: root.title, markdown: root.markdown.slice(0, 5000) }];
 }

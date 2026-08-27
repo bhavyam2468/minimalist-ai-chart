@@ -6,7 +6,6 @@ import { FileEditor } from "./FileEditor";
 import { WebViewer } from "./WebViewer";
 import { ProjectView } from "./ProjectView";
 import { VIEW_LABEL, viewOf, viewSize } from "./view";
-import { copyToClipboard } from "../lib/clipboard";
 import type { CanvasTarget } from "../lib/types";
 
 /* ===========================================================================
