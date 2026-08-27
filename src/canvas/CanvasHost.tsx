@@ -6,6 +6,7 @@ import { FileEditor } from "./FileEditor";
 import { WebViewer } from "./WebViewer";
 import { ProjectView } from "./ProjectView";
 import { VIEW_LABEL, viewOf, viewSize } from "./view";
+import { copyToClipboard } from "../lib/clipboard";
 import type { CanvasTarget } from "../lib/types";
 
 /* ===========================================================================
@@ -176,16 +177,53 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     window.addEventListener("pointerup", () => window.removeEventListener("pointermove", move), { once: true });
   }, [sheetH]);
 
+  const isVid = isVideo(res?.url);
+  const [webTab, setWebTab] = useState<"video" | "reader" | "live">(isVid ? "video" : "reader");
+
+  // Keep webTab in sync when target URL changes
+  useEffect(() => {
+    if (res?.url && isVideo(res.url)) setWebTab("video");
+  }, [res?.url]);
+
+  // Floating controls visibility management (appear on hover / activity)
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimer = useRef<any>(null);
+
+  const onPointerActivity = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      setControlsVisible(false);
+    }, 2800);
+  }, []);
+
+  useEffect(() => {
+    onPointerActivity();
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [onPointerActivity, target]);
+
   const body = useMemo(() => {
     if (!target) return null;
-    if (res?.url) return <WebViewer url={res.url} title={res.title} />;
+    if (res?.url) {
+      return (
+        <WebViewer
+          url={res.url}
+          title={res.title}
+          tab={webTab}
+          onTabChange={setWebTab}
+          hideBar={true}
+        />
+      );
+    }
     const path = res?.path;
     if (!path) return <div className="empty-hint" style={{ padding: 20 }}>nothing to show</div>;
     const v = viewOf(path, file);
     if (v === "project") return <ProjectView chatId={chatId} path={path} />;
     if (v === "ui") return <FileEditor chatId={chatId} path={path} view="ui" />;
     return <FileEditor chatId={chatId} path={path} />;
-  }, [target, res, file, chatId]);
+  }, [target, res, file, chatId, webTab]);
 
   if (!target || !res) return null;
 
@@ -200,9 +238,9 @@ export function CanvasHost({ chatId }: { chatId: string }) {
           <div className="cv-corner-h right" onPointerDown={onSheetDrag} title="Drag to resize" />
           <div className="cv-bar">
             <span className="cv-title">{res.title}</span>
-            <span className="chip">{res.badge}</span>
+            <span className="chip sm">{res.badge}</span>
             <span style={{ flex: 1 }} />
-            <button className="icon-btn" onClick={closeCanvas}><I.x size={16} /></button>
+            <button className="icon-btn sm" onClick={closeCanvas}><I.x size={15} /></button>
           </div>
           <div className="cv-body">{body}</div>
         </div>
@@ -211,7 +249,6 @@ export function CanvasHost({ chatId }: { chatId: string }) {
   }
 
   /* ------------------------------------------------------ desktop window */
-  const isVid = isVideo(res?.url);
   const style: React.CSSProperties = maximized
     ? { left: PAD, top: PAD, width: `calc(100vw - ${PAD * 2}px)`, height: `calc(100vh - ${PAD * 2}px)` }
     : rect
@@ -223,20 +260,90 @@ export function CanvasHost({ chatId }: { chatId: string }) {
   const handles: Dir[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 
   return (
-    <div className="cv-win" style={style}>
-      <div className="cv-bar" onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest("button,a")) return;
-        onPointerDown(e, "move");
-      }}>
-        {res.url ? (isVid ? <I.video size={14} /> : <I.globe size={14} />) : res.path && viewOf(res.path, file) === "project" ? <I.canvas size={14} /> : <I.file size={14} />}
-        <span className="cv-title">{res.title}</span>
-        <span className="chip">{res.badge}</span>
-        <span style={{ flex: 1 }} />
-        <button className="icon-btn sm" title="Reload" onClick={() => setRect((r) => (r ? { ...r } : r))}><I.refresh size={13} /></button>
-        <button className="icon-btn sm" title={maximized ? "Restore" : "Maximise"} onClick={() => setUI({ canvasMax: !maximized })}>
-          {maximized ? "▫" : "▢"}
-        </button>
-        <button className="icon-btn sm" title="Close (Esc)" onClick={closeCanvas}><I.x size={15} /></button>
+    <div
+      className="cv-win"
+      style={style}
+      onPointerMove={onPointerActivity}
+      onMouseEnter={() => setControlsVisible(true)}
+      onMouseLeave={() => {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        setControlsVisible(false);
+      }}
+    >
+      {/* Floating Controls Bar with Soft Shadow that appears on hover */}
+      <div
+        className="cv-floating-bar"
+        data-visible={controlsVisible}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest("button, a")) return;
+          onPointerDown(e, "move");
+        }}
+      >
+        <div className="cv-floating-left">
+          {res.url ? (isVid ? <I.video size={13} /> : <I.globe size={13} />) : res.path && viewOf(res.path, file) === "project" ? <I.canvas size={13} /> : <I.file size={13} />}
+          <span className="cv-floating-title">{res.title}</span>
+          <span className="chip sm">{res.badge}</span>
+        </div>
+
+        {res.url && (
+          <div className="cv-floating-seg">
+            {isVid && (
+              <button data-active={webTab === "video"} onClick={() => setWebTab("video")}>
+                video
+              </button>
+            )}
+            <button data-active={webTab === "reader"} onClick={() => setWebTab("reader")}>
+              {isVid ? "notes" : "reader"}
+            </button>
+            <button data-active={webTab === "live"} onClick={() => setWebTab("live")}>
+              live
+            </button>
+          </div>
+        )}
+
+        <div className="cv-floating-actions">
+          {res.url && (
+            <>
+              <button
+                className="cv-floating-btn"
+                title="Copy link"
+                onClick={() => copyToClipboard(res.url!)}
+              >
+                <I.copy size={12} />
+              </button>
+              <a
+                className="cv-floating-btn"
+                href={res.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                title="Open in new tab"
+              >
+                ↗
+              </a>
+            </>
+          )}
+          <button
+            className="cv-floating-btn"
+            title="Reload"
+            onClick={() => setRect((r) => (r ? { ...r } : r))}
+          >
+            <I.refresh size={12} />
+          </button>
+          <button
+            className="cv-floating-btn"
+            title={maximized ? "Restore" : "Maximise"}
+            onClick={() => setUI({ canvasMax: !maximized })}
+          >
+            {maximized ? "▫" : "▢"}
+          </button>
+          <button
+            className="cv-floating-btn close"
+            title="Close (Esc)"
+            onClick={closeCanvas}
+          >
+            <I.x size={13} />
+          </button>
+        </div>
       </div>
 
       <div className="cv-body">{body}</div>
