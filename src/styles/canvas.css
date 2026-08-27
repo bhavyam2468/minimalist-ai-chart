@@ -46,66 +46,41 @@
   pointer-events: auto;
 }
 
-/* ---- floating top window controls ------------------------------------- */
-.cv-floating-bar,
-.cv-floating-panel {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  height: 40px;
-  max-width: calc(100% - 24px);
-  box-sizing: border-box;
+/* ---- window top bar ---------------------------------------------------- */
+.cv-bar {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
-  background: rgba(14, 16, 22, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--r);
-  box-shadow: 0 12px 34px -4px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  z-index: 60;
+  gap: 10px;
+  height: 42px;
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
   cursor: grab;
   user-select: none;
   touch-action: none;
-  opacity: 0;
-  transform: translateY(-6px);
-  pointer-events: none;
-  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+  z-index: 20;
 }
-.cv-floating-bar:active,
-.cv-floating-panel:active { cursor: grabbing; }
+.cv-bar:active { cursor: grabbing; }
 
-/* ONLY reveal top bar when hovering top edge/area */
-.cv-win[data-top-hover="true"] .cv-floating-bar,
-.cv-win[data-top-hover="true"] .cv-floating-panel,
-.cv-floating-bar:hover,
-.cv-floating-panel:hover {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.cv-floating-left {
+.cv-bar-left {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  max-width: 68%;
+  max-width: 72%;
   overflow: hidden;
 }
 
-.cv-floating-title {
+.cv-title {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 550;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cv-floating-meta {
+.cv-meta {
   font-size: 11.5px;
   color: var(--text-faint);
   overflow: hidden;
@@ -113,58 +88,40 @@
   white-space: nowrap;
 }
 
-.cv-floating-win-ctrls {
+.cv-win-ctrls {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  padding-right: 4px;
 }
 
-.cv-floating-btn {
+.cv-win-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   border-radius: var(--r-xs);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-dim);
   font-size: 12px;
   cursor: pointer;
   flex-shrink: 0;
   transition: all var(--t-fast) var(--ease);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
-.cv-floating-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+.cv-win-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.18);
-  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
-.cv-floating-btn.close:hover {
-  background: rgba(239, 68, 68, 0.22);
+.cv-win-btn.close:hover {
+  background: rgba(239, 68, 68, 0.2);
   color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.cv-bar {
-  flex: none;
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 8px 8px 13px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface);
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
-}
-.cv-bar:active { cursor: grabbing; }
-.cv-bar button, .cv-bar a { cursor: pointer; }
-.cv-title {
-  font-size: var(--fs-sm); font-weight: 520; color: var(--text);
-  max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .cv-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); position: relative; height: 100%; width: 100%; }
@@ -233,21 +190,21 @@
 /* Floating contextual menu aligned to bottom */
 .fe-bar {
   position: absolute;
-  bottom: 16px;
+  bottom: 18px;
   left: 50%;
   transform: translateX(-50%) translateY(8px);
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 36px);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 16px;
+  gap: 10px;
+  padding: 6px 20px;
   height: 42px;
-  background: rgba(14, 16, 22, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--r);
+  background: rgba(14, 16, 22, 0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
   box-shadow: 0 14px 38px -4px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   z-index: 55;
   opacity: 0;
@@ -271,7 +228,7 @@
   font-size: 12px;
   color: var(--text-faint);
   letter-spacing: .02em;
-  padding: 0 5px;
+  padding: 0 4px;
   white-space: nowrap;
 }
 
@@ -304,19 +261,23 @@
 }
 
 .fe-bar .icon-btn.sm {
-  width: 28px;
+  min-width: 28px;
+  width: auto;
   height: 28px;
+  padding: 0 8px;
   border-radius: var(--r-xs);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
   font-size: 12px;
+  font-family: var(--font-sans);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all var(--t-fast) var(--ease);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .fe-bar .icon-btn.sm:hover {

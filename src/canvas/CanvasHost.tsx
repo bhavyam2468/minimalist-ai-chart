@@ -250,60 +250,59 @@ export function CanvasHost({ chatId }: { chatId: string }) {
       onPointerMove={onCanvasPointerMove}
       onPointerLeave={onCanvasPointerLeave}
     >
-      {/* Floating Top Window Controls Bar — ONLY shows on top hover */}
+      {/* Integrated Top Window Bar */}
       <div
-        className="cv-floating-bar"
-        onMouseEnter={() => setTopHover(true)}
+        className="cv-bar"
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest("button, a, input")) return;
           onPointerDown(e, "move");
         }}
       >
-        <div className="cv-floating-left">
+        <div className="cv-bar-left">
           {res.url ? (
-            isVid ? <I.video size={13} /> : <I.globe size={13} />
+            isVid ? <I.video size={14} /> : <I.globe size={14} />
           ) : res.path && viewOf(res.path, file) === "project" ? (
-            <I.canvas size={13} />
+            <I.canvas size={14} />
           ) : (
-            <I.file size={13} />
+            <I.file size={14} />
           )}
-          <span className="cv-floating-title" title={res.title}>
+          <span className="cv-title" title={res.title}>
             {res.title}
           </span>
-          {res.url && <span className="cv-floating-meta">{hostOf(res.url)}</span>}
+          {res.url && <span className="chip sm">{hostOf(res.url)}</span>}
           {!res.url && res.path && res.path !== res.title && (
-            <span className="cv-floating-meta">{res.path}</span>
+            <span className="cv-meta">{res.path}</span>
           )}
         </div>
 
         <span style={{ flex: 1 }} />
 
-        <div className="cv-floating-win-ctrls">
+        <div className="cv-win-ctrls">
           <button
-            className="cv-floating-btn"
+            className="cv-win-btn"
             title="Reload"
             onClick={() => setRect((r) => (r ? { ...r } : r))}
           >
-            <I.refresh size={12} />
+            <I.refresh size={13} />
           </button>
           <button
-            className="cv-floating-btn"
+            className="cv-win-btn"
             title={maximized ? "Restore" : "Maximise"}
             onClick={() => setUI({ canvasMax: !maximized })}
           >
             {maximized ? "▫" : "▢"}
           </button>
           <button
-            className="cv-floating-btn close"
+            className="cv-win-btn close"
             title="Close (Esc)"
             onClick={closeCanvas}
           >
-            <I.x size={13} />
+            <I.x size={14} />
           </button>
         </div>
       </div>
 
-      {/* Canvas Body — full bleed immersion */}
+      {/* Canvas Body */}
       <div className="cv-body">{body}</div>
 
       {!maximized && handles.map((d) => (

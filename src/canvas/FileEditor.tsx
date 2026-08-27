@@ -117,8 +117,13 @@ function SheetView({ text, path }: { text: string; path: string }) {
       <div className="fe">
         <div className="fe-bar">
           <span className="fe-tag">{rows.length} rows</span>
-          <span className="grow" />
-          <button className="icon-btn sm" data-active onClick={() => setRaw(false)}>grid</button>
+          <div className="fe-seg">
+            <button data-active={false} onClick={() => setRaw(false)}>grid</button>
+            <button data-active={true} onClick={() => setRaw(true)}>raw</button>
+          </div>
+          <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(text)}>
+            <I.copy size={13} />
+          </button>
         </div>
         <div className="fe-body"><pre className="fe-pre">{text}</pre></div>
       </div>
@@ -135,11 +140,16 @@ function SheetView({ text, path }: { text: string; path: string }) {
             placeholder="Filter cells..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            style={{ fontSize: "var(--fs-xs)", padding: "3px 8px", maxWidth: 160, background: "var(--surface-3)", borderRadius: "var(--r-xs)" }}
+            style={{ fontSize: "var(--fs-xs)", padding: "3px 8px", maxWidth: 160, background: "rgba(255, 255, 255, 0.06)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "var(--r-xs)", color: "var(--text)" }}
           />
         )}
-        <span className="grow" />
-        <button className="icon-btn sm" onClick={() => setRaw(true)}>raw</button>
+        <div className="fe-seg">
+          <button data-active={true} onClick={() => setRaw(false)}>grid</button>
+          <button data-active={false} onClick={() => setRaw(true)}>raw</button>
+        </div>
+        <button className="icon-btn sm" title="Copy CSV" onClick={() => copyToClipboard(text)}>
+          <I.copy size={13} />
+        </button>
       </div>
 
       {sheets.length > 1 && (
@@ -274,7 +284,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
           )}
           <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
           <button className="icon-btn sm" title="Save (⌘S)" data-active={saved} onClick={save} disabled={!dirty}>
-            {saved ? <I.check size={13} /> : "save"}
+            {saved ? <I.check size={13} /> : <I.save size={13} />}
           </button>
         </div>
         <div className="fe-body" style={{ padding: 0 }}
@@ -315,7 +325,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
         )}
         <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
         <button className="icon-btn sm" data-active={saved} title="Save (⌘S)" onClick={save} disabled={!dirty && !saved}>
-          {saved ? <I.check size={13} /> : "save"}
+          {saved ? <I.check size={13} /> : <I.save size={13} />}
         </button>
       </div>
 
