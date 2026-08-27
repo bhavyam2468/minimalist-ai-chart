@@ -711,3 +711,65 @@ html.lenis, html.lenis body { height: auto; }
 .btn.primary { background: var(--text); color: var(--bg); border-color: transparent; }
 
 .empty-hint { color: var(--text-faint); font-size: var(--fs-sm); padding: 6px 8px; }
+
+/* ---------------------------------------------------- composable blocks */
+.block-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color var(--t-fast);
+}
+.block-card-default {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+}
+.block-card-outline {
+  background: transparent;
+  border: 1px solid var(--line-soft);
+}
+.block-card-glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line-soft);
+}
+.block-card-tint {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+.block-grid {
+  display: grid;
+  width: 100%;
+  align-items: stretch;
+}
+.block-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+}
+.block-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.comp-btn {
+  user-select: none;
+}
+.comp-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.comp-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}

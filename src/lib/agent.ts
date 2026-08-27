@@ -32,7 +32,7 @@ tables, ordered/unordered/task lists, > quotes, --- rules, footnotes [^1] with
 images ![alt](url), bare YouTube links (auto-embedded), and
 <details><summary>title</summary> … </details> for anything long or optional.
 
-## Tools & Generative UI
+## Tools & Generative UI (Gamma-Inspired Composable Blocks)
 Prefer doing over describing. Use \`find_skills\` before an unfamiliar workflow;
 skills carry the exact procedure. Search the web whenever freshness matters.
 Write artefacts to the workspace instead of dumping them in the reply, then
@@ -41,45 +41,58 @@ conversation that holds files (with a real editor), web pages and artefacts.
 Use \`artifact\` when a chart, dashboard, tool or embed communicates better than prose.
 Keep context lean with add_context / remove_context / compact_context.
 
-## Summoning Tools & Inline Generative UI (<component>)
-- **Summon Tools Inline**: Prefer doing over describing. You have tools: \`web_search\`, \`web_fetch\`, \`run_python\`, \`read_file\`, \`edit_file\`, \`write_file\`, \`list_files\`, \`open_canvas\`, \`search_components\`.
-- **Pre-existing UI Component Priority**: ALWAYS try to create UI from the pre-existing component library first using \`<component type="..." ... />\` or \`<component>{ ... }</component>\`. If there is no suitable component in the library, then resort to using HTML and creating custom UI in the workspace with \`write_file\` and presenting it with \`open_canvas\`.
-- **Inline Generative UI (<component>)**: Whenever a widget, input, color palette, calendar, form, metric, chart, slide, chemistry, or math communicates better than prose, summon it inline using \`<component type="..." ... />\`.
-  - **Syntax Rules**:
-    1. ALWAYS start with \`<component type="TYPE" ... />\` or \`<component type="TYPE">JSON</component>\`. NEVER omit \`<component \` at the start.
-    2. Self-closing components end with \`/>\`.
-  - **Pre-existing Component Types**:
-    - **Interactive Controls**:
-      - \`slider\`: \`<component type="slider" label="Compute Capacity" value="65" min="0" max="100" unit="%" />\`
-      - \`color-picker\`: \`<component type="color-picker" label="Accent Palette" value="#7C3AED" colors='["#7C3AED","#FF6B6B","#F59E0B","#10B981","#38BDF8"]' />\`
-      - \`calendar\`: \`<component type="calendar" label="Target Date" value="2026-08-28" />\`
-      - \`clock\`: \`<component type="clock" label="System Clock" />\`
-      - \`timer\`: \`<component type="timer" label="Sprint Countdown" seconds="300" />\`
-      - \`stopwatch\`: \`<component type="stopwatch" label="Benchmark" />\`
-      - \`weather\`: \`<component type="weather" city="New York City, NY" temp="74°F" condition="Clear Skies" />\`
-      - \`search-bar\`: \`<component type="search-bar" placeholder="Search..." />\`
-      - \`tags-input\`: \`<component type="tags-input" label="Tags" tags='["Frontend","UI"]' />\`
-      - \`file-upload\`: \`<component type="file-upload" label="Upload Dataset" accept="CSV, JSON" />\`
-      - \`dropdown\`: \`<component type="dropdown" label="Environment" value="prod" options='[{"value":"dev","label":"Dev"},{"value":"prod","label":"Prod"}]' />\`
-      - \`radio\`: \`<component type="radio" value="balanced" options='[{"id":"fast","label":"Fast"},{"id":"balanced","label":"Balanced"}]' />\`
-      - \`checkbox\`: \`<component type="checkbox" label="Enable telemetry" checked="true" />\`
-      - \`switch\`: \`<component type="switch" label="Auto-save" checked="true" />\`
-      - \`stepper\`: \`<component type="stepper" label="Replicas" value="4" min="1" max="16" unit="nodes" />\`
-      - \`button\`: \`<component type="button" label="Deploy Cluster" variant="primary" />\`
-      - \`button-group\`: \`<component type="button-group" items='[{"label":"Copy"},{"label":"Share"}]' />\`
-      - \`segmented-control\`: \`<component type="segmented-control" value="24H" options='["1H","24H","7D","30D"]' />\`
-      - \`todo\`: \`<component type="todo" title="Sprint Tasks" items='[{"text":"Task 1","done":true}]' />\`
-    - **Forms & Reactive Widgets**:
-      - \`form\`: Multi-field form container with a linked Submit button that returns structured JSON answers to the conversation:
-        \`<component type="form" title="Config Form" submitLabel="Submit" fields='[{"id":"env","label":"Env","type":"dropdown","options":["dev","prod"]},{"id":"nodes","label":"Nodes","type":"slider","value":4}]' />\`
-      - \`question\`: \`<component type="question" question="Which strategy?" options='[{"id":"a","label":"Option A"},{"id":"b","label":"Option B"}]' requireSubmit="true" />\`
-      - \`reactive\`: Live client-side calculator combining inputs + dynamically recalculating metrics/charts:
-        \`<component type="reactive" title="Revenue Calculator" state='{"price":49,"units":100}' controls='[{"id":"price","type":"slider","min":10,"max":200}]' />\`
-    - **Charts** (\`type="chart" kind="..."\`): Kinds: \`line\`, \`area\`, \`bar\`, \`hbar\`, \`donut\`, \`pie\`, \`bubble\`, \`treemap\`, \`waterfall\`, \`radar\`, \`gauge\`, \`funnel\`, \`heatmap\`, \`candlestick\`.
-    - **Visualizers**: \`chemistry\` (2D molecular SMILES, e.g. \`molecule="caffeine"\`), \`math\` (2D function plotter, e.g. \`fn="sin(x)*cos(2*x)"\`).
-    - **Presentation Slides**: \`slide:title\`, \`slide:hero\`, \`slide:split\`, \`slide:features\`, \`slide:stats\`, \`slide:roadmap\`, \`slide:quote\`, \`slide:team\`, \`slide:cta\`.
-    - **Data & Layout Cards**: \`metrics\`, \`table\`, \`switcher\`, \`accordion\`, \`callout\`.
-  If you ever need the exhaustive reference manual, call \`read_skill("generative-ui")\` or \`search_components\`.
+## Composable Generative UI Architecture
+This app is NOT a bloated widget toolkit with rigid monolithic templates. You build ANY UI (stopwatches, countdowns, pomodoro timers, weather cards, pricing simulators, slides, forms) dynamically using fundamental nestable building blocks and reactive state logic:
+- **Fundamental Blocks**:
+  - \`card\`: Universal liquid container (\`title\`, \`subtitle\`, \`badge\`, \`variant\`, \`state\`, \`tick\`, \`onTick\`, child \`blocks\`).
+  - \`grid\`: Multi-column layout (\`cols\`: 1-6, \`gap\`, child \`blocks\`).
+  - \`text\`: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
+  - \`metric\`: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`).
+  - \`button\`: Reactive button (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
+  - \`slider\`: Precision expansion slider with hairline track expanding to 26px on drag (\`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, \`bind\`).
+  - \`input\`: Clean field (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
+  - \`dropdown\`: Select menu (\`label\`, \`options\`, \`bind\`).
+  - \`switch\`: Toggle switch (\`label\`, \`description\`, \`bind\`).
+  - \`checkbox\`: Checkbox (\`label\`, \`description\`, \`bind\`).
+  - \`progress\`: Progress bar (\`value\`, \`max\`, \`label\`, \`unit\`).
+  - \`chart\`: Charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
+  - \`table\`: Data table (\`headers\`, \`rows\`).
+  - \`badge\`: Pill badge (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
+  - \`divider\`: Hairline rule.
+  - \`math\`: 2D interactive math visualizer (\`fn\`, \`xmin\`, \`xmax\`).
+  - \`chemistry\`: 2D molecular diagram from SMILES (\`smiles\` or \`molecule\`).
+
+- **Reactive State & Logic Engine**:
+  - Provide \`state: { ... }\` on the container card to create reactive state.
+  - Provide \`tick: 1000\` and \`onTick: "if (running) seconds++"\` for automated timer loops.
+  - Provide \`onClick: "running = !running"\` on buttons for state mutations.
+  - Use \`bind: "key"\` on sliders, inputs, switches, dropdowns for two-way state binding.
+  - Use \`\${...}\` or \`{...}\` interpolation in labels, metrics, text, and chart data points.
+  - Use \`submitToChat\` on buttons to serialize scenario state back into the chat.
+
+- **Syntax Rules**:
+  1. For single components: \`<component type="slider" label="Users: \${users}" bind="users" />\`
+  2. For nested cards & widgets:
+\`<component>
+{
+  "type": "card",
+  "state": { "seconds": 0, "running": false },
+  "tick": 1000,
+  "onTick": "if (running) seconds++",
+  "blocks": [
+    { "type": "badge", "text": "\${running ? 'RUNNING' : 'PAUSED'}", "color": "\${running ? 'ok' : 'faint'}" },
+    { "type": "metric", "label": "Time", "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
+        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
+      ]
+    }
+  ]
+}
+</component>\`
 
 ## Search Efficiency & Anti-Looping
 Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter
@@ -465,8 +478,8 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
         let syntaxError: string | null = null;
 
         // Missing <component opening tag (e.g. starts with type="dropdown" ...)
-        if (/(?:^|\n)\s*type=["']?(?:slider|dropdown|radio|checkbox|button|input|stepper|rating|progress|color-picker|palette|calendar|date-picker|weather|clock|chart|metrics|form|reactive|question)["']?\s/i.test(content)) {
-          syntaxError = "Your output contained an orphan 'type=\"...\"' attribute without the opening '<component ' tag. Every UI component MUST start with '<component type=\"...\" ... />'.";
+        if (/(?:^|\n)\s*type=["']?(?:card|grid|slider|dropdown|switch|checkbox|button|input|progress|chart|metric|badge|text)["']?\s/i.test(content)) {
+          syntaxError = "Your output contained an orphan 'type=\"...\"' attribute without the opening '<component ' tag. Every UI component MUST start with '<component type=\"...\" ... />' or '<component>{ ... }</component>'.";
         } else if (/<component\b/i.test(content) && !/<component[\s\S]*?(?:\/>|<\/component>)/i.test(content)) {
           syntaxError = "Unclosed '<component>' tag. Please close self-closing components with '/>' or container components with '</component>'.";
         }
@@ -476,7 +489,7 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
           cleaned.push({ role: "assistant", content });
           cleaned.push({
             role: "system",
-            content: `[UI SYNTAX ERROR]: ${syntaxError}\nRule: Always create UI using valid '<component type="..." ... />' syntax from the pre-existing component library. Example:\n<component type="color-picker" label="Theme Palette" value="#7C3AED" colors='["#7C3AED","#FF6B6B","#10B981"]' />\nPlease output the UI again with valid syntax.`,
+            content: `[UI SYNTAX ERROR]: ${syntaxError}\nRule: Build UI using fundamental composable blocks ('card', 'grid', 'text', 'metric', 'button', 'slider', 'input', 'dropdown', 'switch', 'progress', 'chart'). Use reactive state ({ state, tick, onTick }) and \${...} interpolation for live logic (stopwatches, timers, calculators, etc.).\nExample:\n<component>\n{\n  "type": "card",\n  "state": { "seconds": 0, "running": false },\n  "tick": 1000,\n  "onTick": "if (running) seconds++",\n  "blocks": [\n    { "type": "badge", "text": "\${running ? 'RUNNING' : 'PAUSED'}", "color": "\${running ? 'ok' : 'faint'}" },\n    { "type": "metric", "label": "Time", "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}" },\n    {\n      "type": "grid",\n      "cols": 2,\n      "blocks": [\n        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },\n        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }\n      ]\n    }\n  ]\n}\n</component>\nPlease output the UI again with valid syntax.`,
           });
           continue;
         }

@@ -1,6 +1,7 @@
 /**
  * UI Component SDK
- * Programmatic interface for constructing, searching, and serializing Generative UI components.
+ * Programmatic interface for constructing, searching, and serializing
+ * fundamental composable Generative UI blocks.
  */
 
 import { COMPONENT_CATALOG, searchComponents, getComponentDef } from "./ui-library";
@@ -33,164 +34,138 @@ function createBuilder<T extends Record<string, any>>(type: string, props: T): C
 }
 
 export const UI = {
-  /**
-   * Search component definitions by tag, query, or category.
-   */
   search: searchComponents,
-
-  /**
-   * Get component metadata by type.
-   */
   get: getComponentDef,
-
-  /**
-   * List all registered components.
-   */
   list: () => COMPONENT_CATALOG,
 
   /**
-   * Interactive Controls & Inputs
+   * Layout & Containers (Gamma-inspired liquid cards and nestable grids)
    */
-  slider: (props: {
-    value?: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    unit?: string;
-    label?: string;
-  }) => createBuilder("slider", { value: 50, min: 0, max: 100, unit: "%", ...props }),
+  card: (props: {
+    title?: string;
+    subtitle?: string;
+    badge?: string;
+    variant?: "default" | "outline" | "glass" | "tint";
+    state?: Record<string, any>;
+    tick?: number;
+    onTick?: string;
+    blocks?: any[];
+  }) => createBuilder("card", props),
 
-  rangeSlider: (props: {
-    min?: number;
-    max?: number;
-    low?: number;
-    high?: number;
-    unit?: string;
-    label?: string;
-  }) => createBuilder("range-slider", props),
-
-  button: (props: {
-    label: string;
-    variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "pill";
-    size?: "sm" | "md" | "lg";
-    loading?: boolean;
-    disabled?: boolean;
-  }) => createBuilder("button", props),
-
-  checkbox: (props: {
-    label: string;
-    description?: string;
-    checked?: boolean;
-  }) => createBuilder("checkbox", props),
-
-  radio: (props: {
-    name?: string;
-    value?: string;
-    options: Array<{ id: string; label: string; description?: string }>;
-  }) => createBuilder("radio", props),
-
-  dropdown: (props: {
-    label?: string;
-    placeholder?: string;
-    value?: string;
-    options: Array<{ label: string; value: string }>;
-  }) => createBuilder("dropdown", props),
-
-  switchToggle: (props: {
-    label: string;
-    description?: string;
-    checked?: boolean;
-  }) => createBuilder("switch", props),
-
-  input: (props: {
-    label?: string;
-    placeholder?: string;
-    value?: string;
-  }) => createBuilder("input", props),
-
-  stepper: (props: {
-    label?: string;
-    value?: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    unit?: string;
-  }) => createBuilder("stepper", props),
-
-  rating: (props: {
-    value?: number;
-    max?: number;
-    label?: string;
-  }) => createBuilder("rating", props),
-
-  progress: (props: {
-    value: number;
-    max?: number;
-    label?: string;
-    unit?: string;
-  }) => createBuilder("progress", props),
+  grid: (props: {
+    cols?: number;
+    gap?: string | number;
+    blocks?: any[];
+  }) => createBuilder("grid", { cols: 2, ...props }),
 
   /**
-   * Presentation & Slides
+   * Typography & Content
    */
-  slideTitle: (props: { title: string; subtitle?: string; presenter?: string }) =>
-    createBuilder("slide:title", props),
+  text: (props: {
+    text: string;
+    variant?: "title" | "sub" | "kicker" | "code" | "body";
+    align?: "left" | "center" | "right";
+  }) => createBuilder("text", props),
 
-  slideHero: (props: { headline: string; lead?: string }) =>
-    createBuilder("slide:hero", props),
+  badge: (props: {
+    text: string;
+    color?: "default" | "accent" | "ok" | "warn" | "danger" | "faint";
+  }) => createBuilder("badge", props),
 
-  slideSplit: (props: { leftTitle: string; rightTitle: string; leftItems: string[]; rightItems: string[] }) =>
-    createBuilder("slide:split", props),
-
-  slideFeatures: (props: { title: string; items: Array<{ title: string; description: string }> }) =>
-    createBuilder("slide:features", props),
-
-  slideStats: (props: { title: string; stats: Array<{ number: string; label: string }> }) =>
-    createBuilder("slide:stats", props),
-
-  slideRoadmap: (props: { title: string; phases: Array<{ phase: string; title: string; items: string[] }> }) =>
-    createBuilder("slide:roadmap", props),
+  divider: () => createBuilder("divider", {}),
 
   /**
    * Data & Visualizations
    */
+  metric: (props: {
+    label: string;
+    value: string | number;
+    delta?: string;
+    sub?: string;
+  }) => createBuilder("metric", props),
+
   chart: (props: {
-    kind?: "line" | "area" | "bar" | "hbar" | "donut" | "pie" | "radar" | "gauge" | "funnel" | "heatmap" | "candlestick";
+    kind?: "line" | "area" | "bar" | "hbar" | "donut" | "pie" | "radar" | "gauge" | "candlestick";
     title?: string;
-    data: Array<{ label: string; value: number }>;
+    data: Array<any>;
     unit?: string;
   }) => createBuilder("chart", props),
 
+  table: (props: {
+    headers: string[];
+    rows: (string | number)[][];
+  }) => createBuilder("table", props),
+
   math: (props: {
-    fn?: string;
+    fn: string;
     title?: string;
     xmin?: number;
     xmax?: number;
     ymin?: number;
     ymax?: number;
-    functions?: Array<{ expr: string; label?: string; color?: string }>;
-    desmos?: string;
   }) => createBuilder("math", props),
 
   chemistry: (props: {
-    smiles: string;
+    smiles?: string;
+    molecule?: string;
     title?: string;
-    caption?: string;
   }) => createBuilder("chemistry", props),
 
-  switcher: (props: {
-    tabs: Array<{ label: string; content: any }>;
-  }) => createBuilder("switcher", props),
+  /**
+   * Interactive Controls & Reactive Bindings
+   */
+  slider: (props: {
+    label: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    bind?: string;
+    value?: number;
+  }) => createBuilder("slider", { min: 0, max: 100, step: 1, ...props }),
 
-  metrics: (props: {
-    items: Array<{ label: string; value: string | number; delta?: string }>;
-  }) => createBuilder("metrics", props),
+  button: (props: {
+    text: string;
+    variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
+    size?: "sm" | "md" | "lg";
+    onClick?: string;
+    submitToChat?: string;
+    action?: "copy" | "reset";
+  }) => createBuilder("button", props),
 
-  question: (props: {
-    id: string;
-    question: string;
-    options: Array<{ id: string; label: string; description?: string }>;
-    allowCustom?: boolean;
-    skipButton?: boolean;
-  }) => createBuilder("question", props),
+  input: (props: {
+    label?: string;
+    placeholder?: string;
+    type?: "text" | "number";
+    bind?: string;
+    value?: any;
+  }) => createBuilder("input", props),
+
+  dropdown: (props: {
+    label?: string;
+    options: Array<string | { label: string; value: any }>;
+    bind?: string;
+    value?: any;
+  }) => createBuilder("dropdown", props),
+
+  switchToggle: (props: {
+    label: string;
+    description?: string;
+    bind?: string;
+    checked?: boolean;
+  }) => createBuilder("switch", props),
+
+  checkbox: (props: {
+    label: string;
+    description?: string;
+    bind?: string;
+    checked?: boolean;
+  }) => createBuilder("checkbox", props),
+
+  progress: (props: {
+    label?: string;
+    value: number | string;
+    max?: number;
+    unit?: string;
+  }) => createBuilder("progress", props),
 };

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } from "react";
 import { Markdown } from "../md/Markdown";
 import { useApp } from "../lib/store";
 import { send } from "../lib/agent";
@@ -8,6 +8,186 @@ import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { ChemistryBlock } from "./ChemistryBlock";
 import { MathPlotBlock } from "./MathPlotBlock";
 import type { CanvasBlock } from "../lib/types";
+
+/* ===========================================================================
+   REACTIVE LOGIC & EXECUTION ENGINE
+   =========================================================================== */
+
+export type ReactiveState = Record<string, any>;
+
+export interface ReactiveContextType {
+  state: ReactiveState;
+  updateState: (key: string, val: any) => void;
+  setState: React.Dispatch<React.SetStateAction<ReactiveState>>;
+  runAction: (code: string, extra?: Record<string, any>) => void;
+  interpolate: (val: any) => any;
+  isReactive: boolean;
+}
+
+export const ReactiveContext = createContext<ReactiveContextType>({
+  state: {},
+  updateState: () => {},
+  setState: () => {},
+  runAction: () => {},
+  interpolate: (val: any) => val,
+  isReactive: false,
+});
+
+export function useReactive(): ReactiveContextType {
+  return useContext(ReactiveContext);
+}
+
+/**
+ * Execute dynamic code in a sandboxed Proxy scope that directly exposes
+ * all keys of `state` as mutable variables, Math, Date, pad(), and state.
+ */
+export function runSafeCode(code: string, state: ReactiveState, extra: Record<string, any> = {}): ReactiveState {
+  if (!code || typeof code !== "string") return state;
+  const next = { ...state, ...extra };
+  try {
+    const sandbox = new Proxy(next, {
+      has() {
+        return true;
+      },
+      get(target, key: any) {
+        if (key === Symbol.unscopables) return undefined;
+        if (key in target) return target[key];
+        if (key in Math) return (Math as any)[key];
+        if (key === "Math") return Math;
+        if (key === "Date") return Date;
+        if (key === "state") return target;
+        if (key === "pad") return (n: any) => String(Math.floor(Number(n) || 0)).padStart(2, "0");
+        return undefined;
+      },
+      set(target, key: any, val) {
+        target[key] = val;
+        return true;
+      },
+    });
+    const fn = new Function("sandbox", `with (sandbox) { ${code}; }`);
+    fn(sandbox);
+  } catch (err) {
+    console.warn("Reactive execution warning:", err);
+  }
+
+  // Remove temporary extra keys from the persistent state
+  for (const k of Object.keys(extra)) {
+    if (!(k in state)) {
+      delete next[k];
+    }
+  }
+  return next;
+}
+
+/**
+ * Safely evaluate an expression string against the reactive state.
+ */
+export function evalExpr(expr: string, state: ReactiveState): any {
+  if (!expr || typeof expr !== "string") return undefined;
+  try {
+    const sandbox = new Proxy(state, {
+      has() {
+        return true;
+      },
+      get(target, key: any) {
+        if (key === Symbol.unscopables) return undefined;
+        if (key in target) return target[key];
+        if (key in Math) return (Math as any)[key];
+        if (key === "Math") return Math;
+        if (key === "Date") return Date;
+        if (key === "state") return target;
+        if (key === "pad") return (n: any) => String(Math.floor(Number(n) || 0)).padStart(2, "0");
+        return undefined;
+      },
+    });
+    const fn = new Function("sandbox", `with (sandbox) { return (${expr}); }`);
+    return fn(sandbox);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Interpolate strings containing ${...} or {...} expressions using reactive state.
+ */
+export function interpolateValue(val: any, state: ReactiveState): any {
+  if (val == null) return val;
+  if (typeof val === "number" || typeof val === "boolean") return val;
+  if (typeof val !== "string") return val;
+  if (!val.includes("{")) return val;
+
+  // Exact expression match: "${expr}" or "{expr}"
+  const exact = val.match(/^\$\{([^}]+)\}$/) || val.match(/^\{([^}]+)\}$/);
+  if (exact) {
+    const res = evalExpr(exact[1], state);
+    return res !== undefined ? res : val;
+  }
+
+  // Embedded ${expr}
+  let out = val.replace(/\$\{([^}]+)\}/g, (_, expr) => {
+    const res = evalExpr(expr, state);
+    return res !== undefined ? String(res) : "";
+  });
+
+  // Embedded {expr}
+  if (out.includes("{")) {
+    out = out.replace(/\{([a-zA-Z0-9_$.+\-*/% ()?:\x27\x22\\]+)\}/g, (orig, expr) => {
+      const res = evalExpr(expr, state);
+      return res !== undefined ? String(res) : orig;
+    });
+  }
+
+  return out;
+}
+
+export function ReactiveProvider({
+  initialState,
+  tick,
+  onTick,
+  children,
+}: {
+  initialState?: ReactiveState;
+  tick?: number;
+  onTick?: string;
+  children: React.ReactNode;
+}) {
+  const [state, setState] = useState<ReactiveState>(() => initialState || {});
+
+  const updateState = useCallback((key: string, val: any) => {
+    setState((prev) => ({ ...prev, [key]: val }));
+  }, []);
+
+  const runAction = useCallback((code: string, extra?: Record<string, any>) => {
+    if (!code || typeof code !== "string") return;
+    setState((prev) => runSafeCode(code, prev, extra));
+  }, []);
+
+  // Tick loop for stopwatches, timers, countdowns, simulations
+  useEffect(() => {
+    if (!tick || !onTick) return;
+    const intervalMs = Math.max(16, Number(tick) || 1000);
+    const timerId = setInterval(() => {
+      setState((prev) => runSafeCode(onTick, prev));
+    }, intervalMs);
+    return () => clearInterval(timerId);
+  }, [tick, onTick]);
+
+  const boundInterpolate = useCallback((val: any) => interpolateValue(val, state), [state]);
+
+  const value = useMemo<ReactiveContextType>(
+    () => ({
+      state,
+      setState,
+      updateState,
+      runAction,
+      interpolate: boundInterpolate,
+      isReactive: true,
+    }),
+    [state, updateState, runAction, boundInterpolate]
+  );
+
+  return <ReactiveContext.Provider value={value}>{children}</ReactiveContext.Provider>;
+}
 
 /* ===========================================================================
    Blocks — C1 by Thesys-inspired Generative UI System.
@@ -147,7 +327,7 @@ function ChartTooltip({ tip }: { tip: TooltipState | null }) {
 }
 
 /* ------------------------------------------------------------------ charts */
-function normalizeChartData(b: any): {
+function normalizeChartData(b: any, interp: (v: any) => any = (v) => v): {
   kind: string;
   data: { label: string; value: number }[];
   series: { name: string; points: { x: any; y: number }[] }[];
@@ -178,22 +358,23 @@ function normalizeChartData(b: any): {
 
   const data = rawList.map((d: any, idx: number) => {
     if (typeof d === "number") return { label: String(idx + 1), value: d };
-    if (Array.isArray(d)) return { label: String(d[0] ?? idx + 1), value: Number(d[1] ?? 0) };
+    if (Array.isArray(d)) return { label: String(interp(d[0]) ?? idx + 1), value: Number(interp(d[1]) ?? 0) };
+    const rawVal = interp(d.value ?? d.y ?? d.val ?? d.count ?? 0);
     return {
-      label: String(d.label ?? d.name ?? d.x ?? d.time ?? d.category ?? `Item ${idx + 1}`),
-      value: Number(d.value ?? d.y ?? d.val ?? d.count ?? 0),
+      label: String(interp(d.label ?? d.name ?? d.x ?? d.time ?? d.category ?? `Item ${idx + 1}`)),
+      value: Number(rawVal ?? 0),
     };
   });
 
   const series: { name: string; points: { x: any; y: number }[] }[] = Array.isArray(b.series)
     ? b.series.map((s: any, sIdx: number) => ({
-        name: s.name || s.title || `Series ${sIdx + 1}`,
+        name: String(interp(s.name || s.title || `Series ${sIdx + 1}`)),
         points: (s.points || s.data || []).map((p: any, pIdx: number) => {
           if (typeof p === "number") return { x: pIdx + 1, y: p };
-          if (Array.isArray(p)) return { x: p[0] ?? pIdx + 1, y: Number(p[1] ?? 0) };
+          if (Array.isArray(p)) return { x: interp(p[0]) ?? pIdx + 1, y: Number(interp(p[1]) ?? 0) };
           return {
-            x: p.x ?? p.label ?? p.name ?? p.time ?? pIdx + 1,
-            y: Number(p.y ?? p.value ?? p.val ?? 0),
+            x: interp(p.x ?? p.label ?? p.name ?? p.time ?? pIdx + 1),
+            y: Number(interp(p.y ?? p.value ?? p.val ?? 0)),
           };
         }),
       }))
@@ -203,7 +384,8 @@ function normalizeChartData(b: any): {
 }
 
 function Chart({ b }: { b: CanvasBlock }) {
-  const norm = normalizeChartData(b);
+  const { interpolate } = useReactive();
+  const norm = normalizeChartData(b, interpolate);
   const kind = norm.kind;
   const data = norm.data;
   const series = norm.series;
@@ -1468,108 +1650,6 @@ function Accordion({ b }: { b: CanvasBlock }) {
   );
 }
 
-/* ------------------------------------------------------------- interactive timers */
-function Pomodoro({ label, work = 1500, breakFor = 300 }: { label: string; work?: number; breakFor?: number }) {
-  const [left, setLeft] = useState(work);
-  const [phase, setPhase] = useState<"work" | "break">("work");
-  const [run, setRun] = useState(false);
-  const [cycles, setCycles] = useState(0);
-
-  useEffect(() => {
-    if (!run) return;
-    const t = setInterval(() => setLeft((l) => l - 1), 1000);
-    return () => clearInterval(t);
-  }, [run]);
-
-  useEffect(() => {
-    if (left > 0) return;
-    if (phase === "work") { setPhase("break"); setLeft(breakFor); setCycles((c) => c + 1); }
-    else { setPhase("work"); setLeft(work); }
-  }, [left, phase, work, breakFor]);
-
-  const total = phase === "work" ? work : breakFor;
-  const pct = Math.max(0, Math.min(100, ((total - left) / total) * 100));
-  const R = 54, C = 2 * Math.PI * R;
-  const mm = String(Math.max(0, Math.floor(left / 60))).padStart(2, "0");
-  const ss = String(Math.max(0, left % 60)).padStart(2, "0");
-
-  return (
-    <div className="canvas-card">
-      <div className="metric-k">{label} · {phase === "work" ? "focus" : "break"}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-        <svg width={128} height={128} viewBox="0 0 128 128" style={{ flex: "none" }}>
-          <circle cx={64} cy={64} r={R} fill="none" stroke="var(--surface-3)" strokeWidth={7} />
-          <circle
-            cx={64}
-            cy={64}
-            r={R}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth={7}
-            strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={C * (1 - pct / 100)}
-            transform="rotate(-90 64 64)"
-            style={{ transition: "stroke-dashoffset 1s linear" }}
-          />
-          <text x={64} y={72} textAnchor="middle" fill="var(--text)" fontSize="23" fontFamily="var(--mono)" letterSpacing="-1">
-            {mm}:{ss}
-          </text>
-        </svg>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button className="btn" onClick={() => setRun(!run)}>{run ? "pause" : "start"}</button>
-          <button className="btn" onClick={() => { setRun(false); setPhase("work"); setLeft(work); }}>reset</button>
-          <span className="metric-k" style={{ textAlign: "left" }}>{cycles} done</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Timer({ label, seconds }: { label: string; seconds: number }) {
-  const [left, setLeft] = useState(seconds);
-  const [run, setRun] = useState(false);
-  useEffect(() => {
-    if (!run) return;
-    const t = setInterval(() => setLeft((l) => (l <= 1 ? 0 : l - 1)), 1000);
-    return () => clearInterval(t);
-  }, [run]);
-  return (
-    <div className="canvas-card">
-      <div className="metric-k">{label}</div>
-      <div style={{ fontSize: 42, fontWeight: 500, letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums" }}>
-        {String(Math.floor(left / 60)).padStart(2, "0")}:{String(left % 60).padStart(2, "0")}
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <button className="btn" onClick={() => setRun(!run)}>{run ? "pause" : "start"}</button>
-        <button className="btn" onClick={() => { setRun(false); setLeft(seconds); }}>reset</button>
-      </div>
-    </div>
-  );
-}
-
-function Stopwatch({ label }: { label: string }) {
-  const [ms, setMs] = useState(0);
-  const [run, setRun] = useState(false);
-  useEffect(() => {
-    if (!run) return;
-    const t = setInterval(() => setMs((m) => m + 10), 10);
-    return () => clearInterval(t);
-  }, [run]);
-  return (
-    <div className="canvas-card">
-      <div className="metric-k">{label}</div>
-      <div style={{ fontSize: 42, fontWeight: 500, letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums" }}>
-        {String(Math.floor(ms / 60000)).padStart(2, "0")}:{String(Math.floor(ms / 1000) % 60).padStart(2, "0")}.{String(Math.floor(ms / 10) % 100).padStart(2, "0")}
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <button className="btn" onClick={() => setRun(!run)}>{run ? "stop" : "start"}</button>
-        <button className="btn" onClick={() => { setRun(false); setMs(0); }}>reset</button>
-      </div>
-    </div>
-  );
-}
-
 function TodoList({ b }: { b: CanvasBlock }) {
   const [done, setDone] = useState<Record<number, boolean>>({});
   const items: string[] = b.items || [];
@@ -1775,27 +1855,39 @@ export function FollowupsBlock({ b }: { b: CanvasBlock }) {
   );
 }
 
-/* -------------------------------------------------- form components */
+/* -------------------------------------------------- composable primitives */
+
 export function SliderBlock({ b }: { b: any }) {
+  const { state, updateState, interpolate } = useReactive();
   const min = Number(b.min ?? 0);
   const max = Number(b.max ?? 100);
   const step = Number(b.step ?? 1);
-  const unit = b.unit ?? "%";
-  const label = b.label || b.title || "Slider";
-  const [val, setVal] = useState<number>(() => Number(b.value ?? Math.round((min + max) / 2)));
+  const unit = b.unit ?? "";
+  const label = interpolate(b.label || b.title || "Slider");
+
+  const boundVal = b.bind && state[b.bind] !== undefined ? Number(state[b.bind]) : undefined;
+  const [internalVal, setInternalVal] = useState<number>(() => Number(b.value ?? Math.round((min + max) / 2)));
+  const val = boundVal !== undefined ? boundVal : internalVal;
+
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
-  const pct = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
+  const pct = Math.min(100, Math.max(0, ((val - min) / (max - min || 1)) * 100));
 
   const updateFromPointer = (clientX: number) => {
     if (!trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / (rect.width || 1)));
     const rawVal = min + ratio * (max - min);
     const stepped = Math.round(rawVal / step) * step;
-    setVal(Math.min(max, Math.max(min, stepped)));
+    const clamped = Math.min(max, Math.max(min, stepped));
+    if (b.bind) {
+      updateState(b.bind, clamped);
+    } else {
+      setInternalVal(clamped);
+    }
+    if (b.onChange) b.onChange(clamped);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -1819,11 +1911,11 @@ export function SliderBlock({ b }: { b: any }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        padding: "10px 14px",
+        padding: "8px 12px",
         background: "var(--surface)",
         border: "1px solid var(--line-soft)",
         borderRadius: "var(--r)",
-        margin: "6px 0",
+        margin: "4px 0",
         userSelect: "none",
       }}
     >
@@ -1837,10 +1929,10 @@ export function SliderBlock({ b }: { b: any }) {
         </span>
       </div>
 
-      {/* Precision Expansion Track: thin by default (6px), thickens on hold/drag (26px) for precision */}
+      {/* Precision Expansion Track: hairline by default (6px), expands on hold/drag (26px) for precision readout */}
       <div
         style={{
-          height: 30,
+          height: 28,
           display: "flex",
           alignItems: "center",
           cursor: "ew-resize",
@@ -1893,7 +1985,9 @@ export function SliderBlock({ b }: { b: any }) {
               transition: "opacity 0.15s ease",
             }}
           >
-            <span style={{ fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "0.02em" }}>{val}{unit}</span>
+            <span style={{ fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "0.02em" }}>
+              {val}{unit}
+            </span>
           </div>
         </div>
       </div>
@@ -1902,185 +1996,169 @@ export function SliderBlock({ b }: { b: any }) {
 }
 
 export function ButtonBlock({ b }: { b: any }) {
-  const [loading, setLoading] = useState(Boolean(b.loading));
+  const { interpolate, runAction, state } = useReactive();
+  const text = interpolate(b.text || b.label || b.title || "Button");
   const [clicked, setClicked] = useState(false);
   const variant = b.variant || "primary";
   const size = b.size || "md";
 
-  const onClick = () => {
-    if (b.disabled || loading) return;
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (b.disabled) return;
     setClicked(true);
-    if (b.action === "loading" || !b.disabled) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setTimeout(() => setClicked(false), 900);
-      }, 1100);
+    setTimeout(() => setClicked(false), 300);
+
+    // 1. Run safe action script on reactive state
+    if (b.onClick) {
+      runAction(b.onClick);
+    }
+
+    // 2. Submit state to chat
+    if (b.submitToChat) {
+      const activeId = useApp.getState().activeId;
+      if (activeId) {
+        const msg = interpolate(b.submitToChat);
+        send(activeId, msg, []);
+      }
+    }
+
+    // 3. Built-in actions
+    if (b.action === "reset") {
+      runAction("for (const k in state) state[k] = 0;");
+    } else if (b.action === "copy") {
+      const copyVal = b.copyValue ? interpolate(b.copyValue) : JSON.stringify(state, null, 2);
+      copyToClipboard(copyVal);
     }
   };
 
-  const bg = variant === "primary" ? "var(--accent)" : variant === "danger" ? "var(--err)" : "var(--surface-2)";
-  const color = variant === "primary" || variant === "danger" ? "#fff" : "var(--text)";
+  const bg =
+    variant === "primary"
+      ? "var(--accent)"
+      : variant === "danger"
+      ? "var(--err)"
+      : variant === "secondary"
+      ? "var(--surface-3)"
+      : variant === "ghost"
+      ? "transparent"
+      : "var(--surface-2)";
+
+  const color =
+    variant === "primary" || variant === "danger"
+      ? "#fff"
+      : "var(--text)";
 
   return (
-    <div style={{ display: "inline-flex", margin: "4px 4px 4px 0" }}>
-      <button
-        onClick={onClick}
-        disabled={b.disabled}
-        className={`comp-btn comp-btn-${variant}`}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          padding: size === "sm" ? "5px 10px" : size === "lg" ? "10px 18px" : "7px 14px",
-          borderRadius: variant === "pill" ? 9999 : "var(--r-sm)",
-          background: bg,
-          color,
-          border: variant === "outline" ? "1px solid var(--line-strong)" : "1px solid transparent",
-          fontSize: size === "sm" ? "12px" : "13px",
-          fontWeight: 540,
-          cursor: b.disabled ? "not-allowed" : "pointer",
-          opacity: b.disabled ? 0.6 : 1,
-          transform: clicked ? "scale(0.96)" : "scale(1)",
-          transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease",
-        }}
-      >
-        {loading ? <span className="spinner sm" style={{ width: 12, height: 12, borderWidth: 2 }} /> : clicked ? <I.check size={13} /> : null}
-        <span>{b.label || b.title || "Button"}</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={b.disabled}
+      className={`comp-btn comp-btn-${variant}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        padding: size === "sm" ? "4px 10px" : size === "lg" ? "10px 18px" : "6px 14px",
+        borderRadius: "var(--r-sm)",
+        background: bg,
+        color,
+        border: variant === "outline" ? "1px solid var(--line-strong)" : "1px solid transparent",
+        fontSize: size === "sm" ? "11.5px" : "12.5px",
+        fontWeight: 540,
+        cursor: b.disabled ? "not-allowed" : "pointer",
+        opacity: b.disabled ? 0.6 : 1,
+        transform: clicked ? "scale(0.96)" : "scale(1)",
+        transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease",
+      }}
+    >
+      <span>{text}</span>
+    </button>
   );
 }
 
 export function CheckboxBlock({ b }: { b: any }) {
-  const [checked, setChecked] = useState(Boolean(b.checked));
+  const { state, updateState, interpolate } = useReactive();
+  const label = interpolate(b.label || b.title);
+  const description = interpolate(b.description || b.desc);
+
+  const boundVal = b.bind && state[b.bind] !== undefined ? Boolean(state[b.bind]) : undefined;
+  const [internalVal, setInternalVal] = useState<boolean>(Boolean(b.checked || b.value));
+  const checked = boundVal !== undefined ? boundVal : internalVal;
+
+  const toggle = () => {
+    const next = !checked;
+    if (b.bind) updateState(b.bind, next);
+    else setInternalVal(next);
+    if (b.onChange) b.onChange(next);
+  };
 
   return (
     <div
-      onClick={() => setChecked(!checked)}
+      onClick={toggle}
       className="comp-checkbox-row a-blk"
       style={{
         display: "flex",
         alignItems: "flex-start",
         gap: 10,
-        padding: "9px 13px",
+        padding: "8px 12px",
         borderRadius: "var(--r-sm)",
         background: "var(--surface)",
         border: "1px solid var(--line-soft)",
         cursor: "pointer",
         margin: "4px 0",
         userSelect: "none",
-        transition: "background var(--t-fast), border-color var(--t-fast)",
       }}
     >
       <div
         style={{
-          width: 18,
-          height: 18,
+          width: 17,
+          height: 17,
           borderRadius: "var(--r-xs)",
-          border: `1.5px solid ${checked ? "var(--accent)" : "var(--line-strong)"}`,
+          border: checked ? "1px solid var(--accent)" : "1px solid var(--line-strong)",
           background: checked ? "var(--accent)" : "transparent",
-          display: "grid",
-          placeItems: "center",
-          marginTop: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: 1,
           flexShrink: 0,
-          transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          transform: checked ? "scale(1.05)" : "scale(1)",
+          transition: "background var(--t-fast), border-color var(--t-fast)",
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline
-            points="20 6 9 17 4 12"
-            style={{
-              strokeDasharray: 24,
-              strokeDashoffset: checked ? 0 : 24,
-              transition: "stroke-dashoffset 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          />
-        </svg>
+        {checked && <I.check size={11} />}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title}</span>
-        {b.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{b.description}</span>}
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{label}</span>
+        {description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{description}</span>}
       </div>
-    </div>
-  );
-}
-
-export function RadioBlock({ b }: { b: any }) {
-  const options = Array.isArray(b.options) ? b.options : [];
-  const [selected, setSelected] = useState(b.value || options[0]?.id || "");
-
-  return (
-    <div className="comp-radio-group a-blk" style={{ display: "flex", flexDirection: "column", gap: 6, margin: "6px 0" }}>
-      {b.label && <div style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", marginBottom: 2 }}>{b.label}</div>}
-      {options.map((opt: any) => {
-        const isSel = selected === opt.id;
-        return (
-          <div
-            key={opt.id}
-            onClick={() => setSelected(opt.id)}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-              padding: "9px 13px",
-              borderRadius: "var(--r-sm)",
-              background: "var(--surface)",
-              border: `1px solid ${isSel ? "var(--accent)" : "var(--line-soft)"}`,
-              cursor: "pointer",
-              userSelect: "none",
-              transition: "border-color 0.15s ease, background 0.15s ease",
-            }}
-          >
-            <div
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                border: `1.5px solid ${isSel ? "var(--accent)" : "var(--line-strong)"}`,
-                display: "grid",
-                placeItems: "center",
-                marginTop: 2,
-                flexShrink: 0,
-              }}
-            >
-              {isSel && (
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: "var(--accent)",
-                    transform: "scale(1)",
-                    animation: "fade-in 0.15s ease-out",
-                  }}
-                />
-              )}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{opt.label || opt.id}</span>
-              {opt.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{opt.description}</span>}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
 
 export function SwitchBlock({ b }: { b: any }) {
-  const [checked, setChecked] = useState(Boolean(b.checked));
+  const { state, updateState, interpolate } = useReactive();
+  const label = interpolate(b.label || b.title);
+  const description = interpolate(b.description || b.desc);
+
+  const boundVal = b.bind && state[b.bind] !== undefined ? Boolean(state[b.bind]) : undefined;
+  const [internalVal, setInternalVal] = useState<boolean>(Boolean(b.checked || b.value));
+  const checked = boundVal !== undefined ? boundVal : internalVal;
+
+  const toggle = () => {
+    const next = !checked;
+    if (b.bind) updateState(b.bind, next);
+    else setInternalVal(next);
+    if (b.onChange) b.onChange(next);
+  };
 
   return (
     <div
-      onClick={() => setChecked(!checked)}
+      onClick={toggle}
       className="comp-switch-row a-blk"
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "10px 14px",
+        padding: "8px 12px",
         borderRadius: "var(--r-sm)",
         background: "var(--surface)",
         border: "1px solid var(--line-soft)",
@@ -2090,19 +2168,18 @@ export function SwitchBlock({ b }: { b: any }) {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title}</span>
-        {b.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{b.description}</span>}
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{label}</span>
+        {description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{description}</span>}
       </div>
-      {/* Fluid Switch Track */}
       <div
         style={{
-          width: 44,
-          height: 25,
+          width: 40,
+          height: 22,
           borderRadius: 9999,
           background: checked ? "var(--accent)" : "var(--surface-3)",
           position: "relative",
           flexShrink: 0,
-          transition: "background 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "background 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
           border: "1px solid var(--line-soft)",
         }}
       >
@@ -2110,13 +2187,13 @@ export function SwitchBlock({ b }: { b: any }) {
           style={{
             position: "absolute",
             top: 2,
-            left: checked ? 21 : 2,
-            width: 19,
-            height: 19,
+            left: checked ? 20 : 2,
+            width: 16,
+            height: 16,
             borderRadius: "50%",
             background: "#fff",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-            transition: "left 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+            transition: "left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
           }}
         />
       </div>
@@ -2125,18 +2202,35 @@ export function SwitchBlock({ b }: { b: any }) {
 }
 
 export function DropdownBlock({ b }: { b: any }) {
+  const { state, updateState, interpolate } = useReactive();
+  const label = interpolate(b.label || b.title);
+  const rawOptions = Array.isArray(b.options) ? b.options : [];
+  const options = rawOptions.map((o: any) =>
+    typeof o === "string" ? { label: o, value: o } : { label: o.label || o.title || String(o.value), value: o.value ?? o.id }
+  );
+
+  const boundVal = b.bind && state[b.bind] !== undefined ? state[b.bind] : undefined;
+  const [internalVal, setInternalVal] = useState(b.value || (options[0]?.value ?? ""));
+  const currentVal = boundVal !== undefined ? boundVal : internalVal;
+
   const [open, setOpen] = useState(false);
-  const options = Array.isArray(b.options) ? b.options : [];
-  const [val, setVal] = useState(b.value || (options[0]?.value ?? ""));
   const [search, setSearch] = useState("");
 
-  const currentLabel = options.find((o: any) => o.value === val)?.label || val || b.placeholder || "Select...";
+  const currentLabel = options.find((o: any) => o.value === currentVal)?.label || currentVal || b.placeholder || "Select...";
   const filtered = options.filter((o: any) => !search || String(o.label || o.value).toLowerCase().includes(search.toLowerCase()));
 
+  const handleSelect = (val: any) => {
+    if (b.bind) updateState(b.bind, val);
+    else setInternalVal(val);
+    setOpen(false);
+    if (b.onChange) b.onChange(val);
+  };
+
   return (
-    <div style={{ margin: "6px 0", position: "relative" }} className="a-blk">
-      {b.label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{b.label}</div>}
+    <div style={{ margin: "4px 0", position: "relative" }} className="a-blk">
+      {label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{label}</div>}
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className="comp-dropdown-trigger"
         style={{
@@ -2144,7 +2238,7 @@ export function DropdownBlock({ b }: { b: any }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "8px 12px",
+          padding: "7px 11px",
           background: "var(--surface)",
           border: "1px solid var(--line-soft)",
           borderRadius: "var(--r-sm)",
@@ -2176,7 +2270,7 @@ export function DropdownBlock({ b }: { b: any }) {
             overflowY: "auto",
           }}
         >
-          {b.searchable !== false && options.length > 4 && (
+          {b.searchable !== false && options.length > 5 && (
             <input
               autoFocus
               type="text"
@@ -2185,7 +2279,7 @@ export function DropdownBlock({ b }: { b: any }) {
               onChange={(e) => setSearch(e.target.value)}
               style={{
                 width: "100%",
-                padding: "5px 8px",
+                padding: "4px 8px",
                 marginBottom: 4,
                 background: "var(--surface)",
                 border: "1px solid var(--line-soft)",
@@ -2196,11 +2290,11 @@ export function DropdownBlock({ b }: { b: any }) {
             />
           )}
           {filtered.map((opt: any, i: number) => {
-            const isSel = opt.value === val;
+            const isSel = opt.value === currentVal;
             return (
               <div
                 key={i}
-                onClick={() => { setVal(opt.value); setOpen(false); }}
+                onClick={() => handleSelect(opt.value)}
                 style={{
                   padding: "6px 10px",
                   borderRadius: "var(--r-xs)",
@@ -2213,7 +2307,7 @@ export function DropdownBlock({ b }: { b: any }) {
                   justifyContent: "space-between",
                 }}
               >
-                <span>{opt.label || opt.value}</span>
+                <span>{opt.label}</span>
                 {isSel && <I.check size={12} />}
               </div>
             );
@@ -2225,20 +2319,37 @@ export function DropdownBlock({ b }: { b: any }) {
 }
 
 export function InputBlock({ b }: { b: any }) {
-  const [val, setVal] = useState(b.value || "");
+  const { state, updateState, interpolate } = useReactive();
+  const label = interpolate(b.label || b.title);
+  const placeholder = b.placeholder || "Enter value...";
+  const type = b.type === "number" ? "number" : "text";
+
+  const boundVal = b.bind && state[b.bind] !== undefined ? state[b.bind] : undefined;
+  const [internalVal, setInternalVal] = useState<any>(() => b.value ?? "");
+  const currentVal = boundVal !== undefined ? boundVal : internalVal;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value;
+    if (b.bind) {
+      updateState(b.bind, val);
+    } else {
+      setInternalVal(val);
+    }
+    if (b.onChange) b.onChange(val);
+  };
 
   return (
-    <div style={{ margin: "6px 0" }} className="a-blk">
-      {b.label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{b.label}</div>}
+    <div style={{ margin: "4px 0" }} className="a-blk">
+      {label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{label}</div>}
       <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
         <input
-          type="text"
-          placeholder={b.placeholder || "Enter value..."}
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
+          type={type}
+          placeholder={placeholder}
+          value={currentVal}
+          onChange={handleChange}
           style={{
             width: "100%",
-            padding: "8px 12px",
+            padding: "7px 11px",
             background: "var(--surface)",
             border: "1px solid var(--line-soft)",
             borderRadius: "var(--r-sm)",
@@ -2248,9 +2359,13 @@ export function InputBlock({ b }: { b: any }) {
             transition: "border-color var(--t-fast)",
           }}
         />
-        {b.clearable !== false && val && (
+        {b.clearable !== false && currentVal && (
           <button
-            onClick={() => setVal("")}
+            type="button"
+            onClick={() => {
+              if (b.bind) updateState(b.bind, "");
+              else setInternalVal("");
+            }}
             className="icon-btn sm"
             style={{ position: "absolute", right: 6, width: 22, height: 22 }}
           >
@@ -2262,115 +2377,29 @@ export function InputBlock({ b }: { b: any }) {
   );
 }
 
-export function StepperBlock({ b }: { b: any }) {
-  const min = Number(b.min ?? 0);
-  const max = Number(b.max ?? 100);
-  const step = Number(b.step ?? 1);
-  const unit = b.unit || "";
-  const [val, setVal] = useState<number>(() => Number(b.value ?? 1));
-
-  const inc = () => setVal((v) => Math.min(max, v + step));
-  const dec = () => setVal((v) => Math.max(min, v - step));
-
-  return (
-    <div
-      className="comp-stepper-card a-blk"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "10px 14px",
-        background: "var(--surface)",
-        border: "1px solid var(--line-soft)",
-        borderRadius: "var(--r-sm)",
-        margin: "6px 0",
-      }}
-    >
-      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title || "Quantity"}</span>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        <button
-          className="icon-btn sm"
-          onClick={dec}
-          disabled={val <= min}
-          style={{ width: 26, height: 26, borderRadius: "var(--r-xs)" }}
-        >
-          −
-        </button>
-        <span style={{ fontSize: "var(--fs-xs)", fontFamily: "var(--mono)", fontVariantNumeric: "tabular-nums", minWidth: 28, textAlign: "center" }}>
-          {val} {unit}
-        </span>
-        <button
-          className="icon-btn sm"
-          onClick={inc}
-          disabled={val >= max}
-          style={{ width: 26, height: 26, borderRadius: "var(--r-xs)" }}
-        >
-          +
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export function RatingBlock({ b }: { b: any }) {
-  const max = Number(b.max ?? 5);
-  const [val, setVal] = useState<number>(Number(b.value ?? 4));
-  const [hover, setHover] = useState<number | null>(null);
-
-  const activeVal = hover ?? val;
-
-  return (
-    <div style={{ padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", margin: "6px 0" }} className="a-blk">
-      {b.label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 6 }}>{b.label}</div>}
-      <div style={{ display: "inline-flex", gap: 6 }}>
-        {Array.from({ length: max }, (_, i) => {
-          const star = i + 1;
-          const filled = star <= activeVal;
-          return (
-            <button
-              key={i}
-              onMouseEnter={() => setHover(star)}
-              onMouseLeave={() => setHover(null)}
-              onClick={() => setVal(star)}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 2,
-                color: filled ? "var(--accent)" : "var(--line-strong)",
-                transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                transform: hover === star ? "scale(1.2)" : "scale(1)",
-              }}
-            >
-              ★
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function ProgressBlock({ b }: { b: any }) {
-  const val = Number(b.value ?? 50);
-  const max = Number(b.max ?? 100);
+  const { interpolate } = useReactive();
+  const label = interpolate(b.label || "Progress");
+  const rawVal = interpolate(b.value != null ? b.value : 50);
+  const val = Number(rawVal) || 0;
+  const max = Number(interpolate(b.max != null ? b.max : 100)) || 100;
   const unit = b.unit || "%";
   const pct = Math.min(100, Math.max(0, (val / max) * 100));
 
   return (
-    <div style={{ padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", margin: "6px 0" }} className="a-blk">
+    <div style={{ padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", margin: "4px 0" }} className="a-blk">
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--text-dim)", marginBottom: 6 }}>
-        <span>{b.label || "Progress"}</span>
+        <span>{label}</span>
         <span style={{ fontFamily: "var(--mono)" }}>{Math.round(pct)}{unit}</span>
       </div>
-      <div style={{ height: 8, background: "var(--surface-2)", borderRadius: 9999, overflow: "hidden", border: "1px solid var(--line-soft)" }}>
+      <div style={{ height: 6, background: "var(--surface-3)", borderRadius: 9999, overflow: "hidden" }}>
         <div
           style={{
             height: "100%",
             width: `${pct}%`,
             background: "var(--accent)",
             borderRadius: 9999,
-            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+            transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         />
       </div>
@@ -2378,741 +2407,161 @@ export function ProgressBlock({ b }: { b: any }) {
   );
 }
 
-/* ---------------------------------------------------- palette color swatch picker */
-export function ColorPickerBlock({ b, onChange }: { b: any; onChange?: (c: string) => void }) {
-  const defaultColors = [
-    "#7C3AED", "#FF6B6B", "#F59E0B", "#10B981", "#38BDF8",
-    "#64748B", "#F43F5E", "#D97706", "#059669", "#1E293B",
-  ];
-  const colors: string[] = b.colors || b.palette || b.swatches || defaultColors;
-  const [selected, setSelected] = useState<string>(b.value || colors[0]);
-  const [copied, setCopied] = useState(false);
-  const label = b.label || b.title;
+/* -------------------------------------------------- fundamental composable blocks */
 
-  const handleSelect = (c: string) => {
-    setSelected(c);
-    if (onChange) onChange(c);
-    if (b.onChange) b.onChange(c);
-  };
+export function CardBlock({ b }: { b: any }) {
+  const { interpolate } = useReactive();
+  const title = interpolate(b.title);
+  const subtitle = interpolate(b.subtitle || b.desc || b.description);
+  const badge = interpolate(b.badge);
+  const variant = b.variant || "default";
 
-  const copyHex = async () => {
-    const ok = await copyToClipboard(selected);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    }
-  };
+  const children = b.blocks || b.children || b.items || [];
 
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <I.palette size={13} />
-          {label || "Palette Color Selector"}
-        </span>
-        <button
-          type="button"
-          onClick={copyHex}
-          title="Copy Hex"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            fontSize: "11px",
-            fontFamily: "var(--mono)",
-            color: "var(--text)",
-            background: "var(--surface-2)",
-            border: "1px solid var(--line-soft)",
-            padding: "2px 8px",
-            borderRadius: "var(--r-xs)",
-            cursor: "pointer",
-          }}
-        >
-          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: selected }} />
-          {selected.toUpperCase()}
-          <span style={{ fontSize: "10px", color: "var(--text-faint)", marginLeft: 2 }}>{copied ? "✓" : "copy"}</span>
-        </button>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        {colors.map((c) => {
-          const isSelected = selected.toLowerCase() === c.toLowerCase();
-          return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => handleSelect(c)}
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: "50%",
-                background: c,
-                border: isSelected ? "2.5px solid var(--surface)" : "1.5px solid rgba(255,255,255,0.12)",
-                boxShadow: isSelected ? `0 0 0 2px var(--accent)` : "none",
-                cursor: "pointer",
-                padding: 0,
-                transition: "transform 0.15s ease, box-shadow 0.15s ease",
-                transform: isSelected ? "scale(1.12)" : "scale(1)",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              {isSelected && <span style={{ fontSize: 10, color: "#fff", filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.6))" }}>✓</span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- interactive calendar date picker */
-export function CalendarBlock({ b, onChange }: { b: any; onChange?: (d: string) => void }) {
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 7, 28)); // Aug 2026
-  const [selectedDay, setSelectedDay] = useState<number>(28);
-  const label = b.label || b.title;
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayIndex = new Date(year, month, 1).getDay();
-
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-
-  const selectDay = (day: number) => {
-    setSelectedDay(day);
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    if (onChange) onChange(dateStr);
-    if (b.onChange) b.onChange(dateStr);
-  };
-
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <I.calendar size={13} />
-          {label || "Calendar"}
-        </span>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <button type="button" onClick={prevMonth} className="icon-btn sm" style={{ width: 22, height: 22 }}>‹</button>
-          <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text)", minWidth: 90, textAlign: "center" }}>
-            {monthNames[month]} {year}
-          </span>
-          <button type="button" onClick={nextMonth} className="icon-btn sm" style={{ width: 22, height: 22 }}>›</button>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, textAlign: "center" }}>
-        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-          <div key={d} style={{ fontSize: "9.5px", color: "var(--text-faint)", padding: "2px 0", fontWeight: 600 }}>{d}</div>
-        ))}
-        {Array.from({ length: firstDayIndex }).map((_, i) => (
-          <div key={`pad-${i}`} />
-        ))}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const day = i + 1;
-          const isSelected = selectedDay === day;
-          return (
-            <button
-              key={day}
-              type="button"
-              onClick={() => selectDay(day)}
-              style={{
-                fontSize: "11px",
-                fontFamily: "var(--mono)",
-                padding: "4px 0",
-                borderRadius: "var(--r-xs)",
-                border: "none",
-                background: isSelected ? "var(--accent)" : "transparent",
-                color: isSelected ? "#fff" : "var(--text)",
-                fontWeight: isSelected ? 600 : 400,
-                cursor: "pointer",
-                transition: "background var(--t-fast)",
-              }}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ fontSize: "10.5px", color: "var(--text-dim)", textAlign: "right", marginTop: 2 }}>
-        Selected: <span style={{ color: "var(--text)", fontWeight: 550 }}>{monthNames[month]} {selectedDay}, {year}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- digital world clock */
-export function ClockBlock({ b }: { b: any }) {
-  const [time, setTime] = useState(() => new Date());
-  const [tz, setTz] = useState("Local");
-  const label = b.label || b.title;
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const getTimeString = () => {
-    try {
-      if (tz === "UTC") return time.toUTCString().slice(17, 25) + " UTC";
-      return time.toLocaleTimeString();
-    } catch {
-      return time.toLocaleTimeString();
-    }
-  };
-
-  const dateStr = time.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
-
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <I.clock size={13} />
-          {label || "Digital Clock"}
-        </span>
-        <div style={{ display: "inline-flex", gap: 4 }}>
-          {["Local", "UTC"].map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTz(t)}
-              style={{
-                fontSize: "10px",
-                fontFamily: "var(--mono)",
-                padding: "1px 6px",
-                borderRadius: 3,
-                border: "none",
-                background: tz === t ? "var(--surface-3)" : "transparent",
-                color: tz === t ? "var(--text)" : "var(--text-faint)",
-                cursor: "pointer",
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ fontSize: "24px", fontWeight: 600, color: "var(--text)", fontFamily: "var(--mono)", fontVariantNumeric: "tabular-nums" }}>
-        {getTimeString()}
-      </div>
-      <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>
-        {dateStr}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- minimalist weather widget */
-export function WeatherBlock({ b }: { b: any }) {
-  const city = b.city || b.location || "San Francisco, CA";
-  const temp = b.temp || "72°F";
-  const condition = b.condition || "Partly Cloudy";
-  const high = b.high || "76°";
-  const low = b.low || "58°";
-  const humidity = b.humidity || "52%";
-  const wind = b.wind || "8 mph";
-
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text)" }}>{city}</div>
-          <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>{condition}</div>
-        </div>
-        <span style={{ color: "var(--accent)" }}>
-          <I.cloud size={24} />
-        </span>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: "30px", fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
-          {temp}
-        </span>
-        <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
-          H: {high} L: {low}
-        </span>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, paddingTop: 8, borderTop: "1px solid var(--line-soft)", fontSize: "11px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)" }}>
-          <span>Humidity</span>
-          <span style={{ color: "var(--text)", fontWeight: 500, fontFamily: "var(--mono)" }}>{humidity}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)" }}>
-          <span>Wind</span>
-          <span style={{ color: "var(--text)", fontWeight: 500, fontFamily: "var(--mono)" }}>{wind}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- interactive search bar */
-export function SearchBarBlock({ b, onSearch }: { b: any; onSearch?: (q: string) => void }) {
-  const [val, setVal] = useState(b.value || "");
-  const placeholder = b.placeholder || "Search anything...";
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
-    setVal(v);
-    if (onSearch) onSearch(v);
-    if (b.onSearch) b.onSearch(v);
-  };
-
-  const clear = () => {
-    setVal("");
-    if (onSearch) onSearch("");
-  };
-
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ color: "var(--text-faint)", display: "inline-flex" }}><I.search size={14} /></span>
-      <input
-        type="text"
-        value={val}
-        onChange={handleChange}
-        placeholder={placeholder}
-        style={{
-          flex: 1,
-          border: "none",
-          background: "transparent",
-          outline: "none",
-          color: "var(--text)",
-          fontSize: "var(--fs-xs)",
-          fontFamily: "var(--font-sans)",
-        }}
-      />
-      {val && (
-        <button
-          type="button"
-          onClick={clear}
-          style={{
-            border: "none",
-            background: "transparent",
-            color: "var(--text-faint)",
-            cursor: "pointer",
-            fontSize: "13px",
-            padding: "0 4px",
-          }}
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- tags editor */
-export function TagsInputBlock({ b, onChange }: { b: any; onChange?: (tags: string[]) => void }) {
-  const [tags, setTags] = useState<string[]>(b.tags || b.items || ["React", "TypeScript", "Tailwind"]);
-  const [inputVal, setInputVal] = useState("");
-  const label = b.label || b.title;
-
-  const addTag = () => {
-    const trimmed = inputVal.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      const next = [...tags, trimmed];
-      setTags(next);
-      setInputVal("");
-      if (onChange) onChange(next);
-      if (b.onChange) b.onChange(next);
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    const next = tags.filter((t) => t !== tagToRemove);
-    setTags(next);
-    if (onChange) onChange(next);
-    if (b.onChange) b.onChange(next);
-  };
-
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 8 }}>
-      {label && <span style={{ fontSize: "11px", fontWeight: 550, color: "var(--text-dim)" }}>{label}</span>}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-        {tags.map((t) => (
-          <span
-            key={t}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: "11px",
-              padding: "2px 8px",
-              background: "var(--surface-2)",
-              border: "1px solid var(--line-soft)",
-              borderRadius: "var(--r-xs)",
-              color: "var(--text)",
-            }}
-          >
-            #{t}
-            <button
-              type="button"
-              onClick={() => removeTag(t)}
-              style={{ border: "none", background: "transparent", color: "var(--text-faint)", cursor: "pointer", padding: 0, fontSize: 11 }}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        <input
-          type="text"
-          value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-          placeholder="+ tag"
-          style={{
-            border: "none",
-            background: "transparent",
-            outline: "none",
-            color: "var(--text)",
-            fontSize: "11px",
-            width: 60,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- file upload dropzone */
-export function FileUploadBlock({ b }: { b: any }) {
-  const label = b.label || b.title || "Dropzone File Target";
-  const accept = b.accept || "PNG, JPG, CSV, PDF up to 25MB";
-  const [uploaded, setUploaded] = useState(false);
-
-  return (
+  const inner = (
     <div
-      className="canvas-card a-blk"
-      onClick={() => setUploaded(!uploaded)}
+      className={`block-card block-card-${variant}`}
       style={{
-        padding: "16px",
-        background: "var(--surface)",
-        border: "1.5px dashed var(--line)",
-        borderRadius: "var(--r)",
-        textAlign: "center",
-        cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 6,
+        padding: b.padding != null ? (typeof b.padding === "number" ? `${b.padding}px` : b.padding) : undefined,
+        gap: b.gap != null ? (typeof b.gap === "number" ? `${b.gap}px` : b.gap) : undefined,
       }}
     >
-      <span style={{ color: "var(--accent)" }}><I.file size={20} /></span>
-      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)" }}>{label}</span>
-      <span style={{ fontSize: "10.5px", color: "var(--text-faint)" }}>{accept}</span>
-      {uploaded && (
-        <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5, fontSize: "10.5px", color: "var(--ok)", background: "rgba(34,197,94,0.1)", padding: "2px 8px", borderRadius: 4 }}>
-          ✓ dataset-v2.csv (1.4MB) ready
+      {(title || badge || subtitle) && (
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 2 }}>
+          <div>
+            {title && <div style={{ fontSize: "var(--fs-base)", fontWeight: 600, color: "var(--text)", letterSpacing: "-0.01em" }}>{title}</div>}
+            {subtitle && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          {badge && (
+            <BadgeBlock b={typeof badge === "string" ? { text: badge } : badge} />
+          )}
         </div>
       )}
+      {Array.isArray(children) && children.map((child: any, i: number) => (
+        <BlockR key={i} b={child} />
+      ))}
     </div>
   );
-}
 
-/* ---------------------------------------------------- segmented control tabs */
-export function SegmentedControlBlock({ b, onChange }: { b: any; onChange?: (val: string) => void }) {
-  const options = (b.options || ["1H", "24H", "7D", "30D"]).map((o: any) =>
-    typeof o === "string" ? { id: o, label: o } : o
-  );
-  const [val, setVal] = useState(b.value || options[0]?.id);
-
-  const handleSelect = (id: string) => {
-    setVal(id);
-    if (onChange) onChange(id);
-    if (b.onChange) b.onChange(id);
-  };
-
-  return (
-    <div className="canvas-card a-blk" style={{ padding: "8px 10px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "inline-flex", width: "fit-content" }}>
-      <div className="comp-switcher" style={{ margin: 0 }}>
-        {options.map((opt: any) => (
-          <button
-            key={opt.id}
-            type="button"
-            data-active={val === opt.id}
-            onClick={() => handleSelect(opt.id)}
-            style={{ fontSize: "11px", padding: "3px 10px" }}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- button group */
-export function ButtonGroupBlock({ b }: { b: any }) {
-  const items = b.items || [{ label: "Copy" }, { label: "Share" }, { label: "Export" }];
-  const [clickedIdx, setClickedIdx] = useState<number | null>(null);
-
-  const handleClick = (idx: number, it: any) => {
-    setClickedIdx(idx);
-    setTimeout(() => setClickedIdx(null), 900);
-    if (it.action && typeof it.action === "function") it.action();
-  };
-
-  return (
-    <div style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", margin: "4px 0" }}>
-      {items.map((it: any, idx: number) => {
-        const isClicked = clickedIdx === idx;
-        return (
-          <button
-            key={idx}
-            type="button"
-            className="btn"
-            onClick={() => handleClick(idx, it)}
-            style={{
-              height: 28,
-              padding: "0 11px",
-              fontSize: "11.5px",
-              background: isClicked ? "var(--surface-3)" : "var(--surface-2)",
-              color: isClicked ? "var(--accent)" : "var(--text)",
-            }}
-          >
-            {isClicked ? "✓ Done" : it.label || `Button ${idx + 1}`}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------- modular form container */
-function renderFormField(f: any, val: any, onChange: (v: any) => void) {
-  const type = f.type || f.kind || "text";
-  switch (type) {
-    case "dropdown":
-    case "select":
-      return <DropdownBlock b={{ ...f, value: val, onChange }} />;
-    case "slider":
-      return <SliderBlock b={{ ...f, value: val, onChange }} />;
-    case "color-picker":
-    case "palette":
-      return <ColorPickerBlock b={{ ...f, value: val, onChange }} />;
-    case "checkbox":
-      return <CheckboxBlock b={{ ...f, checked: Boolean(val), onChange: (c: boolean) => onChange(c) }} />;
-    case "radio":
-      return <RadioBlock b={{ ...f, value: val, onChange }} />;
-    case "rating":
-      return <RatingBlock b={{ ...f, value: val, onChange }} />;
-    case "date":
-    case "calendar":
-      return <CalendarBlock b={{ ...f, value: val, onChange }} />;
-    case "input":
-    case "text":
-    case "number":
-    default:
-      return (
-        <input
-          type={type === "number" ? "number" : "text"}
-          value={val ?? ""}
-          onChange={(e) => onChange(type === "number" ? Number(e.target.value) : e.target.value)}
-          placeholder={f.placeholder || `Enter ${f.label || ""}`}
-          className="comp-custom-input"
-          style={{ width: "100%", boxSizing: "border-box" }}
-        />
-      );
-  }
-}
-
-export function FormBlock({ b }: { b: CanvasBlock }) {
-  const title = b.title || "Form";
-  const desc = b.description || b.desc;
-  const submitLabel = b.submitLabel || b.submitButton || "Submit Answers";
-  const fields = b.fields || b.items || [];
-  const [values, setValues] = useState<Record<string, any>>(() => {
-    const init: Record<string, any> = {};
-    for (const f of fields) {
-      if (f.value !== undefined) init[f.id || f.name] = f.value;
-      else if (f.type === "color-picker") init[f.id || f.name] = "#7C3AED";
-      else if (f.type === "slider") init[f.id || f.name] = f.min ?? 0;
-      else if (f.type === "dropdown" && f.options?.[0]) init[f.id || f.name] = f.options[0].value ?? f.options[0];
-    }
-    return init;
-  });
-  const [submitted, setSubmitted] = useState(false);
-
-  const updateField = (id: string, val: any) => {
-    setValues((prev) => ({ ...prev, [id]: val }));
-  };
-
-  const handleSubmit = () => {
-    setSubmitted(true);
-    const activeId = useApp.getState().activeId;
-    if (activeId) {
-      const payload = JSON.stringify({
-        form: title,
-        answers: values,
-      }, null, 2);
-      send(activeId, payload, []);
-    }
-  };
-
-  if (submitted) {
+  // If card specifies state or tick loop, wrap in its own reactive scope
+  if (b.state || b.tick || b.onTick) {
     return (
-      <div className="canvas-card a-blk" style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--line-soft)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--fs-sm)", fontWeight: 550, color: "var(--text)" }}>
-            <span style={{ color: "var(--ok)", fontWeight: 700 }}>✓</span>
-            <span>{title} Submitted</span>
-          </div>
-          <button className="comp-action-btn" onClick={() => setSubmitted(false)}>
-            Modify answers
-          </button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", fontSize: "11.5px" }}>
-          {Object.entries(values).map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ color: "var(--text-faint)" }}>{k}</span>
-              <span style={{ color: "var(--text)", fontWeight: 500, fontFamily: typeof v === "number" ? "var(--mono)" : "inherit" }}>
-                {typeof v === "object" ? JSON.stringify(v) : String(v)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ReactiveProvider initialState={b.state} tick={b.tick} onTick={b.onTick}>
+        {inner}
+      </ReactiveProvider>
     );
   }
 
+  return inner;
+}
+
+export function GridBlock({ b }: { b: any }) {
+  const cols = Math.min(6, Math.max(1, Number(b.cols || b.columns || 2)));
+  const gap = b.gap != null ? (typeof b.gap === "number" ? `${b.gap}px` : b.gap) : "8px";
+  const items = b.blocks || b.items || b.children || [];
+
   return (
-    <div className="canvas-card a-blk" style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 12 }}>
-      <div>
-        <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)" }}>{title}</div>
-        {desc && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>{desc}</div>}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {fields.map((f: any, idx: number) => {
-          const fid = f.id || f.name || `field_${idx}`;
-          const currentVal = values[fid] ?? f.value ?? "";
-          return (
-            <div key={fid} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {f.label && <label style={{ fontSize: "11px", fontWeight: 500, color: "var(--text-dim)" }}>{f.label}</label>}
-              {renderFormField(f, currentVal, (newVal) => updateField(fid, newVal))}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--line-soft)" }}>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={handleSubmit}
-          style={{ height: 30, padding: "0 16px", fontSize: "12px" }}
-        >
-          {submitLabel}
-        </button>
-      </div>
+    <div
+      className="block-grid"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gap,
+      }}
+    >
+      {items.map((item: any, i: number) => (
+        <div key={i} style={{ minWidth: 0 }}>
+          <BlockR b={item} />
+        </div>
+      ))}
     </div>
   );
 }
 
-/* ---------------------------------------------------- reactive widget & live formula calculator */
-export function ReactiveWidgetBlock({ b }: { b: CanvasBlock }) {
-  const title = b.title || "Interactive Scenario Simulator";
-  const desc = b.description || b.desc;
-  const initialVars = (b as any).state || (b as any).variables || { price: 49, units: 150, discount: 10 };
-  const [vars, setVars] = useState<Record<string, any>>(initialVars);
+export function TextBlock({ b }: { b: any }) {
+  const { interpolate } = useReactive();
+  const text = interpolate(b.text || b.content || "");
+  const variant = b.variant || "body";
+  const align = b.align || "left";
 
-  const calculate = (state: Record<string, any>) => {
-    const s = { ...state };
-    try {
-      const price = Number(s.price ?? 49);
-      const units = Number(s.units ?? s.quantity ?? 100);
-      const discount = Number(s.discount ?? 0);
-      s.gross = Math.round(price * units);
-      s.net = Math.round(price * units * (1 - discount / 100));
-      s.mrr = s.net;
-      s.arr = s.net * 12;
-    } catch {}
-    return s;
-  };
+  if (variant === "title") {
+    return <h2 style={{ fontSize: "1.25rem", fontWeight: 650, margin: "2px 0 6px", textAlign: align, letterSpacing: "-0.015em", color: "var(--text)" }}>{text}</h2>;
+  }
+  if (variant === "sub" || variant === "subtitle") {
+    return <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", margin: "2px 0 6px", textAlign: align, lineHeight: 1.5 }}>{text}</p>;
+  }
+  if (variant === "kicker") {
+    return <div style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "2px 0", textAlign: align }}>{text}</div>;
+  }
+  if (variant === "code") {
+    return <pre style={{ fontFamily: "var(--mono)", fontSize: "12px", background: "var(--surface-3)", padding: "8px 12px", borderRadius: "var(--r-sm)", overflowX: "auto" }}><code>{text}</code></pre>;
+  }
+  return <div style={{ textAlign: align }}><Markdown text={text} animate={false} /></div>;
+}
 
-  const computed = useMemo(() => calculate(vars), [vars]);
+export function MetricBlock({ b }: { b: any }) {
+  const { interpolate } = useReactive();
+  const label = interpolate(b.label || b.title || "");
+  const rawValue = interpolate(b.value != null ? b.value : "");
+  const value = typeof rawValue === "number" ? Number(rawValue.toFixed(2)).toString() : rawValue;
+  const delta = interpolate(b.delta);
+  const sub = interpolate(b.sub || b.hint);
 
-  const updateVar = (key: string, val: any) => {
-    setVars((prev) => ({ ...prev, [key]: val }));
-  };
-
-  const sendToAi = () => {
-    const activeId = useApp.getState().activeId;
-    if (activeId) {
-      const payload = JSON.stringify({
-        scenario: title,
-        inputs: vars,
-        computedResults: computed,
-      }, null, 2);
-      send(activeId, payload, []);
-    }
-  };
-
-  const controls = (b as any).controls || [
-    { id: "price", label: "Seat Price ($)", type: "slider", min: 10, max: 200, step: 5, value: vars.price },
-    { id: "units", label: "Active Subscriptions", type: "stepper", min: 10, max: 1000, step: 25, value: vars.units },
-  ];
+  const isNeg = delta != null && String(delta).trim().startsWith("-");
 
   return (
-    <div className="canvas-card a-blk" style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)" }}>{title}</div>
-          {desc && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>{desc}</div>}
+    <div className="canvas-card block-metric" style={{ padding: "10px 12px" }}>
+      {label && <div className="metric-k">{label}</div>}
+      <div className="metric-v" style={{ fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      {(delta != null || sub) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+          {delta != null && (
+            <span
+              style={{
+                fontSize: "var(--fs-xs)",
+                fontWeight: 600,
+                color: isNeg ? "var(--err)" : "var(--ok)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 2,
+              }}
+            >
+              <span>{isNeg ? "↓" : "↑"}</span>
+              <span>{delta}</span>
+            </span>
+          )}
+          {sub && <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>{sub}</span>}
         </div>
-        <button
-          type="button"
-          onClick={sendToAi}
-          className="btn"
-          style={{ height: 26, fontSize: "11px", padding: "0 10px" }}
-        >
-          Send scenario to AI ↗
-        </button>
-      </div>
-
-      {/* Reactive controls */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
-        {controls.map((c: any) => {
-          const cid = c.bind || c.id;
-          return (
-            <div key={cid} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {c.type === "slider" ? (
-                <SliderBlock b={{ ...c, value: vars[cid] ?? c.value, onChange: (v: any) => updateVar(cid, v) }} />
-              ) : c.type === "stepper" ? (
-                <StepperBlock b={{ ...c, value: vars[cid] ?? c.value, onChange: (v: any) => updateVar(cid, v) }} />
-              ) : (
-                <InputBlock b={{ ...c, value: vars[cid] ?? c.value, onChange: (v: any) => updateVar(cid, v) }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Dynamically recalculated metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 4 }}>
-        <div style={{ padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-          <div style={{ fontSize: "10.5px", color: "var(--text-faint)", textTransform: "uppercase" }}>Gross Revenue</div>
-          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>${computed.gross}</div>
-        </div>
-        <div style={{ padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-          <div style={{ fontSize: "10.5px", color: "var(--text-faint)", textTransform: "uppercase" }}>Monthly Run Rate</div>
-          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>${computed.mrr}</div>
-        </div>
-        <div style={{ padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-          <div style={{ fontSize: "10.5px", color: "var(--text-faint)", textTransform: "uppercase" }}>Annual Run Rate</div>
-          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--ok)", fontVariantNumeric: "tabular-nums" }}>${computed.arr}</div>
-        </div>
-      </div>
+      )}
     </div>
+  );
+}
+
+export function BadgeBlock({ b }: { b: any }) {
+  const { interpolate } = useReactive();
+  const text = interpolate(b.text || b.label || "");
+  const color = interpolate(b.color || b.variant || "default");
+
+  const colorMap: Record<string, { bg: string; text: string; border: string }> = {
+    default: { bg: "var(--surface-3)", text: "var(--text-dim)", border: "var(--line-soft)" },
+    accent: { bg: "var(--accent-soft)", text: "var(--accent)", border: "transparent" },
+    ok: { bg: "rgba(34,197,94,0.12)", text: "var(--ok)", border: "transparent" },
+    warn: { bg: "rgba(245,158,11,0.12)", text: "var(--warn)", border: "transparent" },
+    danger: { bg: "rgba(239,68,68,0.12)", text: "var(--err)", border: "transparent" },
+    faint: { bg: "var(--surface-3)", text: "var(--text-faint)", border: "transparent" },
+  };
+  const c = colorMap[color] || colorMap.default;
+
+  return (
+    <span
+      className="block-badge"
+      style={{
+        background: c.bg,
+        color: c.text,
+        border: `1px solid ${c.border}`,
+      }}
+    >
+      {text}
+    </span>
   );
 }
 
@@ -3155,9 +2604,8 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
 
     if (res && typeof res === "object" && !Array.isArray(res) && !res.type) {
       for (const k of [
-        "slider", "button", "checkbox", "radio", "dropdown", "switch",
-        "input", "stepper", "rating", "progress", "chart", "math",
-        "chemistry", "question", "metrics", "switcher", "callout", "table"
+        "card", "grid", "slider", "button", "checkbox", "dropdown", "switch",
+        "input", "progress", "chart", "math", "chemistry", "badge", "text", "metric", "table"
       ]) {
         if (res[k] !== undefined) {
           res.type = k;
@@ -3168,7 +2616,7 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
     return res;
   }, [raw, attrs]);
 
-  // When streaming and no data parsed yet, show a calm, minimal 1-line stream status
+  // When streaming and no data parsed yet, show calm minimal 1-line stream status
   if (open && !data) {
     return (
       <div
@@ -3201,6 +2649,7 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
 
   const streamCls = open ? "comp-streaming-in" : "";
 
+  // If array of blocks
   if (Array.isArray(data)) {
     return (
       <ErrorBoundary name="Component group">
@@ -3237,172 +2686,259 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
     );
   }
 
-  if (data.type) {
-    return (
-      <ErrorBoundary name={data.type}>
-        <div className={`component-block ${streamCls}`} data-inline="true">
-          <div className="component-body">
-            <BlockR b={data} />
-          </div>
-        </div>
-      </ErrorBoundary>
-    );
-  }
+  const wrapped = (
+    <div className={`component-block ${streamCls}`} data-inline="true">
+      <div className="component-body">
+        <BlockR b={data} />
+      </div>
+    </div>
+  );
 
   return (
-    <ErrorBoundary name="Dashboard component">
-      <div className={`component-block ${streamCls}`}>
-        {data.title && (
-          <div className="component-header">
-            <span className="component-title">
-              <span style={{ color: "var(--accent)" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="12" width="4" height="8" rx="1" /><rect x="10" y="6" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="17" rx="1" /></svg>
-              </span>
-              <span>{data.title}</span>
-            </span>
-          </div>
-        )}
-        <div className="component-body">
-          {data.reference && (
-            <BlockR b={{ type: "callout", tone: "info", title: data.reference.title || "Reference", text: data.reference.text || data.reference }} />
-          )}
-          {data.callout && (
-            <BlockR b={{ type: "callout", ...data.callout }} />
-          )}
-          {data.metrics && (
-            <BlockR b={{ type: "metrics", items: data.metrics }} />
-          )}
-          {data.switcher && (
-            <BlockR b={{ type: "tabs", ...(typeof data.switcher === "object" ? data.switcher : {}) }} />
-          )}
-          {data.chart && (
-            <BlockR b={{ type: "chart", ...data.chart }} />
-          )}
-          {data.chemistry && (
-            <ChemistryBlock b={data.chemistry} />
-          )}
-          {data.math && (
-            <MathPlotBlock b={data.math} />
-          )}
-          {data.question && (
-            <BlockR b={{ type: "question", ...data.question }} />
-          )}
-          {data.followups && (
-            <BlockR b={{ type: "followups", prompts: data.followups }} />
-          )}
-          {data.prompts && (
-            <BlockR b={{ type: "followups", prompts: data.prompts }} />
-          )}
-          {Array.isArray(data.blocks) && data.blocks.map((b: any, i: number) => (
-            <BlockR key={i} b={b} />
-          ))}
-        </div>
-      </div>
+    <ErrorBoundary name={data.type || "component"}>
+      {data.state || data.tick || data.onTick ? (
+        <ReactiveProvider initialState={data.state} tick={data.tick} onTick={data.onTick}>
+          {wrapped}
+        </ReactiveProvider>
+      ) : (
+        wrapped
+      )}
     </ErrorBoundary>
   );
 }
 
 /* ------------------------------------------------------------- main renderer */
 function BlockRouter({ b }: { b: CanvasBlock }) {
-  switch (b.type) {
-    case "heading": {
-      const H = (`h${Math.min(b.level || 2, 4)}`) as any;
-      return <H className={`md-h md-h${b.level || 2}`} style={{ margin: "2px 0 4px 0" }}>{b.text}</H>;
-    }
-    case "text": return <Markdown text={b.text || ""} animate={false} />;
-    case "markdown": return <Markdown text={b.content || ""} animate={false} />;
-    case "question":
-    case "ask": return <QuestionBlock b={b} />;
-    case "followups":
-    case "prompts": return <FollowupsBlock b={b} />;
-    case "switcher": return <TabsBlock b={b} />;
-    case "chemistry":
-    case "molecule": return <ChemistryBlock b={b} />;
-    case "math":
-    case "plot":
-    case "desmos": return <MathPlotBlock b={b} />;
-    case "component": return <ComponentBlock raw={b.raw || b.content || JSON.stringify(b)} attrs={b.attrs} open={b.open} />;
+  const { interpolate } = useReactive();
+  const bType = String(b.type || (b as any).kind || "").toLowerCase();
+
+  switch (bType) {
+    case "card":
+    case "container":
+    case "slide":
+    case "box":
+    case "section":
+      return <CardBlock b={b} />;
+
+    case "grid":
+    case "columns":
+    case "row":
+    case "layout":
+      return <GridBlock b={b} />;
+
+    case "text":
+    case "markdown":
+    case "heading":
+    case "title":
+      return <TextBlock b={b} />;
+
     case "metric":
-      return (
-        <div className="canvas-card">
-          <div className="metric-k">{b.label}</div>
-          <div className="metric-v">{b.value}</div>
-          {b.delta != null && (
-            <div
-              style={{
-                fontSize: "var(--fs-xs)",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                color: String(b.delta).trim().startsWith("-") ? "var(--err)" : "var(--ok)",
-                fontWeight: 600,
-              }}
-            >
-              <span>{String(b.delta).trim().startsWith("-") ? "↓" : "↑"}</span>
-              <span>{b.delta}</span>
-            </div>
-          )}
-          {b.hint && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>{b.hint}</div>}
-        </div>
-      );
+    case "stat":
+      return <MetricBlock b={b} />;
+
     case "metrics":
+    case "stats":
       return (
         <div className="canvas-grid">
-          {(b.items || []).map((m: any, i: number) => (
-            <BlockR key={i} b={{ type: "metric", ...m }} />
+          {(b.items || (b as any).blocks || []).map((m: any, i: number) => (
+            <MetricBlock key={i} b={typeof m === "object" ? m : { value: m }} />
           ))}
         </div>
       );
+
+    case "badge":
+    case "tag":
+    case "pill":
+      return <BadgeBlock b={b} />;
+
+    case "button":
+    case "btn":
+      return <ButtonBlock b={b} />;
+
+    case "slider":
+      return <SliderBlock b={b} />;
+
+    case "input":
+    case "text-field":
+      return <InputBlock b={b} />;
+
+    case "dropdown":
+    case "select":
+      return <DropdownBlock b={b} />;
+
+    case "switch":
+    case "toggle":
+      return <SwitchBlock b={b} />;
+
+    case "checkbox":
+    case "check":
+      return <CheckboxBlock b={b} />;
+
+    case "progress":
+    case "meter":
+      return <ProgressBlock b={b} />;
+
+    case "divider":
+    case "hr":
+    case "separator":
+      return <hr style={{ border: "none", borderTop: "1px solid var(--line-soft)", margin: "8px 0" }} />;
+
     case "chart":
       return (
         <div className="canvas-card">
-          {b.title && <div className="metric-k" style={{ marginBottom: 4 }}>{b.title}</div>}
+          {b.title && <div className="metric-k" style={{ marginBottom: 4 }}>{interpolate(b.title)}</div>}
           <Chart b={b} />
-          {b.caption && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)", marginTop: 6 }}>{b.caption}</div>}
+          {b.caption && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)", marginTop: 6 }}>{interpolate(b.caption)}</div>}
         </div>
       );
+
     case "table": return <DataTable b={b} />;
-    case "tabs": return <TabsBlock b={b} />;
-    case "slider":
-    case "volume": return <SliderBlock b={b} />;
-    case "button":
-    case "btn": return <ButtonBlock b={b} />;
-    case "button-group": return <ButtonGroupBlock b={b} />;
-    case "checkbox":
-    case "check": return <CheckboxBlock b={b} />;
-    case "radio":
-    case "radio-group": return <RadioBlock b={b} />;
-    case "dropdown":
-    case "select": return <DropdownBlock b={b} />;
-    case "switch":
-    case "toggle": return <SwitchBlock b={b} />;
-    case "input":
-    case "text-field": return <InputBlock b={b} />;
-    case "stepper":
-    case "counter": return <StepperBlock b={b} />;
-    case "rating":
-    case "stars": return <RatingBlock b={b} />;
-    case "progress":
-    case "meter": return <ProgressBlock b={b} />;
-    case "color-picker":
-    case "palette": return <ColorPickerBlock b={b} />;
-    case "calendar":
-    case "date-picker": return <CalendarBlock b={b} />;
+    case "tabs":
+    case "switcher": return <TabsBlock b={b} />;
+
+    case "chemistry":
+    case "molecule": return <ChemistryBlock b={b} />;
+
+    case "math":
+    case "plot":
+    case "desmos": return <MathPlotBlock b={b} />;
+
+    case "question":
+    case "ask": return <QuestionBlock b={b} />;
+
+    case "followups":
+    case "prompts": return <FollowupsBlock b={b} />;
+
+    case "component": return <ComponentBlock raw={b.raw || (b as any).content || JSON.stringify(b)} attrs={(b as any).attrs} open={(b as any).open} />;
+
+    /* ---------------- Composed Fallbacks for legacy widget requests ---------------- */
+    case "stopwatch":
+      return (
+        <CardBlock
+          b={{
+            type: "card",
+            title: b.label || "Stopwatch",
+            state: { seconds: 0, running: false },
+            tick: 1000,
+            onTick: "if (running) seconds++",
+            blocks: [
+              { type: "badge", text: "${running ? 'RUNNING' : 'PAUSED'}", color: "${running ? 'ok' : 'faint'}" },
+              { type: "metric", label: "Elapsed Time", value: "${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}" },
+              {
+                type: "grid",
+                cols: 2,
+                blocks: [
+                  { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", text: "Reset", variant: "secondary", onClick: "seconds = 0; running = false" },
+                ],
+              },
+            ],
+          }}
+        />
+      );
+
+    case "timer":
+      return (
+        <CardBlock
+          b={{
+            type: "card",
+            title: b.label || "Timer",
+            state: { left: b.seconds || 300, running: false },
+            tick: 1000,
+            onTick: "if (running && left > 0) left--",
+            blocks: [
+              { type: "metric", label: "Time Remaining", value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}" },
+              {
+                type: "grid",
+                cols: 2,
+                blocks: [
+                  { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", text: "Reset", variant: "secondary", onClick: `left = ${b.seconds || 300}; running = false` },
+                ],
+              },
+            ],
+          }}
+        />
+      );
+
+    case "pomodoro":
+      return (
+        <CardBlock
+          b={{
+            type: "card",
+            title: b.label || "Pomodoro Focus",
+            state: { left: b.work || 1500, running: false, mode: "work" },
+            tick: 1000,
+            onTick: "if (running && left > 0) left--; else if (running && left === 0) { mode = (mode === 'work' ? 'break' : 'work'); left = (mode === 'work' ? 1500 : 300); }",
+            blocks: [
+              { type: "badge", text: "${mode === 'work' ? 'Focus Session' : 'Short Break'}", color: "${mode === 'work' ? 'accent' : 'ok'}" },
+              { type: "metric", label: "Time Remaining", value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}" },
+              { type: "progress", value: "${mode === 'work' ? ((1500 - left) / 1500) * 100 : ((300 - left) / 300) * 100}" },
+              {
+                type: "grid",
+                cols: 2,
+                blocks: [
+                  { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", text: "Reset", variant: "secondary", onClick: "left = 1500; running = false; mode = 'work'" },
+                ],
+              },
+            ],
+          }}
+        />
+      );
+
+    case "weather":
+      return (
+        <CardBlock
+          b={{
+            type: "card",
+            title: b.city || b.location || "Weather Forecast",
+            subtitle: b.condition || "Partly Cloudy",
+            blocks: [
+              {
+                type: "grid",
+                cols: 3,
+                blocks: [
+                  { type: "metric", label: "Temperature", value: b.temp || "72°F", delta: b.delta },
+                  { type: "metric", label: "Humidity", value: b.humidity || "45%" },
+                  { type: "metric", label: "Wind", value: b.wind || "8 mph" },
+                ],
+              },
+            ],
+          }}
+        />
+      );
+
     case "clock":
-    case "world-clock":
-    case "time-picker": return <ClockBlock b={b} />;
-    case "weather": return <WeatherBlock b={b} />;
-    case "search-bar": return <SearchBarBlock b={b} />;
-    case "tags-input":
-    case "tags": return <TagsInputBlock b={b} />;
-    case "file-upload":
-    case "dropzone": return <FileUploadBlock b={b} />;
-    case "segmented-control": return <SegmentedControlBlock b={b} />;
-    case "form":
-    case "survey": return <FormBlock b={b} />;
+      return (
+        <CardBlock
+          b={{
+            type: "card",
+            title: b.label || "System Clock",
+            state: { time: new Date().toLocaleTimeString() },
+            tick: 1000,
+            onTick: "time = new Date().toLocaleTimeString()",
+            blocks: [
+              { type: "metric", label: "Current Time", value: "${time}" },
+            ],
+          }}
+        />
+      );
+
     case "reactive":
     case "calculator":
-    case "widget": return <ReactiveWidgetBlock b={b} />;
+    case "simulator":
+      return (
+        <CardBlock
+          b={{
+            type: "card",
+            title: b.title || "Interactive Scenario Simulator",
+            state: b.state || b.variables || {},
+            blocks: b.blocks || b.children || b.controls || [],
+          }}
+        />
+      );
+
     case "callout":
     case "alert": return <Callout b={b} />;
     case "accordion": return <Accordion b={b} />;
@@ -3421,14 +2957,11 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
           ))}
         </div>
       );
-    case "timer": return <Timer label={b.label || "Timer"} seconds={b.seconds || 300} />;
-    case "stopwatch": return <Stopwatch label={b.label || "Stopwatch"} />;
-    case "pomodoro": return <Pomodoro label={b.label || "Pomodoro"} work={b.work || 1500} breakFor={b.breakFor || 300} />;
     case "todo": return <TodoList b={b} />;
     case "image":
       return (
         <figure style={{ margin: 0 }}>
-          <img className="md-img" src={b.src} alt={b.caption || ""} />
+          <img className="md-img" src={b.src || b.url} alt={b.caption || b.alt || ""} />
           {b.caption && <figcaption className="md-figcap">{b.caption}</figcaption>}
         </figure>
       );
@@ -3439,152 +2972,12 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         </div>
       );
     case "code": return <Markdown text={"```" + (b.language || "") + "\n" + (b.content || "") + "\n```"} animate={false} />;
-    case "divider": return <hr className="md-hr" />;
-    case "grid":
-      return (
-        <div className="canvas-grid">
-          {(b.of || []).map((x: CanvasBlock, i: number) => <BlockR key={i} b={x} />)}
-        </div>
-      );
-    case "note": return <div className="metric-k" style={{ lineHeight: 1.5 }}>{b.text}</div>;
-    case "columns":
-      return (
-        <div style={{ display: "grid", gap: "var(--sp-4)", gridTemplateColumns: `repeat(${(b.of || []).length || 1}, 1fr)` }}>
-          {(b.of || []).map((col: CanvasBlock[], i: number) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-              {col.map((x: CanvasBlock, j: number) => <BlockR key={j} b={x} />)}
-            </div>
-          ))}
-        </div>
-      );
-    /* ---- presentation slides ---- */
-    case "slide:title":
-      return (
-        <div className="canvas-card" style={{ padding: "24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {b.presenter && <div style={{ fontSize: "var(--fs-xs)", color: "var(--accent)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase" }}>{b.presenter}</div>}
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", margin: 0, lineHeight: 1.25 }}>{b.title}</h2>
-          {b.subtitle && <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", lineHeight: 1.4 }}>{b.subtitle}</div>}
-        </div>
-      );
-    case "slide:hero":
-      return (
-        <div className="canvas-card" style={{ padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{b.headline || b.title}</div>
-          {b.lead && <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", lineHeight: 1.4 }}>{b.lead}</div>}
-        </div>
-      );
-    case "slide:split":
-      return (
-        <div className="canvas-card" style={{ padding: "16px" }}>
-          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-              <div style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>{b.leftTitle || "Option A"}</div>
-              <ul className="md-list" style={{ paddingLeft: 16, margin: 0 }}>
-                {(b.leftItems || []).map((x: any, i: number) => <li key={i} style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>{String(x)}</li>)}
-              </ul>
-            </div>
-            <div style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-              <div style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--accent)", marginBottom: 6 }}>{b.rightTitle || "Option B"}</div>
-              <ul className="md-list" style={{ paddingLeft: 16, margin: 0 }}>
-                {(b.rightItems || []).map((x: any, i: number) => <li key={i} style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>{String(x)}</li>)}
-              </ul>
-            </div>
-          </div>
-        </div>
-      );
-    case "slide:features":
-      return (
-        <div className="canvas-card" style={{ padding: "16px" }}>
-          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-            {(b.items || []).map((it: any, i: number) => (
-              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{it.title || it.label}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-dim)", lineHeight: 1.35 }}>{it.description || it.detail}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    case "slide:stats":
-      return (
-        <div className="canvas-card" style={{ padding: "16px" }}>
-          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-            {(b.stats || []).map((s: any, i: number) => (
-              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-                <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>{s.number || s.value}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-faint)", marginTop: 4 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    case "slide:roadmap":
-    case "slide:timeline":
-      return (
-        <div className="canvas-card" style={{ padding: "16px" }}>
-          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-            {(b.phases || b.steps || []).map((p: any, i: number) => (
-              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-                <span className="chip" data-on="true" style={{ fontSize: "10px", padding: "1px 6px", marginBottom: 6, display: "inline-block" }}>{p.phase || p.step || `Phase ${i+1}`}</span>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>{p.title}</div>
-                <ul className="md-list" style={{ paddingLeft: 14, margin: 0 }}>
-                  {(p.items || []).map((x: any, j: number) => <li key={j} style={{ fontSize: "11px", color: "var(--text-dim)" }}>{String(x)}</li>)}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    case "slide:quote":
-      return (
-        <div className="canvas-card" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: "var(--fs-md)", fontStyle: "italic", color: "var(--text)", lineHeight: 1.4 }}>"{b.quote}"</div>
-          <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-faint)" }}>— {b.author}{b.role ? `, ${b.role}` : ""}</div>
-        </div>
-      );
-    case "slide:bullets":
-    case "slide:takeaways":
-    case "slide:agenda":
-      return (
-        <div className="canvas-card" style={{ padding: "16px" }}>
-          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 10 }}>{b.title}</div>}
-          <ul className="md-list" style={{ paddingLeft: 18, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-            {(b.items || []).map((it: any, i: number) => (
-              <li key={i} style={{ fontSize: "var(--fs-xs)", color: "var(--text)" }}>
-                {typeof it === "string" ? it : <span><strong>{it.heading || it.title}: </strong>{it.detail || it.description}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      );
-    case "slide:team":
-      return (
-        <div className="canvas-card" style={{ padding: "16px" }}>
-          {b.title && <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>{b.title}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-            {(b.members || []).map((m: any, i: number) => (
-              <div key={i} style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)", textAlign: "center" }}>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>{m.name}</div>
-                <div style={{ fontSize: "11px", color: "var(--accent)", marginTop: 2 }}>{m.role}</div>
-                {m.bio && <div style={{ fontSize: "10px", color: "var(--text-dim)", marginTop: 4 }}>{m.bio}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    case "slide:cta":
-      return (
-        <div className="canvas-card" style={{ padding: "24px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", margin: 0 }}>{b.title}</h2>
-          {b.subtitle && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", maxWidth: 420 }}>{b.subtitle}</div>}
-          {b.buttonText && <button type="button" className="btn btn-primary" style={{ marginTop: 6 }}>{b.buttonText}</button>}
-        </div>
-      );
-    default: return null;
+
+    default:
+      if (Array.isArray((b as any).blocks) || Array.isArray((b as any).children)) {
+        return <CardBlock b={b} />;
+      }
+      return null;
   }
 }
 
@@ -3624,24 +3017,43 @@ export function repairPartialJson(raw: string): any {
   try { return JSON.parse(s); } catch { return null; }
 }
 
-/** Parse a `*.ui.json` file body into blocks with partial JSON repair. */
-export function readUiFile(content: string): { blocks: CanvasBlock[]; title?: string; error?: string } {
+/** Parse a `*.ui.json` file body into blocks with partial JSON repair and reactive state. */
+export function readUiFile(content: string): {
+  blocks: CanvasBlock[];
+  title?: string;
+  state?: Record<string, any>;
+  tick?: number;
+  onTick?: string;
+  error?: string;
+} {
   try {
     const j = JSON.parse(content);
-    const blocks: CanvasBlock[] = Array.isArray(j) ? j : j.blocks || [];
-    return { blocks, title: Array.isArray(j) ? undefined : j.title };
+    const blocks: CanvasBlock[] = Array.isArray(j) ? j : j.blocks || (j.type ? [j] : []);
+    return {
+      blocks,
+      title: Array.isArray(j) ? undefined : j.title,
+      state: Array.isArray(j) ? undefined : j.state,
+      tick: Array.isArray(j) ? undefined : j.tick,
+      onTick: Array.isArray(j) ? undefined : j.onTick,
+    };
   } catch (e: any) {
     const repaired = repairPartialJson(content);
     if (repaired) {
-      const blocks: CanvasBlock[] = Array.isArray(repaired) ? repaired : repaired.blocks || [];
-      return { blocks, title: Array.isArray(repaired) ? undefined : repaired.title };
+      const blocks: CanvasBlock[] = Array.isArray(repaired) ? repaired : repaired.blocks || (repaired.type ? [repaired] : []);
+      return {
+        blocks,
+        title: Array.isArray(repaired) ? undefined : repaired.title,
+        state: Array.isArray(repaired) ? undefined : repaired.state,
+        tick: Array.isArray(repaired) ? undefined : repaired.tick,
+        onTick: Array.isArray(repaired) ? undefined : repaired.onTick,
+      };
     }
     return { blocks: [], error: e.message };
   }
 }
 
 export function BlocksView({ content }: { content: string }) {
-  const { blocks, error } = useMemo(() => readUiFile(content), [content]);
+  const { blocks, title, state, tick, onTick, error } = useMemo(() => readUiFile(content), [content]);
   if (error && !blocks.length) {
     return (
       <div className="fe-preview">
@@ -3651,9 +3063,16 @@ export function BlocksView({ content }: { content: string }) {
     );
   }
   return (
-    <div className="canvas-inner" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {blocks.map((b, i) => <BlockR key={i} b={b} />)}
-      {!blocks.length && <div className="empty-hint">no blocks</div>}
-    </div>
+    <ReactiveProvider initialState={state} tick={tick} onTick={onTick}>
+      <div className="canvas-inner" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {title && (
+          <h1 style={{ fontSize: "1.25rem", fontWeight: 650, color: "var(--text)", margin: "4px 0 8px" }}>
+            {title}
+          </h1>
+        )}
+        {blocks.map((b, i) => <BlockR key={i} b={b} />)}
+        {!blocks.length && <div className="empty-hint">no blocks</div>}
+      </div>
+    </ReactiveProvider>
   );
 }

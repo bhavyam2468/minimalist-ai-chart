@@ -19,27 +19,128 @@ export const SKILLS: Skill[] = [
   {
     name: "generative-ui",
     description:
-      "Create inline interactive UI widgets (<component>) or .ui.json canvas files: color-picker palette, calendar date picker, precision slider, clock, weather, search bar, multi-field form with submit, reactive calculators, charts, visualizers, and slides.",
+      "Compose rich inline UI (<component>) or .ui.json files using Gamma-inspired fundamental blocks (card, grid, text, metric, button, slider, input, dropdown, switch, progress, chart) and reactive state logic.",
     always: true,
     body: `# generative-ui
-Always prefer creating UI from the pre-existing component library with \`<component type="..." ... />\` directly inline in your message. If and only if no suitable pre-existing component fits the user's needs, resort to writing custom HTML/CSS/JS files in the workspace with \`write_file\` and surfacing them with \`open_canvas\`.
+This app does NOT use bloated monolithic widgets or pre-baked slide templates. It uses a small set of fundamental, nestable building blocks inspired by Gamma, linked with a reactive programming engine.
 
-## Pre-Existing Component Types
-- **color-picker**: \`<component type="color-picker" label="Theme Swatches" value="#7C3AED" colors='["#7C3AED","#FF6B6B","#10B981"]' />\`
-- **calendar**: \`<component type="calendar" label="Target Date" value="2026-08-28" />\`
-- **slider**: \`<component type="slider" label="Capacity" value="65" min="0" max="100" unit="%" />\`
-- **clock**: \`<component type="clock" label="System Clock" />\`
-- **weather**: \`<component type="weather" city="New York City, NY" temp="74°F" condition="Clear Skies" />\`
-- **search-bar**: \`<component type="search-bar" placeholder="Search components..." />\`
-- **form**: Multi-field form container linked to a Submit button that sends structured JSON back:
-  \`<component type="form" title="Config" submitLabel="Apply" fields='[{"id":"color","label":"Accent","type":"color-picker"},{"id":"env","label":"Env","type":"dropdown","options":["dev","prod"]}]' />\`
-- **reactive**: Dynamic scenario & formula calculator updating charts/metrics in real time:
-  \`<component type="reactive" title="Simulator" state='{"price":50,"qty":100}' controls='[{"id":"price","type":"slider","min":10,"max":200}]' />\`
-- **question**: \`<component type="question" question="Which model?" options='[{"id":"v1","label":"Standard"},{"id":"v2","label":"Pro"}]' requireSubmit="true" />\`
-- **charts**: \`<component type="chart" kind="line|bar|hbar|donut|pie|bubble|treemap|waterfall|radar|gauge|funnel|candlestick|heatmap" data='[...]' />\`
-- **chemistry**: \`<component type="chemistry" molecule="caffeine" />\`
-- **math**: \`<component type="math" fn="sin(x)*cos(2*x)" />\`
-- **slides**: \`<component type="slide:title" title="..." subtitle="..." />\`
+## Fundamental Composable Blocks
+- **card**: Liquid container with optional \`title\`, \`subtitle\`, \`badge\`, \`variant\` ("default"|"outline"|"glass"|"tint"), \`state\`, \`tick\`, \`onTick\`, and nested child \`blocks\`.
+- **grid**: Composable multi-column layout (\`cols\`: 1-6, \`gap\`, and child \`blocks\`).
+- **text**: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
+- **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`).
+- **button**: Reactive action trigger (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
+- **slider**: Precision expansion slider (hairline track expanding to 26px on drag with precision readout, \`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, and \`bind\`).
+- **input**: Text/number input (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
+- **dropdown**: Select menu (\`label\`, \`options\`, \`bind\`).
+- **switch**: Boolean toggle switch (\`label\`, \`description\`, \`bind\`).
+- **checkbox**: Boolean checkbox (\`label\`, \`description\`, \`bind\`).
+- **progress**: Progress meter (\`value\`, \`max\`, \`label\`, \`unit\`).
+- **chart**: Composable charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
+- **table**: Clean data table (\`headers\`, \`rows\`).
+- **badge**: Status pill (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
+- **divider**: Hairline separator.
+- **math**: Interactive 2D function visualizer (\`fn\`, \`xmin\`, \`xmax\`).
+- **chemistry**: 2D molecule diagram (\`smiles\` or \`molecule\`).
+
+## Reactive State & Logic Engine
+Any \`card\` or UI document can declare reactive state and dynamic ticking:
+- \`state\`: Initial state object, e.g. \`{ "seconds": 0, "running": false, "users": 100, "price": 49 }\`.
+- \`tick\`: Interval in ms (e.g. \`1000\` for 1s ticks, \`100\` for 0.1s ticks).
+- \`onTick\`: JS script executed every tick (e.g. \`"if (running) seconds++"\`).
+- \`onClick\`: JS script executed on button click (e.g. \`"running = !running"\` or \`"seconds = 0; running = false"\`).
+- \`bind\`: Two-way binding attribute on sliders, inputs, switches, dropdowns, and checkboxes linking directly to a key in \`state\`.
+- \`\${...}\` / \`{...}\`: Dynamic template interpolation in any label, value, text, badge, or chart. Built-in helpers: \`pad(n)\`, \`Math\`, \`Date\`.
+- \`submitToChat\`: On buttons, sends a message back to chat with interpolated state (e.g. \`"Forecast submitted: ARR=\${users * price * 12}"\`).
+
+## Composable Recipes (Build Any Widget or Presentation)
+1. **Stopwatch**:
+\`\`\`json
+{
+  "type": "card",
+  "state": { "seconds": 0, "running": false },
+  "tick": 1000,
+  "onTick": "if (running) seconds++",
+  "blocks": [
+    { "type": "badge", "text": "\${running ? 'RUNNING' : 'PAUSED'}", "color": "\${running ? 'ok' : 'faint'}" },
+    { "type": "metric", "label": "Elapsed Time", "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
+        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+2. **Pomodoro Timer**:
+\`\`\`json
+{
+  "type": "card",
+  "state": { "timeLeft": 1500, "running": false, "mode": "work" },
+  "tick": 1000,
+  "onTick": "if (running && timeLeft > 0) timeLeft--; else if (running && timeLeft === 0) { mode = (mode === 'work' ? 'break' : 'work'); timeLeft = (mode === 'work' ? 1500 : 300); }",
+  "blocks": [
+    { "type": "badge", "text": "\${mode === 'work' ? 'Focus Session' : 'Short Break'}", "color": "\${mode === 'work' ? 'accent' : 'ok'}" },
+    { "type": "metric", "label": "Time Remaining", "value": "\${pad(Math.floor(timeLeft / 60))}:\${pad(timeLeft % 60)}" },
+    { "type": "progress", "value": "\${mode === 'work' ? ((1500 - timeLeft) / 1500) * 100 : ((300 - timeLeft) / 300) * 100}" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
+        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "timeLeft = 1500; running = false; mode = 'work'" }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+3. **Interactive Pricing Calculator**:
+\`\`\`json
+{
+  "type": "card",
+  "title": "SaaS Scenario Calculator",
+  "state": { "users": 150, "price": 49 },
+  "blocks": [
+    { "type": "slider", "label": "Active Users: \${users}", "min": 10, "max": 1000, "step": 10, "bind": "users" },
+    { "type": "slider", "label": "Price/Month: $\${price}", "min": 10, "max": 200, "step": 5, "bind": "price" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "metric", "label": "Monthly Revenue (MRR)", "value": "$\${users * price}" },
+        { "type": "metric", "label": "Annual Run Rate (ARR)", "value": "$\${users * price * 12}" }
+      ]
+    },
+    { "type": "button", "text": "Submit Model to Chat", "submitToChat": "Model submitted: \${users} users at $\${price}/mo -> ARR is $\${users * price * 12}" }
+  ]
+}
+\`\`\`
+
+4. **Gamma-Style Presentation Card / Slide**:
+\`\`\`json
+{
+  "type": "card",
+  "blocks": [
+    { "type": "badge", "text": "Q3 2026 ROADMAP", "color": "accent" },
+    { "type": "text", "text": "Next-Generation Inference Engine", "variant": "title" },
+    { "type": "text", "text": "Transitioning from static widgets to composable reactive building blocks.", "variant": "sub" },
+    {
+      "type": "grid",
+      "cols": 3,
+      "blocks": [
+        { "type": "metric", "label": "Median TTFT", "value": "24ms", "delta": "-8ms" },
+        { "type": "metric", "label": "Peak Concurrency", "value": "12,000", "delta": "+40%" },
+        { "type": "metric", "label": "Error Rate", "value": "0.01%", "sub": "p99.9" }
+      ]
+    }
+  ]
+}
+\`\`\`
 `,
   },
   {
