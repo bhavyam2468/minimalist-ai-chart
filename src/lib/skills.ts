@@ -53,62 +53,149 @@ Rules
   {
     name: "generative-ui",
     description:
-      "Render rich interactive charts with Google-style fluid animations, metric cards, multi-view switchers, interactive questions with custom inputs and skip buttons, and follow-up prompt chips inline in chat using <component> tags. Always enabled.",
+      "Render rich interactive charts (line, area, bar, hbar, donut, pie, scatter, radar, gauge, funnel, heatmap, candlestick), organic chemistry SMILES molecular diagrams, interactive 2D math function visualizers (Desmos-style), metric cards, multi-view switchers, and interactive questions inline in chat using <component> tags. Always enabled.",
     always: true,
     body: `# generative-ui
-You can embed rich, interactive, animated Generative UI directly inline in your responses using the \`<component>\` tag. These blend natively into the conversation, feature Google-quality fluid chart animations (smooth Bézier splines, gradient reveals, hover crosshairs, tooltips), and support full user interactivity.
+You can embed rich, interactive, animated Generative UI directly inline in your responses using the \`<component>\` tag. These blend seamlessly into the conversation, feature Google-quality fluid animations (smooth Bézier splines, gradient reveals, hover crosshairs, tooltips), and support full user interactivity.
 
-## Syntax
-Wrap a declarative JSON structure inside \`<component> ... </component>\`.
-
+## Uniform Syntax & Active Guessing
+You can pass parameters either as in-tag XML attributes or as a JSON body:
 \`\`\`html
+<!-- Attribute Syntax -->
+<component type="chemistry" smiles="CC(=O)Oc1ccccc1C(=O)O" title="Aspirin" />
+<component type="math" fn="sin(x)*cos(2*x)" title="Damped Wave" />
+<component type="chart" kind="radar" data='[{"label":"Speed","value":85},{"label":"Power","value":90}]' />
+
+<!-- Or JSON Body Syntax -->
 <component>
 {
   "type": "chart",
   "kind": "line",
-  ...
+  "title": "Throughput Over Time",
+  "data": [{ "label": "00:00", "value": 120 }, { "label": "04:00", "value": 450 }]
 }
 </component>
 \`\`\`
 
+All parameters are uniform and intuitive. Actively guess natural parameters — the SDK is lenient and automatically normalizes whatever you pass.
+
+---
+
 ## Supported Component Types
 
-### 1. Interactive Animated Charts (Google Quality)
-Kinds: \`"line"\`, \`"area"\`, \`"bar"\`, \`"hbar"\`, \`"donut"\`, \`"pie"\`, \`"scatter"\`.
-- Features smooth Bézier curves, fluid gradient reveals, staggered bar/dot animations, hover crosshairs, and tracking tooltips.
+### 1. Extended Chart Library
+All charts accept \`data: [{ label, value }]\` (or \`[x, y]\` or \`[number]\`) and optional \`series: [{ name, points }]\`.
 
-Line / Area chart:
+- **line** / **spline**: Smooth Bézier curves, tracking vertical crosshair, steady focal dot, tooltip.
+- **area**: Gradient-filled spline area chart with entrance sweep animation.
+- **bar**: Animated vertical bars with staggered entrance and value readouts.
+- **hbar**: Horizontal bar comparisons with width wipe animations.
+- **donut** / **pie**: Radial segments with center total readout and interactive slice hover.
+- **scatter**: 2D data point clusters with hover tooltips.
+- **radar** / **spider**: Radial multi-axis polygon comparing 3+ criteria (e.g. Speed, Reliability, Cost, Security).
+- **gauge** / **meter**: Radial speedometer (min, max, value readout, colored arc track).
+- **funnel**: Conversion funnel stages showing percentage drop-offs between steps.
+- **heatmap**: 2D grid matrix with color intensity scaling and hover cell tooltips.
+- **candlestick** / **ohlc**: Financial stock bars with wicks (open, high, low, close).
+
+Radar Chart Example:
 \`\`\`json
 {
   "type": "chart",
-  "kind": "line",
-  "title": "Throughput Over Time",
+  "kind": "radar",
+  "title": "System Architecture Evaluation",
   "data": [
-    { "label": "00:00", "value": 320 },
-    { "label": "04:00", "value": 450 },
-    { "label": "08:00", "value": 890 },
-    { "label": "12:00", "value": 1120 },
-    { "label": "16:00", "value": 980 },
-    { "label": "20:00", "value": 640 }
+    { "label": "Latency", "value": 92 },
+    { "label": "Throughput", "value": 85 },
+    { "label": "Resilience", "value": 78 },
+    { "label": "Simplicity", "value": 90 },
+    { "label": "Cost", "value": 88 }
   ]
 }
 \`\`\`
 
-Multi-series comparison:
+Gauge Example:
 \`\`\`json
 {
   "type": "chart",
-  "kind": "line",
-  "title": "Latency Percentiles",
-  "series": [
-    { "name": "p50", "points": [{ "x": "Scenario A", "y": 45 }, { "x": "Scenario B", "y": 72 }] },
-    { "name": "p99", "points": [{ "x": "Scenario A", "y": 180 }, { "x": "Scenario B", "y": 410 }] }
+  "kind": "gauge",
+  "title": "CPU Utilization",
+  "value": 74,
+  "min": 0,
+  "max": 100,
+  "unit": "%"
+}
+\`\`\`
+
+Funnel Example:
+\`\`\`json
+{
+  "type": "chart",
+  "kind": "funnel",
+  "title": "Conversion Funnel",
+  "data": [
+    { "label": "Page Visitors", "value": 14000 },
+    { "label": "Account Signups", "value": 4800 },
+    { "label": "Activated Workspace", "value": 2100 },
+    { "label": "Upgraded to Pro", "value": 640 }
   ]
 }
 \`\`\`
 
-### 2. Multi-View Switcher (Tabs to Switch Graphs & Dashboards)
-Allows the user to seamlessly toggle between multiple charts or views with a polished segmented switcher:
+---
+
+### 2. Organic Chemistry Molecular Diagrams (SMILES 2D)
+Renders crisp 2D chemical structures. Pass standard SMILES strings or common molecule names (e.g. \`aspirin\`, \`benzene\`, \`caffeine\`, \`dopamine\`, \`serotonin\`, \`penicillin\`, \`ibuprofen\`, \`ethanol\`, \`glucose\`).
+
+\`\`\`html
+<component type="chemistry" smiles="CC(=O)Oc1ccccc1C(=O)O" title="Aspirin (Acetylsalicylic Acid)" />
+\`\`\`
+Or JSON body:
+\`\`\`json
+{
+  "type": "chemistry",
+  "smiles": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",
+  "title": "Caffeine",
+  "caption": "1,3,7-Trimethylxanthine — Central nervous system stimulant"
+}
+\`\`\`
+
+---
+
+### 3. Math & Desmos 2D Function Visualizer
+Interactive 2D function visualizer with drag-to-pan, zoom in/out, home reset, and coordinate crosshair tracking:
+
+\`\`\`html
+<component type="math" fn="sin(x)*cos(2*x)" title="Damped Wave Packet" />
+\`\`\`
+Or multi-function plot:
+\`\`\`json
+{
+  "type": "math",
+  "title": "Trigonometric Superposition",
+  "functions": [
+    { "expr": "sin(x)", "label": "Carrier sin(x)" },
+    { "expr": "cos(2*x)", "label": "Modulator cos(2x)" }
+  ],
+  "xmin": -8,
+  "xmax": 8,
+  "ymin": -3,
+  "ymax": 3
+}
+\`\`\`
+Or embed an external Desmos calculator:
+\`\`\`json
+{
+  "type": "math",
+  "desmos": "https://www.desmos.com/calculator/d1qgq8n7vx",
+  "title": "Interactive Parabola"
+}
+\`\`\`
+
+---
+
+### 4. Multi-View Switcher (Segmented Control Dashboards)
+Allows the user to seamlessly toggle between multiple views without reloads:
 \`\`\`json
 {
   "type": "switcher",
@@ -119,11 +206,7 @@ Allows the user to seamlessly toggle between multiple charts or views with a pol
         "type": "chart",
         "kind": "line",
         "title": "Latency by Scenario (ms)",
-        "data": [
-          { "label": "Baseline", "value": 120 },
-          { "label": "Stress 1k", "value": 340 },
-          { "label": "Stress 2k", "value": 780 }
-        ]
+        "data": [{ "label": "Baseline", "value": 120 }, { "label": "Stress", "value": 340 }]
       }
     },
     {
@@ -132,45 +215,31 @@ Allows the user to seamlessly toggle between multiple charts or views with a pol
         "type": "chart",
         "kind": "bar",
         "title": "Throughput (RPS)",
-        "data": [
-          { "label": "Baseline", "value": 400 },
-          { "label": "Stress 1k", "value": 980 },
-          { "label": "Stress 2k", "value": 1190 }
-        ]
-      }
-    },
-    {
-      "label": "Errors",
-      "content": {
-        "type": "chart",
-        "kind": "line",
-        "title": "Error Rate (%)",
-        "data": [
-          { "label": "Baseline", "value": 0.1 },
-          { "label": "Stress 1k", "value": 1.4 },
-          { "label": "Stress 2k", "value": 12.5 }
-        ]
+        "data": [{ "label": "Baseline", "value": 400 }, { "label": "Stress", "value": 1190 }]
       }
     }
   ]
 }
 \`\`\`
 
-### 3. Metric & Stat Cards
+---
+
+### 5. Metric & Stat Cards
 \`\`\`json
 {
   "type": "metrics",
   "items": [
     { "label": "ROWS", "value": "6" },
-    { "label": "AVG LATENCY", "value": "416.67 ms", "delta": "-12.5ms" },
-    { "label": "PEAK THROUGHPUT", "value": "1190 rps", "delta": "+14%" },
-    { "label": "MAX ERROR RATE", "value": "12.5%", "delta": "-2.1%" }
+    { "label": "AVG LATENCY", "value": "416 ms", "delta": "-12.5ms" },
+    { "label": "PEAK THROUGHPUT", "value": "1,190 rps", "delta": "+14%" },
+    { "label": "ERROR RATE", "value": "0.02%", "delta": "-0.5%" }
   ]
 }
 \`\`\`
 
-### 4. Interactive Questions (with Skip & Custom Answer)
-Ask the user clarifying questions with one-click choices, a custom answer input, and a skip button:
+---
+
+### 6. Interactive Questions (with Skip & Custom Answer)
 \`\`\`json
 {
   "type": "question",
@@ -178,29 +247,28 @@ Ask the user clarifying questions with one-click choices, a custom answer input,
   "question": "Which test scenario should we run next?",
   "options": [
     { "id": "stress", "label": "Stress Test (High Load)", "description": "Ramp up to 2,000 rps over 5 mins" },
-    { "id": "soak", "label": "Soak Test (Longevity)", "description": "Sustain 500 rps over 24 hours" },
-    { "id": "spike", "label": "Spike Test", "description": "Instant burst to 5,000 rps" }
+    { "id": "soak", "label": "Soak Test (Longevity)", "description": "Sustain 500 rps over 24 hours" }
   ],
   "allowCustom": true,
   "skipButton": true
 }
 \`\`\`
 
-### 5. Follow-Up Prompts (Clickable Suggestion Chips)
+---
+
+### 7. Follow-Up Prompts (Clickable Suggestion Chips)
 \`\`\`json
 {
   "type": "followups",
   "prompts": [
     "Simulate 5,000 rps load",
     "Analyze database query bottlenecks",
-    "Export CSV performance report"
+    "Export performance report"
   ]
 }
 \`\`\`
 
-### 6. Full Dashboards
-Combine cards, switcher, and follow-ups in a single \`<component>\` by wrapping them in an array or an object with \`metrics\`, \`switcher\`, \`followups\`.
-Always prefer \`<component>\` when presenting benchmarks, status reports, quantitative data, or actionable next steps!`,
+Always use \`<component>\` when presenting quantitative data, chemistry, mathematics, or dashboards.`,
   },
   {
     name: "workspace-files",

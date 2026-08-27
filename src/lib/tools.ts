@@ -147,6 +147,16 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
       return s.body;
     }
 
+    /* ---- common aliases ---- */
+    case "search": return await runTool("web_search", args, ctx);
+    case "fetch": return await runTool("web_fetch", args, ctx);
+    case "python": return await runTool("run_python", args, ctx);
+    case "component":
+    case "render_component":
+    case "create_chart": {
+      return `To render this component inline in chat, output <component>${JSON.stringify(args, null, 2)}</component> directly in your response.`;
+    }
+
     /* ---- workspace ---- */
     case "list_files": {
       const c = chatOf(chatId);
@@ -441,5 +451,5 @@ _o.getvalue()
     return await mcpCall(srv, tool, args);
   }
 
-  return `unknown tool ${name}`;
+  return `unknown tool "${name}". You can execute web searches, workspace file operations, or output inline <component> tags directly in your message.`;
 }

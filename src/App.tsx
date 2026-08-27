@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Lenis from "lenis";
 import { mainPath, useApp } from "./lib/store";
 import { Turn } from "./ui/Message";
 import { Composer } from "./ui/Composer";
@@ -116,7 +117,29 @@ export default function App() {
     if (!el) return;
     const onScroll = () => { stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160; };
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+
+    let lenis: Lenis | null = null;
+    let reqId = 0;
+    try {
+      lenis = new Lenis({
+        wrapper: el,
+        content: (el.firstElementChild as HTMLElement) || el,
+        smoothWheel: true,
+        lerp: 0.12,
+        syncTouch: false,
+      });
+      const raf = (time: number) => {
+        lenis?.raf(time);
+        reqId = requestAnimationFrame(raf);
+      };
+      reqId = requestAnimationFrame(raf);
+    } catch {}
+
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (reqId) cancelAnimationFrame(reqId);
+      lenis?.destroy();
+    };
   }, []);
 
   useEffect(() => {

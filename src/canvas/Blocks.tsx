@@ -3,6 +3,9 @@ import { Markdown } from "../md/Markdown";
 import { useApp } from "../lib/store";
 import { send } from "../lib/agent";
 import { I } from "../ui/Icons";
+import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { ChemistryBlock } from "./ChemistryBlock";
+import { MathPlotBlock } from "./MathPlotBlock";
 import type { CanvasBlock } from "../lib/types";
 
 /* ===========================================================================
@@ -143,16 +146,492 @@ function ChartTooltip({ tip }: { tip: TooltipState | null }) {
 }
 
 /* ------------------------------------------------------------------ charts */
+function normalizeChartData(b: any): {
+  kind: string;
+  data: { label: string; value: number }[];
+  series: { name: string; points: { x: any; y: number }[] }[];
+  raw: any;
+} {
+  const rawKind = String(b.kind || b.type || "bar").toLowerCase();
+  let kind = rawKind;
+  if (rawKind === "spline" || rawKind === "smooth") kind = "line";
+  else if (rawKind === "meter" || rawKind === "speedometer") kind = "gauge";
+  else if (rawKind === "spider") kind = "radar";
+  else if (rawKind === "conversion") kind = "funnel";
+  else if (rawKind === "ohlc" || rawKind === "candles" || rawKind === "stock") kind = "candlestick";
+  else if (rawKind === "matrix") kind = "heatmap";
+  else if (rawKind === "horizontal-bar" || rawKind === "horizontal_bar") kind = "hbar";
+  else if (rawKind === "stacked_bar" || rawKind === "stacked") kind = "stacked-bar";
+
+  const rawList = Array.isArray(b.data)
+    ? b.data
+    : Array.isArray(b.points)
+    ? b.points
+    : Array.isArray(b.items)
+    ? b.items
+    : Array.isArray(b.values)
+    ? b.values
+    : Array.isArray(b.rows)
+    ? b.rows
+    : [];
+
+  const data = rawList.map((d: any, idx: number) => {
+    if (typeof d === "number") return { label: String(idx + 1), value: d };
+    if (Array.isArray(d)) return { label: String(d[0] ?? idx + 1), value: Number(d[1] ?? 0) };
+    return {
+      label: String(d.label ?? d.name ?? d.x ?? d.time ?? d.category ?? `Item ${idx + 1}`),
+      value: Number(d.value ?? d.y ?? d.val ?? d.count ?? 0),
+    };
+  });
+
+  const series: { name: string; points: { x: any; y: number }[] }[] = Array.isArray(b.series)
+    ? b.series.map((s: any, sIdx: number) => ({
+        name: s.name || s.title || `Series ${sIdx + 1}`,
+        points: (s.points || s.data || []).map((p: any, pIdx: number) => {
+          if (typeof p === "number") return { x: pIdx + 1, y: p };
+          if (Array.isArray(p)) return { x: p[0] ?? pIdx + 1, y: Number(p[1] ?? 0) };
+          return {
+            x: p.x ?? p.label ?? p.name ?? p.time ?? pIdx + 1,
+            y: Number(p.y ?? p.value ?? p.val ?? 0),
+          };
+        }),
+      }))
+    : [];
+
+  return { kind, data, series, raw: b };
+}
+
 function Chart({ b }: { b: CanvasBlock }) {
-  const kind = b.kind || "bar";
-  const data: { label: string; value: number }[] = (b.data || []).map((d: any) => ({
-    label: String(d.label ?? d.x ?? ""),
-    value: Number(d.value ?? d.y ?? 0),
-  }));
-  const series: { name: string; points: { x: any; y: number }[] }[] = b.series || [];
+  const norm = normalizeChartData(b);
+  const kind = norm.kind;
+  const data = norm.data;
+  const series = norm.series;
   const W = 660, H = 260, PAD = 36;
   const [tip, setTip] = useState<TooltipState | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+
+  // 0. Radar / Spider Chart
+  if (kind === "radar") {
+    const items = data.length >= 3 ? data : [
+      { label: "Speed", value: 85 },
+      { label: "Power", value: 70 },
+      { label: "Reliability", value: 90 },
+      { label: "Cost", value: 65 },
+      { label: "UX", value: 80 },
+    ];
+    const maxVal = Math.max(...items.map((d) => d.value), 100);
+    const numAxes = items.length;
+    const cx = 170, cy = 130, R = 85;
+    const [hoverAxis, setHoverAxis] = useState<number | null>(null);
+    const rings = [0.25, 0.5, 0.75, 1.0];
+
+    const getPolyPoints = (scale: number) => {
+      return Array.from({ length: numAxes })
+        .map((_, i) => {
+          const angle = -Math.PI / 2 + (i / numAxes) * Math.PI * 2;
+          const x = cx + R * scale * Math.cos(angle);
+          const y = cy + R * scale * Math.sin(angle);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        })
+        .join(" ");
+    };
+
+    const valueVertices = items.map((d, i) => {
+      const ratio = Math.max(0.05, Math.min(1, d.value / maxVal));
+      const angle = -Math.PI / 2 + (i / numAxes) * Math.PI * 2;
+      const x = cx + R * ratio * Math.cos(angle);
+      const y = cy + R * ratio * Math.sin(angle);
+      return { x, y, angle, label: d.label, value: d.value };
+    });
+    const valuePolyStr = valueVertices.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+
+    return (
+      <div style={{ display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap", position: "relative" }}>
+        <svg
+          width={340}
+          height={260}
+          viewBox="0 0 340 260"
+          onMouseLeave={() => setHoverAxis(null)}
+          style={{ overflow: "visible" }}
+        >
+          {rings.map((rRatio, rIdx) => (
+            <polygon
+              key={`ring-${rIdx}`}
+              points={getPolyPoints(rRatio)}
+              fill="none"
+              stroke="var(--line-soft)"
+              strokeWidth="1"
+              strokeDasharray={rIdx < 3 ? "2 3" : undefined}
+            />
+          ))}
+
+          {Array.from({ length: numAxes }).map((_, i) => {
+            const angle = -Math.PI / 2 + (i / numAxes) * Math.PI * 2;
+            const x2 = cx + R * Math.cos(angle);
+            const y2 = cy + R * Math.sin(angle);
+            const labelX = cx + (R + 18) * Math.cos(angle);
+            const labelY = cy + (R + 18) * Math.sin(angle);
+            const isHover = hoverAxis === i;
+            return (
+              <g key={`spoke-${i}`}>
+                <line
+                  x1={cx}
+                  y1={cy}
+                  x2={x2}
+                  y2={y2}
+                  stroke={isHover ? "var(--accent)" : "var(--line-soft)"}
+                  strokeWidth={isHover ? 1.5 : 1}
+                />
+                <text
+                  x={labelX}
+                  y={labelY + 3}
+                  textAnchor="middle"
+                  fill={isHover ? "var(--text)" : "var(--text-faint)"}
+                  fontSize="10"
+                  fontWeight={isHover ? 600 : 400}
+                >
+                  {items[i]?.label}
+                </text>
+              </g>
+            );
+          })}
+
+          <polygon
+            points={valuePolyStr}
+            fill="var(--accent)"
+            fillOpacity="0.2"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            style={{ animation: "fade-in .4s ease both" }}
+          />
+
+          {valueVertices.map((pt, i) => {
+            const isHover = hoverAxis === i;
+            return (
+              <g
+                key={`dot-${i}`}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setHoverAxis(i)}
+              >
+                <circle cx={pt.x} cy={pt.y} r={isHover ? 7 : 4} fill="var(--accent)" opacity={isHover ? 0.3 : 0} />
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isHover ? 4.2 : 3.2}
+                  fill="var(--accent)"
+                  stroke="var(--surface)"
+                  strokeWidth="1.8"
+                />
+              </g>
+            );
+          })}
+        </svg>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 150 }}>
+          {items.map((d, i) => (
+            <div
+              key={i}
+              onMouseEnter={() => setHoverAxis(i)}
+              onMouseLeave={() => setHoverAxis(null)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "3px 6px",
+                borderRadius: "var(--r-xs)",
+                background: hoverAxis === i ? "var(--surface-3)" : "transparent",
+                fontSize: "var(--fs-xs)",
+                cursor: "pointer",
+              }}
+            >
+              <span style={{ color: hoverAxis === i ? "var(--text)" : "var(--text-dim)" }}>{d.label}</span>
+              <b style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{fmt(d.value)}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 0.1 Radial Gauge / Speedometer
+  if (kind === "gauge") {
+    const val = typeof b.value === "number" ? b.value : (data[0]?.value ?? 68);
+    const min = Number(b.min ?? 0);
+    const max = Number(b.max ?? 100);
+    const clamped = Math.max(min, Math.min(max, val));
+    const pct = (clamped - min) / (max - min || 1);
+    const unit = b.unit || "";
+
+    const cx = 170, cy = 135, r = 70;
+    const startAngle = -Math.PI * 1.25;
+    const sweep = Math.PI * 1.5;
+    const endAngle = startAngle + sweep;
+    const curAngle = startAngle + pct * sweep;
+
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+
+    const curX = cx + r * Math.cos(curAngle);
+    const curY = cy + r * Math.sin(curAngle);
+    const largeArc = pct * sweep > Math.PI ? 1 : 0;
+
+    const bgPath = `M ${x1} ${y1} A ${r} ${r} 0 1 1 ${x2} ${y2}`;
+    const valPath = `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${curX} ${curY}`;
+
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", padding: "6px 0" }}>
+        <svg width={340} height={190} viewBox="0 0 340 190">
+          <path
+            d={bgPath}
+            fill="none"
+            stroke="var(--surface-3)"
+            strokeWidth="12"
+            strokeLinecap="round"
+          />
+          <path
+            d={valPath}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="12"
+            strokeLinecap="round"
+          />
+          <text x={cx} y={cy - 2} textAnchor="middle" fill="var(--text)" fontSize="26" fontWeight="600" fontVariantNumeric="tabular-nums">
+            {fmt(clamped)}{unit}
+          </text>
+          <text x={cx} y={cy + 18} textAnchor="middle" fill="var(--text-faint)" fontSize="11" letterSpacing="0.04em" textTransform="uppercase">
+            {b.title || b.label || (data[0]?.label ?? "Value")}
+          </text>
+          <text x={x1 - 4} y={y1 + 16} textAnchor="middle" fill="var(--text-faint)" fontSize="10">{min}</text>
+          <text x={x2 + 4} y={y2 + 16} textAnchor="middle" fill="var(--text-faint)" fontSize="10">{max}</text>
+        </svg>
+      </div>
+    );
+  }
+
+  // 0.2 Conversion Funnel
+  if (kind === "funnel") {
+    const stages = data.length ? data : [
+      { label: "Visits", value: 12000 },
+      { label: "Signups", value: 4600 },
+      { label: "Active", value: 1800 },
+      { label: "Paid", value: 520 },
+    ];
+    const firstVal = stages[0]?.value || 1;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "4px 0" }}>
+        {stages.map((st, i) => {
+          const pctFirst = Math.round((st.value / firstVal) * 100);
+          const prevVal = i > 0 ? stages[i - 1].value : st.value;
+          const pctPrev = prevVal > 0 ? Math.round((st.value / prevVal) * 100) : 100;
+          const widthPct = Math.max(16, (st.value / firstVal) * 100);
+          const col = PALETTE[i % PALETTE.length];
+
+          return (
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>
+                <span style={{ fontWeight: 540, color: "var(--text)" }}>{st.label}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                  <b>{fmt(st.value)}</b>
+                  <span style={{ color: "var(--text-faint)", marginLeft: 6 }}>
+                    ({pctFirst}% {i > 0 && `· ${pctPrev}% of prev`})
+                  </span>
+                </span>
+              </div>
+              <div style={{ height: 20, background: "var(--surface-3)", borderRadius: "var(--r-xs)", overflow: "hidden", display: "flex", alignItems: "center" }}>
+                <div
+                  style={{
+                    width: `${widthPct}%`,
+                    height: "100%",
+                    background: col,
+                    borderRadius: "var(--r-xs)",
+                    animation: `chart-hbar-wipe 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${i * 45}ms both`,
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // 0.3 Candlestick / Stock OHLC
+  if (kind === "candlestick") {
+    const rawCandles = Array.isArray(b.data) && b.data.length && (b.data[0].open !== undefined || b.data[0].o !== undefined)
+      ? b.data.map((c: any, i: number) => ({
+          time: String(c.time || c.label || c.t || `T${i + 1}`),
+          open: Number(c.open ?? c.o ?? 100),
+          high: Number(c.high ?? c.h ?? 105),
+          low: Number(c.low ?? c.l ?? 95),
+          close: Number(c.close ?? c.c ?? 102),
+        }))
+      : data.map((d, i) => {
+          const base = d.value || 100;
+          return {
+            time: d.label || `T${i + 1}`,
+            open: base,
+            high: base * 1.05,
+            low: base * 0.95,
+            close: base * (i % 2 === 0 ? 1.03 : 0.97),
+          };
+        });
+
+    const minPrice = Math.min(...rawCandles.map((c) => c.low));
+    const maxPrice = Math.max(...rawCandles.map((c) => c.high));
+    const priceSpan = maxPrice - minPrice || 1;
+    const candleW = Math.min(28, Math.max(8, (W - PAD * 2) / rawCandles.length - 6));
+    const [hoverCandle, setHoverCandle] = useState<number | null>(null);
+    const priceToY = (p: number) => H - PAD - ((p - minPrice) / priceSpan) * (H - PAD * 2);
+
+    return (
+      <div style={{ position: "relative" }}>
+        <svg
+          width="100%"
+          viewBox={`0 0 ${W} ${H}`}
+          onMouseLeave={() => setHoverCandle(null)}
+        >
+          {[0, 0.5, 1].map((t, i) => {
+            const y = PAD + t * (H - PAD * 2);
+            const p = maxPrice - t * priceSpan;
+            return (
+              <g key={i}>
+                <line x1={PAD} x2={W - PAD} y1={y} y2={y} stroke="var(--line-soft)" strokeDasharray="3 3" />
+                <text x={W - PAD + 6} y={y + 3} fill="var(--text-faint)" fontSize="9" fontFamily="var(--mono)">
+                  {p.toFixed(1)}
+                </text>
+              </g>
+            );
+          })}
+
+          {rawCandles.map((c, i) => {
+            const cx = PAD + (i + 0.5) * ((W - PAD * 2) / rawCandles.length);
+            const isUp = c.close >= c.open;
+            const col = isUp ? "var(--ok, #7fb98a)" : "var(--err, #ef4444)";
+            const topY = priceToY(Math.max(c.open, c.close));
+            const botY = priceToY(Math.min(c.open, c.close));
+            const bodyH = Math.max(2, botY - topY);
+            const highY = priceToY(c.high);
+            const lowY = priceToY(c.low);
+            const isHover = hoverCandle === i;
+
+            return (
+              <g
+                key={i}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setHoverCandle(i)}
+              >
+                <line x1={cx} x2={cx} y1={highY} y2={lowY} stroke={col} strokeWidth="1.2" />
+                <rect
+                  x={cx - candleW / 2}
+                  y={topY}
+                  width={candleW}
+                  height={bodyH}
+                  fill={col}
+                  rx={2}
+                  opacity={hoverCandle === null || isHover ? 0.95 : 0.4}
+                />
+                <text x={cx} y={H - PAD + 14} textAnchor="middle" fill={isHover ? "var(--text)" : "var(--text-faint)"} fontSize="9">
+                  {c.time.slice(0, 6)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {hoverCandle !== null && rawCandles[hoverCandle] && (
+          <div
+            style={{
+              position: "absolute",
+              top: 6,
+              left: 10,
+              background: "var(--surface-3)",
+              border: "1px solid var(--line-soft)",
+              borderRadius: "var(--r-xs)",
+              padding: "4px 8px",
+              display: "flex",
+              gap: 8,
+              fontSize: 10.5,
+              fontFamily: "var(--mono)",
+              color: "var(--text)",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+            }}
+          >
+            <span><b>{rawCandles[hoverCandle].time}</b></span>
+            <span>O: {rawCandles[hoverCandle].open}</span>
+            <span>H: {rawCandles[hoverCandle].high}</span>
+            <span>L: {rawCandles[hoverCandle].low}</span>
+            <span style={{ color: rawCandles[hoverCandle].close >= rawCandles[hoverCandle].open ? "var(--ok)" : "var(--err)" }}>
+              C: {rawCandles[hoverCandle].close}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 0.4 Heatmap Matrix
+  if (kind === "heatmap") {
+    const matrix: { x: string; y: string; val: number }[] = [];
+    if (Array.isArray(b.matrix)) {
+      const yLabels = b.yLabels || b.rows || b.matrix.map((_: any, i: number) => `R${i + 1}`);
+      const xLabels = b.xLabels || b.cols || (b.matrix[0] || []).map((_: any, j: number) => `C${j + 1}`);
+      b.matrix.forEach((row: number[], rIdx: number) => {
+        row.forEach((val: number, cIdx: number) => {
+          matrix.push({ x: String(xLabels[cIdx] || cIdx), y: String(yLabels[rIdx] || rIdx), val: Number(val || 0) });
+        });
+      });
+    } else {
+      data.forEach((d) => {
+        matrix.push({ x: d.label, y: "Val", val: d.value });
+      });
+    }
+
+    const maxVal = Math.max(...matrix.map((m) => m.val), 1);
+    const minVal = Math.min(...matrix.map((m) => m.val), 0);
+    const uniqueX = Array.from(new Set(matrix.map((m) => m.x)));
+    const [hoverCell, setHoverCell] = useState<{ x: string; y: string; val: number } | null>(null);
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueX.length}, 1fr)`, gap: 4 }}>
+          {matrix.map((cell, idx) => {
+            const intensity = (cell.val - minVal) / (maxVal - minVal || 1);
+            return (
+              <div
+                key={idx}
+                onMouseEnter={() => setHoverCell(cell)}
+                onMouseLeave={() => setHoverCell(null)}
+                style={{
+                  height: 36,
+                  borderRadius: "var(--r-xs)",
+                  background: `rgba(215, 178, 140, ${Math.max(0.12, intensity)})`,
+                  border: "1px solid var(--line-soft)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 10.5,
+                  fontFamily: "var(--mono)",
+                  color: intensity > 0.5 ? "var(--bg)" : "var(--text)",
+                  fontWeight: 550,
+                  cursor: "pointer",
+                }}
+              >
+                {cell.val}
+              </div>
+            );
+          })}
+        </div>
+        {hoverCell && (
+          <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", fontFamily: "var(--mono)", marginTop: 2 }}>
+            {hoverCell.x} × {hoverCell.y}: <b>{hoverCell.val}</b>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // 1. Donut & Pie
   if (kind === "pie" || kind === "donut") {
@@ -421,15 +900,14 @@ function Chart({ b }: { b: CanvasBlock }) {
                     <circle
                       cx={X(hoverIdx)}
                       cy={cy}
-                      r={8}
+                      r={7}
                       fill={col}
-                      opacity="0.35"
-                      style={{ animation: "chart-pulse 1.4s ease-in-out infinite" }}
+                      opacity="0.2"
                     />
                     <circle
                       cx={X(hoverIdx)}
                       cy={cy}
-                      r={3.8}
+                      r={3.6}
                       fill={col}
                       stroke="var(--surface)"
                       strokeWidth="2"
@@ -742,7 +1220,7 @@ function Slider({ b }: { b: CanvasBlock }) {
 }
 
 function Callout({ b }: { b: CanvasBlock }) {
-  const kind = b.kind || "info"; // info | success | warn | err
+  const kind = b.tone || b.kind || "info"; // info | success | warn | err
   const colorMap: Record<string, string> = {
     info: "var(--info)",
     success: "var(--ok)",
@@ -755,13 +1233,19 @@ function Callout({ b }: { b: CanvasBlock }) {
     <div
       className="canvas-card"
       style={{
-        borderLeft: `3px solid ${c}`,
         background: "var(--surface-2)",
-        gap: 4,
+        border: "1px solid var(--line-soft)",
+        padding: "10px 14px",
+        gap: 6,
       }}
     >
-      {b.title && <div style={{ fontWeight: 600, fontSize: "var(--fs-sm)", color: "var(--text)" }}>{b.title}</div>}
-      <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: c, flexShrink: 0 }} />
+        <span style={{ fontWeight: 550, fontSize: "var(--fs-xs)", letterSpacing: "0.02em", color: "var(--text)" }}>
+          {b.title || (kind.charAt(0).toUpperCase() + kind.slice(1))}
+        </span>
+      </div>
+      <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)", lineHeight: 1.5 }}>
         <Markdown text={b.text || b.content || ""} animate={false} />
       </div>
     </div>
@@ -1103,15 +1587,49 @@ export function FollowupsBlock({ b }: { b: CanvasBlock }) {
   );
 }
 
+function parseXmlAttrs(attrStr?: string): Record<string, any> {
+  if (!attrStr) return {};
+  const attrs: Record<string, any> = {};
+  const re = /([a-zA-Z0-9_-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let match;
+  while ((match = re.exec(attrStr)) !== null) {
+    const key = match[1];
+    let val: any = match[2] ?? match[3] ?? match[4] ?? true;
+    if (val === "true") val = true;
+    else if (val === "false") val = false;
+    else if (!isNaN(Number(val)) && typeof val === "string" && val.trim() !== "") val = Number(val);
+    else if (typeof val === "string" && (val.startsWith("{") || val.startsWith("["))) {
+      try { val = JSON.parse(val); } catch {}
+    }
+    attrs[key] = val;
+  }
+  return attrs;
+}
+
 /* -------------------------------------------------- generative component */
 export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: string; open?: boolean }) {
   const data = useMemo(() => {
-    let clean = raw.trim();
+    const parsedAttrs = parseXmlAttrs(attrs);
+    let clean = (raw || "").trim();
     if (clean.startsWith("```")) {
       clean = clean.replace(/^```[a-z]*\s*/i, "").replace(/\s*```$/, "").trim();
     }
-    return repairPartialJson(clean);
-  }, [raw]);
+    const fromJson = repairPartialJson(clean);
+
+    if (fromJson && typeof fromJson === "object" && !Array.isArray(fromJson)) {
+      return { ...parsedAttrs, ...fromJson };
+    }
+    if (Array.isArray(fromJson)) {
+      return fromJson;
+    }
+    if (Object.keys(parsedAttrs).length > 0) {
+      if (clean && !parsedAttrs.text && !parsedAttrs.content && !parsedAttrs.smiles && !parsedAttrs.fn) {
+        parsedAttrs.text = clean;
+      }
+      return parsedAttrs;
+    }
+    return fromJson;
+  }, [raw, attrs]);
 
   if (!data && open) {
     return (
@@ -1125,78 +1643,114 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
   if (!data) {
     return (
       <div className="component-block" style={{ padding: "10px 14px", color: "var(--text-dim)", fontSize: "var(--fs-xs)" }}>
-        {raw.trim() ? raw : "Empty component"}
+        {raw && raw.trim() ? raw : "Empty component"}
       </div>
     );
   }
 
   if (Array.isArray(data)) {
     return (
-      <div className="component-block" data-inline="true">
-        <div className="component-body">
-          {data.map((b, i) => <BlockR key={i} b={b} />)}
+      <ErrorBoundary name="Component group">
+        <div className="component-block" data-inline="true">
+          <div className="component-body">
+            {data.map((b, i) => <BlockR key={i} b={b} />)}
+          </div>
         </div>
-      </div>
+      </ErrorBoundary>
+    );
+  }
+
+  const compType = String(data.type || data.kind || "").toLowerCase();
+
+  // 1. Organic chemistry SMILES molecular diagram
+  if (compType === "chemistry" || compType === "molecule" || data.smiles || data.molecule) {
+    return (
+      <ErrorBoundary name="Chemistry diagram">
+        <div className="component-block" data-inline="true">
+          <ChemistryBlock b={data} />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // 2. Math & Desmos 2D Function Visualizer
+  if (compType === "math" || compType === "plot" || compType === "desmos" || data.fn || data.formula || data.equation) {
+    return (
+      <ErrorBoundary name="Math function plot">
+        <div className="component-block" data-inline="true">
+          <MathPlotBlock b={data} />
+        </div>
+      </ErrorBoundary>
     );
   }
 
   if (data.type) {
     return (
-      <div className="component-block" data-inline="true">
-        <div className="component-body">
-          <BlockR b={data} />
+      <ErrorBoundary name={data.type}>
+        <div className="component-block" data-inline="true">
+          <div className="component-body">
+            <BlockR b={data} />
+          </div>
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
   return (
-    <div className="component-block">
-      {data.title && (
-        <div className="component-header">
-          <span className="component-title">
-            <span style={{ color: "var(--accent)" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="12" width="4" height="8" rx="1" /><rect x="10" y="6" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="17" rx="1" /></svg>
+    <ErrorBoundary name="Dashboard component">
+      <div className="component-block">
+        {data.title && (
+          <div className="component-header">
+            <span className="component-title">
+              <span style={{ color: "var(--accent)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="12" width="4" height="8" rx="1" /><rect x="10" y="6" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="17" rx="1" /></svg>
+              </span>
+              <span>{data.title}</span>
             </span>
-            <span>{data.title}</span>
-          </span>
+          </div>
+        )}
+        <div className="component-body">
+          {data.reference && (
+            <BlockR b={{ type: "callout", tone: "info", title: data.reference.title || "Reference", text: data.reference.text || data.reference }} />
+          )}
+          {data.callout && (
+            <BlockR b={{ type: "callout", ...data.callout }} />
+          )}
+          {data.metrics && (
+            <BlockR b={{ type: "metrics", items: data.metrics }} />
+          )}
+          {data.switcher && (
+            <BlockR b={{ type: "tabs", ...(typeof data.switcher === "object" ? data.switcher : {}) }} />
+          )}
+          {data.chart && (
+            <BlockR b={{ type: "chart", ...data.chart }} />
+          )}
+          {data.chemistry && (
+            <ChemistryBlock b={data.chemistry} />
+          )}
+          {data.math && (
+            <MathPlotBlock b={data.math} />
+          )}
+          {data.question && (
+            <BlockR b={{ type: "question", ...data.question }} />
+          )}
+          {data.followups && (
+            <BlockR b={{ type: "followups", prompts: data.followups }} />
+          )}
+          {data.prompts && (
+            <BlockR b={{ type: "followups", prompts: data.prompts }} />
+          )}
+          {Array.isArray(data.blocks) && data.blocks.map((b: any, i: number) => (
+            <BlockR key={i} b={b} />
+          ))}
         </div>
-      )}
-      <div className="component-body">
-        {data.reference && (
-          <BlockR b={{ type: "callout", tone: "info", title: data.reference.title || "Reference", text: data.reference.text || data.reference }} />
-        )}
-        {data.callout && (
-          <BlockR b={{ type: "callout", ...data.callout }} />
-        )}
-        {data.metrics && (
-          <BlockR b={{ type: "metrics", items: data.metrics }} />
-        )}
-        {data.switcher && (
-          <BlockR b={{ type: "tabs", ...(typeof data.switcher === "object" ? data.switcher : {}) }} />
-        )}
-        {data.chart && (
-          <BlockR b={{ type: "chart", ...data.chart }} />
-        )}
-        {data.question && (
-          <BlockR b={{ type: "question", ...data.question }} />
-        )}
-        {data.followups && (
-          <BlockR b={{ type: "followups", prompts: data.followups }} />
-        )}
-        {data.prompts && (
-          <BlockR b={{ type: "followups", prompts: data.prompts }} />
-        )}
-        {Array.isArray(data.blocks) && data.blocks.map((b: any, i: number) => (
-          <BlockR key={i} b={b} />
-        ))}
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 
 /* ------------------------------------------------------------- main renderer */
-export function BlockR({ b }: { b: CanvasBlock }) {
+function BlockRouter({ b }: { b: CanvasBlock }) {
   switch (b.type) {
     case "heading": {
       const H = (`h${Math.min(b.level || 2, 4)}`) as any;
@@ -1209,6 +1763,11 @@ export function BlockR({ b }: { b: CanvasBlock }) {
     case "followups":
     case "prompts": return <FollowupsBlock b={b} />;
     case "switcher": return <TabsBlock b={b} />;
+    case "chemistry":
+    case "molecule": return <ChemistryBlock b={b} />;
+    case "math":
+    case "plot":
+    case "desmos": return <MathPlotBlock b={b} />;
     case "component": return <ComponentBlock raw={b.raw || b.content || JSON.stringify(b)} attrs={b.attrs} open={b.open} />;
     case "metric":
       return (
@@ -1329,6 +1888,15 @@ export function BlockR({ b }: { b: CanvasBlock }) {
       );
     default: return null;
   }
+}
+
+export function BlockR({ b }: { b: CanvasBlock }) {
+  if (!b) return null;
+  return (
+    <ErrorBoundary name={b.type || "block"}>
+      <BlockRouter b={b} />
+    </ErrorBoundary>
+  );
 }
 
 /** Repair streaming partial JSON so UI can stream live into the canvas. */

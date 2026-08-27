@@ -1,35 +1,22 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import { parseDocument, youtubeId, type Block, type Inline, type Cell } from "./parse";
 
 /* ------------------------------------------------------------------ katex */
-let katexP: Promise<any> | null = null;
-function ensureKatex(): Promise<any> {
-  if ((window as any).katex) return Promise.resolve((window as any).katex);
-  if (katexP) return katexP;
-  katexP = new Promise((res, rej) => {
-    const l = document.createElement("link");
-    l.rel = "stylesheet";
-    l.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css";
-    document.head.appendChild(l);
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js";
-    s.onload = () => res((window as any).katex);
-    s.onerror = rej;
-    document.head.appendChild(s);
-  });
-  return katexP;
-}
-
 function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: boolean }) {
-  const [html, setHtml] = useState<string | null>(null);
-  useEffect(() => {
-    let dead = false;
-    if (open) return;                       // wait for the closing delimiter
-    ensureKatex()
-      .then((k) => { if (!dead) setHtml(k.renderToString(expr, { displayMode: !!display, throwOnError: false, output: "html" })); })
-      .catch(() => {});
-    return () => { dead = true; };
+  const html = useMemo(() => {
+    if (open) return null;
+    try {
+      return katex.renderToString(expr, {
+        displayMode: !!display,
+        throwOnError: false,
+      });
+    } catch {
+      return null;
+    }
   }, [expr, display, open]);
+
   if (!html) return <span className="md-math-raw">{display ? expr : `$${expr}$`}</span>;
   return <span className={display ? "md-math-block a-fade" : "a-fade"} dangerouslySetInnerHTML={{ __html: html }} />;
 }
@@ -38,6 +25,7 @@ function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: 
 import { highlight } from "./highlight";
 import { copyToClipboard } from "../lib/clipboard";
 import { BlocksView, ComponentBlock } from "../canvas/Blocks";
+import { ErrorBoundary } from "../ui/ErrorBoundary";
 
 /* ---------------------------------------------------------------- helpers */
 function copy(text: string) { return copyToClipboard(text); }
@@ -59,9 +47,44 @@ const Ico = {
 interface Ctx { animate: boolean; complete: boolean }
 
 function Text({ v, animate }: { v: string; animate: boolean }) {
-  if (!animate) return <>{v}</>;
+  const prevLen = useRef(0);
+  const curLen = v.length;
+
+  useEffect(() => {
+    prevLen.current = curLen;
+  }, [curLen]);
+
+  if (!animate) {
+    prevLen.current = curLen;
+    return <>{v}</>;
+  }
+
+  // When text grows during streaming, only animate the incoming tail
+  const oldLen = prevLen.current;
+  if (oldLen > 0 && curLen > oldLen) {
+    const stable = v.slice(0, oldLen);
+    const incoming = v.slice(oldLen);
+    const parts = incoming.split(/(\s+)/);
+    return (
+      <>
+        {stable}
+        {parts.map((p, i) => (p.trim() ? <span key={`in-${i}`} className="tok">{p}</span> : p))}
+      </>
+    );
+  }
+
+  // Initial render during stream: animate only the trailing segment to prevent full-block flashing
   const parts = v.split(/(\s+)/);
-  return <>{parts.map((p, i) => (p.trim() ? <span key={i} className="tok">{p}</span> : p))}</>;
+  const tailStart = Math.max(0, parts.length - 8);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (!p.trim()) return p;
+        if (i >= tailStart) return <span key={i} className="tok">{p}</span>;
+        return p;
+      })}
+    </>
+  );
 }
 
 function renderInline(nodes: Inline[], ctx: Ctx, keyPrefix = ""): React.ReactNode {
@@ -262,7 +285,11 @@ function InlineToolBlock({ lang, code }: { lang: string; code: string }) {
     try {
       const j = JSON.parse(code);
       const args = j.arguments || j.args || j;
-      const firstVal = Object.values(args)[0];
+      if (typeof args === "string") return args.slice(0, 60);
+      if (typeof args !== "object" || !args) return "";
+      const vals = Object.values(args);
+      if (!vals.length) return "";
+      const firstVal = vals[0];
       return typeof firstVal === "string" ? firstVal.slice(0, 60) : "";
     } catch {
       return "";
@@ -321,7 +348,11 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
 
   // 1. Inline tool call blocks
   if (cleanLang === "tool_call" || cleanLang === "call" || cleanLang === "tool" || cleanLang.startsWith("call:")) {
-    return <InlineToolBlock lang={cleanLang} code={code} />;
+    return (
+      <ErrorBoundary name="Tool Call">
+        <InlineToolBlock lang={cleanLang} code={code} />
+      </ErrorBoundary>
+    );
   }
 
   // 2. Inline generative UI blocks (C1 / Thesys declarative JSON)
@@ -332,7 +363,11 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
   );
 
   if (isUiLang || isUiJson) {
-    return <InlineUIBlock lang={cleanLang} code={code} open={open} />;
+    return (
+      <ErrorBoundary name="Generative UI">
+        <InlineUIBlock lang={cleanLang} code={code} open={open} />
+      </ErrorBoundary>
+    );
   }
 
   return (
@@ -456,7 +491,12 @@ const BlockView = memo(function BlockView({ b, ctx }: { b: Block; ctx: Ctx }) {
       );
     }
     case "html": return <div className="a-blk" dangerouslySetInnerHTML={{ __html: b.html }} />;
-    case "component": return <ComponentBlock raw={b.raw} attrs={b.attrs} open={b.open} />;
+    case "component":
+      return (
+        <ErrorBoundary name="Component">
+          <ComponentBlock raw={b.raw} attrs={b.attrs} open={b.open} />
+        </ErrorBoundary>
+      );
     default: return null;
   }
 });

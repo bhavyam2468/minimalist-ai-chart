@@ -7,6 +7,7 @@ import { copyToClipboard } from "../lib/clipboard";
 import { VIEW_LABEL, viewOf } from "../canvas/view";
 import type { Chat, Node } from "../lib/types";
 import { Composer } from "./Composer";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 function Act({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return <button className="icon-btn sm" title={label} onClick={onClick}>{icon}</button>;
@@ -47,6 +48,23 @@ function Branches({ chat, node }: { chat: Chat; node: Node }) {
   );
 }
 
+function getArgHint(args: any): string {
+  if (!args) return "";
+  if (typeof args === "string") return args.slice(0, 80);
+  if (typeof args !== "object") return String(args).slice(0, 80);
+  try {
+    const vals = Object.values(args);
+    if (!vals.length) return "";
+    const first = vals[0];
+    if (typeof first === "string") return first.slice(0, 80);
+    if (Array.isArray(first)) return first.join(", ").slice(0, 80);
+    if (typeof first === "number" || typeof first === "boolean") return String(first);
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 function ToolTrace({ node }: { node: Node }) {
   const calls = node.toolCalls;
   if (!calls?.length) return null;
@@ -56,7 +74,7 @@ function ToolTrace({ node }: { node: Node }) {
 
   const running = calls.find((t) => t.status === "running");
   const hasError = calls.some((t) => t.status === "error");
-  const totalMs = calls.reduce((acc, t) => acc + (t.ms || 0), 0);
+  const totalMs = calls.reduce((acc, t) => acc + (typeof t.ms === "number" ? t.ms : 0), 0);
   const statusMode = hasError ? "error" : running ? "running" : "done";
 
   return (
@@ -107,11 +125,9 @@ function ToolTrace({ node }: { node: Node }) {
         >
           {running ? (
             <>
-              <b>{running.name}</b>
+              <b>{running.name || "tool"}</b>
               <span className="trace-hint" style={{ whiteSpace: "nowrap" }}>
-                {typeof Object.values(running.args || {})[0] === "string"
-                  ? String(Object.values(running.args || {})[0]).slice(0, 48)
-                  : "running..."}
+                {getArgHint(running.args) || "running..."}
               </span>
             </>
           ) : (
@@ -140,16 +156,11 @@ function ToolTrace({ node }: { node: Node }) {
       {isOpen && (
         <div className="trace-list" style={{ width: "100%", maxWidth: 640 }}>
           {calls.map((t) => {
-            const arg = Object.values(t.args || {})[0];
-            const hint =
-              typeof arg === "string"
-                ? arg.slice(0, 80)
-                : Array.isArray(arg)
-                ? arg.join(", ").slice(0, 80)
-                : "";
+            const hint = getArgHint(t.args);
             const isItemOpen = expandedItem === t.id;
             const isErr = t.status === "error";
             const isDone = t.status === "done";
+            const outStr = typeof t.output === "string" ? t.output : JSON.stringify(t.output ?? "");
             return (
               <div key={t.id} className="trace-item">
                 <div
@@ -205,7 +216,7 @@ function ToolTrace({ node }: { node: Node }) {
                       </div>
                     )}
                     <div className="trace-result" style={{ color: isErr ? "var(--err, #ef4444)" : undefined }}>
-                      {t.output || "…"}
+                      {outStr || "…"}
                     </div>
                   </div>
                 )}
@@ -299,11 +310,17 @@ export function Turn({ chat, node }: { chat: Chat; node: Node; threadId?: string
 
   return (
     <div className="turn" data-node={node.id}>
-      <ToolTrace node={node} />
+      <ErrorBoundary name="Tool trace">
+        <ToolTrace node={node} />
+      </ErrorBoundary>
       {!node.content && streaming && !node.toolCalls?.length && (
         <div className="thinking"><i /><i /><i /></div>
       )}
-      {node.content && <Markdown text={node.content} streaming={streaming} animate={streaming} />}
+      {node.content && (
+        <ErrorBoundary name="Message content">
+          <Markdown text={node.content} streaming={streaming} animate={streaming} />
+        </ErrorBoundary>
+      )}
       {node.error && <div className="trace-out" style={{ color: "var(--err)" }}>{node.error}</div>}
       <ArtifactChips chat={chat} node={node} />
       {!streaming && (

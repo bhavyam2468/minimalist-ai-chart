@@ -196,10 +196,6 @@ a { color: inherit; }
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
-@keyframes chart-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.35; }
-  50% { transform: scale(1.4); opacity: 0.1; }
-}
 @keyframes chart-fade-switch {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
