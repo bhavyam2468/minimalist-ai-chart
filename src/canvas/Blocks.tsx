@@ -2113,9 +2113,23 @@ export function normalizeAdaptiveBlocks(blocks: any[]): any[] {
   let buttonAccum: any[] = [];
 
   const flushButtons = () => {
+    if (buttonAccum.length === 0) return;
+
+    const last = normalized[normalized.length - 1];
+    const isMetric = last && (last.type === "metric" || last.kind === "metric");
+    const hasHoverIntent =
+      buttonAccum.some((b) => b.hover === true || b.hoverOnly === true || b.overlay === true) ||
+      buttonAccum.every((b) => b.shape === "square");
+
+    if (isMetric && hasHoverIntent) {
+      last.hoverControls = [...(last.hoverControls || []), ...buttonAccum];
+      buttonAccum = [];
+      return;
+    }
+
     if (buttonAccum.length === 1) {
       normalized.push(buttonAccum[0]);
-    } else if (buttonAccum.length > 1) {
+    } else {
       normalized.push({
         type: "button_group",
         blocks: [...buttonAccum],
@@ -2129,6 +2143,23 @@ export function normalizeAdaptiveBlocks(blocks: any[]): any[] {
     const type = String(b.type || b.kind || "").toLowerCase();
     if (type === "button" || type === "btn") {
       buttonAccum.push(b);
+    } else if (type === "button_group" || type === "buttons") {
+      flushButtons();
+      const last = normalized[normalized.length - 1];
+      const isMetric = last && (last.type === "metric" || last.kind === "metric");
+      const groupBlocks = Array.isArray(b.blocks) ? b.blocks : [];
+      const hasHoverIntent =
+        b.hover === true ||
+        b.hoverOnly === true ||
+        b.overlay === true ||
+        groupBlocks.some((btn: any) => btn.hover === true || btn.hoverOnly === true) ||
+        (groupBlocks.length > 0 && groupBlocks.every((btn: any) => btn.shape === "square"));
+
+      if (isMetric && hasHoverIntent) {
+        last.hoverControls = [...(last.hoverControls || []), ...groupBlocks];
+      } else {
+        normalized.push(b);
+      }
     } else {
       flushButtons();
       normalized.push(b);
@@ -2998,6 +3029,14 @@ export function MetricBlock({ b }: { b: any }) {
   const isNeg = delta != null && String(delta).trim().startsWith("-");
   const isCentered = align === "center";
 
+  const rawHover = b.hoverControls || b.controls || b.overlay || b.actions;
+  const hoverControls = useMemo(() => {
+    if (!rawHover) return null;
+    if (Array.isArray(rawHover)) return rawHover;
+    if (rawHover.blocks && Array.isArray(rawHover.blocks)) return rawHover.blocks;
+    return [rawHover];
+  }, [rawHover]);
+
   return (
     <div
       className="block-metric a-blk"
@@ -3019,21 +3058,59 @@ export function MetricBlock({ b }: { b: any }) {
       )}
 
       <div
-        className="metric-v"
+        className={`metric-v-wrap ${hoverControls && hoverControls.length > 0 ? "has-hover-controls" : ""}`}
         style={{
-          fontVariantNumeric: "tabular-nums",
-          textAlign: align as any,
-          whiteSpace: "nowrap",
-          wordBreak: "keep-all",
-          display: "block",
-          fontSize: isCentered ? "2.4rem" : undefined,
-          lineHeight: 1.12,
-          letterSpacing: "-0.025em",
-          fontWeight: 650,
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: isCentered ? "center" : "flex-start",
+          width: isCentered ? "100%" : undefined,
           margin: isCentered ? "4px 0" : "2px 0",
         }}
       >
-        {value}
+        <div
+          className={`metric-v ${hoverControls && hoverControls.length > 0 ? "metric-v-dimmable" : ""}`}
+          style={{
+            fontVariantNumeric: "tabular-nums",
+            textAlign: align as any,
+            whiteSpace: "nowrap",
+            wordBreak: "keep-all",
+            display: "block",
+            fontSize: isCentered ? "2.4rem" : undefined,
+            lineHeight: 1.12,
+            letterSpacing: "-0.025em",
+            fontWeight: 650,
+          }}
+        >
+          {value}
+        </div>
+
+        {hoverControls && hoverControls.length > 0 && (
+          <div
+            className="metric-hover-controls"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+            }}
+          >
+            {hoverControls.map((btn: any, idx: number) => {
+              const btnBlock = {
+                shape: "square",
+                variant: btn.variant || (idx === 0 ? "primary" : "secondary"),
+                ...btn,
+                style: {
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.3)",
+                  ...btn.style,
+                },
+              };
+              return <ButtonBlock key={idx} b={btnBlock} />;
+            })}
+          </div>
+        )}
       </div>
 
       {(delta != null || sub) && (
@@ -3095,6 +3172,8 @@ export function BadgeBlock({ b }: { b: any }) {
         background: c.bg,
         color: c.text,
         border: `1px solid ${c.border}`,
+        borderRadius: "var(--r-xs)",
+        ...b.style,
       }}
     >
       {text}
@@ -3368,8 +3447,7 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
-            shape: "circle",
-            centered: true,
+            style: { maxWidth: 220, margin: "6px auto", padding: "14px 18px" },
             borderProgress: "${(seconds % 60) * (100 / 60)}",
             progressColor: "var(--accent)",
             state: { seconds: 0, running: false },
@@ -3380,12 +3458,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
                 type: "metric",
                 centered: true,
                 value: "${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}",
-              },
-              {
-                type: "button_group",
-                blocks: [
-                  { type: "button", shape: "square", hover: true, icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", shape: "square", hover: true, icon: "refresh", variant: "secondary", onClick: "seconds = 0; running = false" },
+                hoverControls: [
+                  { type: "button", shape: "square", icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", shape: "square", icon: "refresh", variant: "secondary", onClick: "seconds = 0; running = false" },
                 ],
               },
             ],
@@ -3399,8 +3474,7 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
-            shape: "circle",
-            centered: true,
+            style: { maxWidth: 220, margin: "6px auto", padding: "14px 18px" },
             borderProgress: "${((total - left) / total) * 100}",
             progressColor: "var(--accent)",
             state: { total: initialTimerSec, left: initialTimerSec, running: false },
@@ -3411,12 +3485,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
                 type: "metric",
                 centered: true,
                 value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
-              },
-              {
-                type: "button_group",
-                blocks: [
-                  { type: "button", shape: "square", hover: true, icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", shape: "square", hover: true, icon: "refresh", variant: "secondary", onClick: `left = total; running = false` },
+                hoverControls: [
+                  { type: "button", shape: "square", icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", shape: "square", icon: "refresh", variant: "secondary", onClick: `left = total; running = false` },
                 ],
               },
             ],
@@ -3432,8 +3503,7 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
         <CardBlock
           b={{
             type: "card",
-            shape: "circle",
-            centered: true,
+            style: { maxWidth: 220, margin: "6px auto", padding: "14px 18px" },
             borderProgress: "${mode === 'work' ? ((work - left) / work) * 100 : ((brk - left) / brk) * 100}",
             progressColor: "${mode === 'work' ? 'var(--accent)' : 'var(--ok)'}",
             state: { work: workSec, brk: breakSec, left: workSec, running: false, mode: "work" },
@@ -3444,12 +3514,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
                 type: "metric",
                 centered: true,
                 value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
-              },
-              {
-                type: "button_group",
-                blocks: [
-                  { type: "button", shape: "square", hover: true, icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", shape: "square", hover: true, icon: "skip", variant: "secondary", onClick: `mode = (mode === 'work' ? 'break' : 'work'); left = (mode === 'work' ? work : brk);` },
+                hoverControls: [
+                  { type: "button", shape: "square", icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", shape: "square", icon: "skip", variant: "secondary", onClick: `mode = (mode === 'work' ? 'break' : 'work'); left = (mode === 'work' ? work : brk);` },
                 ],
               },
             ],

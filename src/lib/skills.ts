@@ -26,16 +26,17 @@ This app does NOT use bloated monolithic widgets or pre-baked slide templates. I
 
 ## Core Design Principles
 1. **Radical Minimalism & Zero Redundancy**: Be as non-redundant and minimal as possible. NEVER state the obvious. If a widget displays a primary value (such as a timecode, number, or reading), do NOT add a title naming what the widget is, and do NOT add redundant status labels or badges describing what is already clear from the value itself. Let the primary value speak for itself as the sole focal point.
-2. **Square Hover Icon Buttons & Dynamic Icon States**: Use compact square icon buttons (\`"shape": "square"\`, \`"icon": "..."\`, \`"hover": true\`) that reveal on hover instead of bulky labeled text buttons. Use dynamic icon states via reactive expressions: e.g. \`"icon": "\${active ? 'pause' : 'play'}"\`, \`"icon": "skip"\`, \`"icon": "refresh"\`.
-3. **Circular Widget & Border Progress**: For radial or cyclical visualizers, use a circular card (\`"shape": "circle"\`, \`"centered": true\`) with an animated circular border progress dial (\`"borderProgress"\`). Text and buttons sit centered inside the circle. For rectangular cards, progress renders as an integrated top border bar.
-4. **Cross-Component State Sharing**: Multiple \`<component>\` tags in the same message automatically share state! If you split UI across text or math sections, use \`<component id="master">\` on the primary card and \`<component link="master">\` on downstream buttons to let them control the master state.
-5. **Auto-Adaptive Layout**: Adjacent buttons are automatically grouped and balanced across the row. Odd items in grids auto-span to eliminate awkward holes. Long labels smoothly marquee on hover without breaking words.
+2. **Hover Controls Over Numbers (Floating Actions with Drop Shadow)**: For numeric displays or visualizers, provide square action buttons inside \`hoverControls\` on the \`metric\` block. At rest, only the clean number is shown. When hovering over the number, the action buttons appear centered directly over the number with a drop shadow, and disappear when unhovered. Use dynamic icon states via reactive expressions: e.g. \`"icon": "\${active ? 'pause' : 'play'}"\`, \`"icon": "skip"\`, \`"icon": "refresh"\`.
+3. **Compact Rounded Rectangle Cards (Default)**: Always use clean, compact rounded rectangles (\`"shape": "rect"\` or default card) so the widget fits naturally and neatly in the chat UI. Circular shapes (\`"shape": "circle"\`) are only an optional availability if explicitly requested by the user—never use circles by default. For progress on cards, use \`borderProgress\` which renders as an elegant top perimeter bar.
+4. **Universal Corner Radii**: All elements adhere to the universal corner radii of the design system: cards use \`var(--r)\`, buttons use \`var(--r-sm)\`, badges/tags use \`var(--r-xs)\`.
+5. **Cross-Component State Sharing**: Multiple \`<component>\` tags in the same message automatically share state! If you split UI across text or math sections, use \`<component id="master">\` on the primary card and \`<component link="master">\` on downstream buttons to let them control the master state.
+6. **Auto-Adaptive Layout**: Adjacent buttons are automatically grouped and balanced across the row. Odd items in grids auto-span to eliminate awkward holes. Long labels smoothly marquee on hover without breaking words.
 
 ## Fundamental Composable Blocks
 - **card**: Container with optional \`title\`, \`subtitle\`, \`badge\`, \`centered\` (boolean), \`borderProgress\` (0-100), \`progressColor\`, \`shape\` ("rect"|"circle"), \`state\`, \`tick\`, \`onTick\`, \`id\`, and nested \`blocks\`.
 - **grid**: Composable multi-column layout (\`cols\`: 1-6, \`gap\`, and child \`blocks\`). Automatically balances odd items.
 - **text**: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
-- **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`, \`centered\`).
+- **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`, \`centered\`, \`hoverControls\`: array of buttons).
 - **button**: Reactive action trigger (\`text\`, \`icon\`: "play"|"pause"|"skip"|"refresh"|"check"|"x"|"plus"|"minus"|"settings", \`shape\`: "square"|"rect", \`hover\`: boolean, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
 - **slider**: Precision expansion slider (hairline track expanding to 26px on drag with precision readout, \`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, and \`bind\`).
 - **input**: Text/number input (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
@@ -45,7 +46,7 @@ This app does NOT use bloated monolithic widgets or pre-baked slide templates. I
 - **progress**: Clean progress meter (\`value\`, \`max\`, \`label\`, \`unit\`).
 - **chart**: Composable charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
 - **table**: Clean data table (\`headers\`, \`rows\`).
-- **badge**: Status pill (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
+- **badge**: Status badge with universal radius (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
 - **divider**: Hairline separator.
 - **math**: Interactive 2D function visualizer (\`fn\`, \`xmin\`, \`xmax\`).
 - **chemistry**: 2D molecule diagram (\`smiles\` or \`molecule\`).
@@ -62,23 +63,22 @@ Any \`card\` or UI document can declare reactive state and dynamic ticking:
 
 ## Composable Recipes
 
-1. **Radically Minimal Dynamic Visualizer (Circular Design, Border Progress, Square Hover Buttons)**:
+1. **Radically Minimal Dynamic Visualizer (Border Progress, Number with Hover Controls)**:
 \`\`\`json
 {
   "type": "card",
-  "shape": "circle",
-  "centered": true,
   "borderProgress": "\${((total - count) / total) * 100}",
   "state": { "total": 100, "count": 100, "active": false },
   "tick": 1000,
   "onTick": "if (active && count > 0) count--",
   "blocks": [
-    { "type": "metric", "centered": true, "value": "\${count}" },
     {
-      "type": "button_group",
-      "blocks": [
-        { "type": "button", "shape": "square", "hover": true, "icon": "\${active ? 'pause' : 'play'}", "variant": "primary", "onClick": "active = !active" },
-        { "type": "button", "shape": "square", "hover": true, "icon": "skip", "variant": "secondary", "onClick": "count = 0; active = false" }
+      "type": "metric",
+      "centered": true,
+      "value": "\${count}",
+      "hoverControls": [
+        { "type": "button", "shape": "square", "icon": "\${active ? 'pause' : 'play'}", "variant": "primary", "onClick": "active = !active" },
+        { "type": "button", "shape": "square", "icon": "skip", "variant": "secondary", "onClick": "count = 0; active = false" }
       ]
     }
   ]
@@ -91,8 +91,6 @@ Master Card:
 <component id="tracker">
 {
   "type": "card",
-  "shape": "circle",
-  "centered": true,
   "borderProgress": "\${progress}",
   "state": { "progress": 70, "active": false },
   "blocks": [

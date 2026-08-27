@@ -776,7 +776,7 @@ html.lenis, html.lenis body { height: auto; }
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 9999px;
+  border-radius: var(--r-xs);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -856,6 +856,56 @@ html.lenis, html.lenis body { height: auto; }
 .comp-btn-hover-reveal:focus-visible {
   opacity: 1 !important;
   pointer-events: auto !important;
+}
+
+/* Metric Hover Controls (Floating Actions over Number with Drop Shadow) */
+.metric-v-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metric-hover-controls {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 20;
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.5));
+}
+
+.metric-hover-controls .comp-btn {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+.metric-v-dimmable {
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.metric-v-wrap:hover .metric-hover-controls,
+.block-metric:hover .metric-hover-controls,
+.block-card:hover .metric-hover-controls {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.metric-v-wrap:hover .metric-v-dimmable,
+.block-metric:hover .metric-v-dimmable,
+.block-card:hover .metric-v-dimmable {
+  opacity: 0.12;
+  filter: blur(0.5px);
+}
+
+.inline-ui-wrap .block-card {
+  border-radius: var(--r-sm);
 }
 
 .block-card .block-metric {
