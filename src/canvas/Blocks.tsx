@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Markdown } from "../md/Markdown";
 import { useApp } from "../lib/store";
 import { send } from "../lib/agent";
+import { copyToClipboard } from "../lib/clipboard";
 import { I } from "../ui/Icons";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { ChemistryBlock } from "./ChemistryBlock";
@@ -735,6 +736,208 @@ function Chart({ b }: { b: CanvasBlock }) {
     );
   }
 
+  // 2b. Bubble Chart
+  if (kind === "bubble") {
+    const rawData = Array.isArray((b as any).data) ? (b as any).data : data;
+    const bubbles = rawData.map((d: any, i: number) => {
+      const label = d.label || d.name || d.category || `Bubble ${i + 1}`;
+      const x = Number(d.x ?? (i + 1) * 20);
+      const y = Number(d.y ?? d.value ?? 30 + (i * 15));
+      const r = Number(d.r ?? d.z ?? d.size ?? d.revenue ?? 18);
+      const color = d.color || PALETTE[i % PALETTE.length];
+      return { label, x, y, r, color };
+    });
+    const xs = bubbles.map((x: any) => x.x);
+    const ys = bubbles.map((x: any) => x.y);
+    const rs = bubbles.map((x: any) => x.r);
+    const minX = Math.min(...xs, 0), maxX = Math.max(...xs, 100);
+    const minY = Math.min(...ys, 0), maxY = Math.max(...ys, 100);
+    const maxR = Math.max(...rs, 1);
+
+    const toPxX = (x: number) => PAD + ((x - minX) / (maxX - minX || 1)) * (W - PAD * 2);
+    const toPxY = (y: number) => H - PAD - ((y - minY) / (maxY - minY || 1)) * (H - PAD * 2);
+    const toPxR = (r: number) => Math.max(12, Math.min(38, 10 + (r / maxR) * 26));
+
+    return (
+      <div style={{ position: "relative" }}>
+        <ChartTooltip tip={tip} />
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+          {[0.25, 0.5, 0.75, 1].map((pct, i) => {
+            const y = H - PAD - pct * (H - PAD * 2);
+            return <line key={i} x1={PAD} y1={y} x2={W - PAD} y2={y} stroke="var(--line-soft)" strokeDasharray="3 3" />;
+          })}
+          <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--line-soft)" />
+          <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--line-soft)" />
+
+          {bubbles.map((pt: any, i: number) => {
+            const cx = toPxX(pt.x);
+            const cy = toPxY(pt.y);
+            const cr = toPxR(pt.r);
+            return (
+              <g
+                key={i}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => {
+                  setTip({
+                    x: cx,
+                    y: cy - cr - 8,
+                    title: pt.label,
+                    items: [
+                      { label: "X Position", value: fmt(pt.x) },
+                      { label: "Y Value", value: fmt(pt.y) },
+                      { label: "Volume (R)", value: fmt(pt.r), color: pt.color },
+                    ],
+                  });
+                }}
+                onMouseLeave={() => setTip(null)}
+              >
+                <circle cx={cx} cy={cy} r={cr} fill={pt.color} fillOpacity="0.25" stroke={pt.color} strokeWidth="2" style={{ transition: "transform 0.15s ease" }} />
+                <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="var(--text)" fontSize={Math.max(9, Math.min(12, cr * 0.55))} fontWeight="600" pointerEvents="none">
+                  {pt.label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  }
+
+  // 2c. Treemap
+  if (kind === "treemap") {
+    const rawItems = data.length >= 2 ? data : [
+      { label: "node_modules", value: 420 },
+      { label: "src", value: 85 },
+      { label: "dist", value: 45 },
+      { label: "public", value: 22 },
+    ];
+    const total = rawItems.reduce((sum, d) => sum + Math.max(0, d.value), 0) || 1;
+    const sorted = [...rawItems].sort((a, b) => b.value - a.value);
+
+    return (
+      <div style={{ position: "relative" }}>
+        <ChartTooltip tip={tip} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, width: "100%", minHeight: 180 }}>
+          {sorted.map((item, i) => {
+            const pct = Math.round((item.value / total) * 100);
+            const color = PALETTE[i % PALETTE.length];
+            return (
+              <div
+                key={i}
+                style={{
+                  background: `color-mix(in srgb, ${color} 14%, var(--surface-2))`,
+                  border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+                  borderRadius: "var(--r-sm)",
+                  padding: "12px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  cursor: "pointer",
+                  minHeight: 85,
+                  transition: "transform 0.15s ease",
+                }}
+                onMouseEnter={() => {
+                  setTip({
+                    x: W / 2,
+                    y: 70,
+                    title: item.label,
+                    items: [{ label: "Size", value: `${fmt(item.value)} (${pct}%)`, color }],
+                  });
+                }}
+                onMouseLeave={() => setTip(null)}
+              >
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {item.label}
+                </div>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(item.value)}
+                  </div>
+                  <div style={{ fontSize: "10.5px", color: "var(--text-faint)", marginTop: 2 }}>
+                    {pct}% share
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // 2d. Waterfall Chart
+  if (kind === "waterfall") {
+    const steps = data.length >= 2 ? data : [
+      { label: "Starting", value: 120 },
+      { label: "New ARR", value: 45 },
+      { label: "Churn", value: -12 },
+      { label: "Expansion", value: 28 },
+      { label: "Ending", value: 181 },
+    ];
+    let running = 0;
+    const computedSteps = steps.map((s, idx) => {
+      const isStart = idx === 0;
+      const isEnd = idx === steps.length - 1;
+      const val = s.value;
+      const prev = running;
+      if (!isEnd) running += val;
+      const base = isStart || isEnd ? 0 : Math.min(prev, running);
+      const top = isStart || isEnd ? (isStart ? val : running) : Math.max(prev, running);
+      const isPositive = val >= 0;
+      const color = isStart || isEnd ? "var(--accent)" : isPositive ? "var(--ok)" : "var(--err)";
+      return { label: s.label, val, base, top, color, isTotal: isStart || isEnd };
+    });
+
+    const maxVal = Math.max(...computedSteps.map((c) => Math.max(c.top, c.base)), 1);
+    const minVal = Math.min(...computedSteps.map((c) => Math.min(c.top, c.base)), 0);
+    const range = maxVal - minVal || 1;
+
+    const toY = (v: number) => H - PAD - ((v - minVal) / range) * (H - PAD * 2);
+    const colW = (W - PAD * 2) / computedSteps.length;
+    const barW = Math.min(42, colW * 0.62);
+
+    return (
+      <div style={{ position: "relative" }}>
+        <ChartTooltip tip={tip} />
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+          <line x1={PAD} y1={toY(0)} x2={W - PAD} y2={toY(0)} stroke="var(--line-soft)" />
+          {computedSteps.map((step, idx) => {
+            const cx = PAD + idx * colW + colW / 2;
+            const x = cx - barW / 2;
+            const y1 = toY(step.top);
+            const y2 = toY(step.base);
+            const barH = Math.max(4, Math.abs(y2 - y1));
+            const topY = Math.min(y1, y2);
+
+            return (
+              <g
+                key={idx}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => {
+                  setTip({
+                    x: cx,
+                    y: topY - 10,
+                    title: step.label,
+                    items: [{ label: step.isTotal ? "Total" : "Delta", value: `${step.val > 0 && !step.isTotal ? "+" : ""}${fmt(step.val)}`, color: step.color }],
+                  });
+                }}
+                onMouseLeave={() => setTip(null)}
+              >
+                <rect x={x} y={topY} width={barW} height={barH} rx="3" fill={step.color} fillOpacity="0.8" stroke={step.color} strokeWidth="1.5" />
+                <text x={cx} y={topY - 6} textAnchor="middle" fill="var(--text)" fontSize="10" fontFamily="var(--mono)" fontWeight="600">
+                  {step.val > 0 && !step.isTotal ? `+${fmt(step.val)}` : fmt(step.val)}
+                </text>
+                <text x={cx} y={H - PAD + 16} textAnchor="middle" fill="var(--text-faint)" fontSize="10.5">
+                  {step.label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  }
+
   // 3. Line, Area, Scatter
   if (kind === "line" || kind === "area" || kind === "scatter") {
     const ss = (series.length ? series : [{ name: b.name || "Value", points: data.map((d, i) => ({ x: d.label || i, y: d.value })) }]).filter(
@@ -1403,6 +1606,8 @@ export function QuestionBlock({ b }: { b: CanvasBlock }) {
   );
   const allowCustom = b.allowCustom !== false;
   const showSkip = b.skipButton !== false && b.skip !== false;
+  const requireSubmit = Boolean(b.requireSubmit || b.submitButton || b.submitLabel || b.inForm);
+  const submitLabel = b.submitLabel || b.submitButton || "Submit Answer";
 
   const [selected, setSelected] = useState<string | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
@@ -1411,10 +1616,22 @@ export function QuestionBlock({ b }: { b: CanvasBlock }) {
 
   const handleSelect = (opt: { id: string; label: string }) => {
     setSelected(opt.id);
+    if (requireSubmit) return;
     setAnswered(opt.label);
     const activeId = useApp.getState().activeId;
     if (activeId) {
       send(activeId, opt.label, []);
+    }
+  };
+
+  const handleSubmit = () => {
+    const chosen = options.find((o) => o.id === selected);
+    if (!chosen) return;
+    setAnswered(chosen.label);
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      const payload = JSON.stringify({ question: q, answer: chosen.label, id: chosen.id }, null, 2);
+      send(activeId, payload, []);
     }
   };
 
@@ -1507,11 +1724,21 @@ export function QuestionBlock({ b }: { b: CanvasBlock }) {
               </button>
             )}
             <span style={{ flex: 1 }} />
-            {showSkip && (
+            {requireSubmit ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!selected}
+                onClick={handleSubmit}
+                style={{ height: 26, padding: "0 12px", fontSize: "11px" }}
+              >
+                {submitLabel}
+              </button>
+            ) : showSkip ? (
               <button className="comp-action-btn skip" onClick={handleSkip}>
                 Skip
               </button>
-            )}
+            ) : null}
           </>
         )}
       </div>
@@ -1658,8 +1885,7 @@ export function SliderBlock({ b }: { b: any }) {
               inset: 0,
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0 10px",
+              justifyContent: "center",
               pointerEvents: "none",
               color: "var(--text)",
               mixBlendMode: "difference",
@@ -1667,9 +1893,7 @@ export function SliderBlock({ b }: { b: any }) {
               transition: "opacity 0.15s ease",
             }}
           >
-            <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: "var(--mono)" }}>{min}{unit}</span>
-            <span style={{ fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)" }}>{val}{unit}</span>
-            <span style={{ fontSize: "10px", fontWeight: 600, fontFamily: "var(--mono)" }}>{max}{unit}</span>
+            <span style={{ fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "0.02em" }}>{val}{unit}</span>
           </div>
         </div>
       </div>
@@ -2154,6 +2378,744 @@ export function ProgressBlock({ b }: { b: any }) {
   );
 }
 
+/* ---------------------------------------------------- palette color swatch picker */
+export function ColorPickerBlock({ b, onChange }: { b: any; onChange?: (c: string) => void }) {
+  const defaultColors = [
+    "#7C3AED", "#FF6B6B", "#F59E0B", "#10B981", "#38BDF8",
+    "#64748B", "#F43F5E", "#D97706", "#059669", "#1E293B",
+  ];
+  const colors: string[] = b.colors || b.palette || b.swatches || defaultColors;
+  const [selected, setSelected] = useState<string>(b.value || colors[0]);
+  const [copied, setCopied] = useState(false);
+  const label = b.label || b.title;
+
+  const handleSelect = (c: string) => {
+    setSelected(c);
+    if (onChange) onChange(c);
+    if (b.onChange) b.onChange(c);
+  };
+
+  const copyHex = async () => {
+    const ok = await copyToClipboard(selected);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }
+  };
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <I.palette size={13} />
+          {label || "Palette Color Selector"}
+        </span>
+        <button
+          type="button"
+          onClick={copyHex}
+          title="Copy Hex"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: "11px",
+            fontFamily: "var(--mono)",
+            color: "var(--text)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--line-soft)",
+            padding: "2px 8px",
+            borderRadius: "var(--r-xs)",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: selected }} />
+          {selected.toUpperCase()}
+          <span style={{ fontSize: "10px", color: "var(--text-faint)", marginLeft: 2 }}>{copied ? "✓" : "copy"}</span>
+        </button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {colors.map((c) => {
+          const isSelected = selected.toLowerCase() === c.toLowerCase();
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => handleSelect(c)}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                background: c,
+                border: isSelected ? "2.5px solid var(--surface)" : "1.5px solid rgba(255,255,255,0.12)",
+                boxShadow: isSelected ? `0 0 0 2px var(--accent)` : "none",
+                cursor: "pointer",
+                padding: 0,
+                transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                transform: isSelected ? "scale(1.12)" : "scale(1)",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              {isSelected && <span style={{ fontSize: 10, color: "#fff", filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.6))" }}>✓</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- interactive calendar date picker */
+export function CalendarBlock({ b, onChange }: { b: any; onChange?: (d: string) => void }) {
+  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 7, 28)); // Aug 2026
+  const [selectedDay, setSelectedDay] = useState<number>(28);
+  const label = b.label || b.title;
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayIndex = new Date(year, month, 1).getDay();
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const selectDay = (day: number) => {
+    setSelectedDay(day);
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (onChange) onChange(dateStr);
+    if (b.onChange) b.onChange(dateStr);
+  };
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <I.calendar size={13} />
+          {label || "Calendar"}
+        </span>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <button type="button" onClick={prevMonth} className="icon-btn sm" style={{ width: 22, height: 22 }}>‹</button>
+          <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text)", minWidth: 90, textAlign: "center" }}>
+            {monthNames[month]} {year}
+          </span>
+          <button type="button" onClick={nextMonth} className="icon-btn sm" style={{ width: 22, height: 22 }}>›</button>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, textAlign: "center" }}>
+        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+          <div key={d} style={{ fontSize: "9.5px", color: "var(--text-faint)", padding: "2px 0", fontWeight: 600 }}>{d}</div>
+        ))}
+        {Array.from({ length: firstDayIndex }).map((_, i) => (
+          <div key={`pad-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const isSelected = selectedDay === day;
+          return (
+            <button
+              key={day}
+              type="button"
+              onClick={() => selectDay(day)}
+              style={{
+                fontSize: "11px",
+                fontFamily: "var(--mono)",
+                padding: "4px 0",
+                borderRadius: "var(--r-xs)",
+                border: "none",
+                background: isSelected ? "var(--accent)" : "transparent",
+                color: isSelected ? "#fff" : "var(--text)",
+                fontWeight: isSelected ? 600 : 400,
+                cursor: "pointer",
+                transition: "background var(--t-fast)",
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: "10.5px", color: "var(--text-dim)", textAlign: "right", marginTop: 2 }}>
+        Selected: <span style={{ color: "var(--text)", fontWeight: 550 }}>{monthNames[month]} {selectedDay}, {year}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- digital world clock */
+export function ClockBlock({ b }: { b: any }) {
+  const [time, setTime] = useState(() => new Date());
+  const [tz, setTz] = useState("Local");
+  const label = b.label || b.title;
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getTimeString = () => {
+    try {
+      if (tz === "UTC") return time.toUTCString().slice(17, 25) + " UTC";
+      return time.toLocaleTimeString();
+    } catch {
+      return time.toLocaleTimeString();
+    }
+  };
+
+  const dateStr = time.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <I.clock size={13} />
+          {label || "Digital Clock"}
+        </span>
+        <div style={{ display: "inline-flex", gap: 4 }}>
+          {["Local", "UTC"].map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTz(t)}
+              style={{
+                fontSize: "10px",
+                fontFamily: "var(--mono)",
+                padding: "1px 6px",
+                borderRadius: 3,
+                border: "none",
+                background: tz === t ? "var(--surface-3)" : "transparent",
+                color: tz === t ? "var(--text)" : "var(--text-faint)",
+                cursor: "pointer",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ fontSize: "24px", fontWeight: 600, color: "var(--text)", fontFamily: "var(--mono)", fontVariantNumeric: "tabular-nums" }}>
+        {getTimeString()}
+      </div>
+      <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+        {dateStr}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- minimalist weather widget */
+export function WeatherBlock({ b }: { b: any }) {
+  const city = b.city || b.location || "San Francisco, CA";
+  const temp = b.temp || "72°F";
+  const condition = b.condition || "Partly Cloudy";
+  const high = b.high || "76°";
+  const low = b.low || "58°";
+  const humidity = b.humidity || "52%";
+  const wind = b.wind || "8 mph";
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text)" }}>{city}</div>
+          <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>{condition}</div>
+        </div>
+        <span style={{ color: "var(--accent)" }}>
+          <I.cloud size={24} />
+        </span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: "30px", fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
+          {temp}
+        </span>
+        <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
+          H: {high} L: {low}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, paddingTop: 8, borderTop: "1px solid var(--line-soft)", fontSize: "11px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)" }}>
+          <span>Humidity</span>
+          <span style={{ color: "var(--text)", fontWeight: 500, fontFamily: "var(--mono)" }}>{humidity}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)" }}>
+          <span>Wind</span>
+          <span style={{ color: "var(--text)", fontWeight: 500, fontFamily: "var(--mono)" }}>{wind}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- interactive search bar */
+export function SearchBarBlock({ b, onSearch }: { b: any; onSearch?: (q: string) => void }) {
+  const [val, setVal] = useState(b.value || "");
+  const placeholder = b.placeholder || "Search anything...";
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setVal(v);
+    if (onSearch) onSearch(v);
+    if (b.onSearch) b.onSearch(v);
+  };
+
+  const clear = () => {
+    setVal("");
+    if (onSearch) onSearch("");
+  };
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ color: "var(--text-faint)", display: "inline-flex" }}><I.search size={14} /></span>
+      <input
+        type="text"
+        value={val}
+        onChange={handleChange}
+        placeholder={placeholder}
+        style={{
+          flex: 1,
+          border: "none",
+          background: "transparent",
+          outline: "none",
+          color: "var(--text)",
+          fontSize: "var(--fs-xs)",
+          fontFamily: "var(--font-sans)",
+        }}
+      />
+      {val && (
+        <button
+          type="button"
+          onClick={clear}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "var(--text-faint)",
+            cursor: "pointer",
+            fontSize: "13px",
+            padding: "0 4px",
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- tags editor */
+export function TagsInputBlock({ b, onChange }: { b: any; onChange?: (tags: string[]) => void }) {
+  const [tags, setTags] = useState<string[]>(b.tags || b.items || ["React", "TypeScript", "Tailwind"]);
+  const [inputVal, setInputVal] = useState("");
+  const label = b.label || b.title;
+
+  const addTag = () => {
+    const trimmed = inputVal.trim();
+    if (trimmed && !tags.includes(trimmed)) {
+      const next = [...tags, trimmed];
+      setTags(next);
+      setInputVal("");
+      if (onChange) onChange(next);
+      if (b.onChange) b.onChange(next);
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    const next = tags.filter((t) => t !== tagToRemove);
+    setTags(next);
+    if (onChange) onChange(next);
+    if (b.onChange) b.onChange(next);
+  };
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 8 }}>
+      {label && <span style={{ fontSize: "11px", fontWeight: 550, color: "var(--text-dim)" }}>{label}</span>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        {tags.map((t) => (
+          <span
+            key={t}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: "11px",
+              padding: "2px 8px",
+              background: "var(--surface-2)",
+              border: "1px solid var(--line-soft)",
+              borderRadius: "var(--r-xs)",
+              color: "var(--text)",
+            }}
+          >
+            #{t}
+            <button
+              type="button"
+              onClick={() => removeTag(t)}
+              style={{ border: "none", background: "transparent", color: "var(--text-faint)", cursor: "pointer", padding: 0, fontSize: 11 }}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+          placeholder="+ tag"
+          style={{
+            border: "none",
+            background: "transparent",
+            outline: "none",
+            color: "var(--text)",
+            fontSize: "11px",
+            width: 60,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- file upload dropzone */
+export function FileUploadBlock({ b }: { b: any }) {
+  const label = b.label || b.title || "Dropzone File Target";
+  const accept = b.accept || "PNG, JPG, CSV, PDF up to 25MB";
+  const [uploaded, setUploaded] = useState(false);
+
+  return (
+    <div
+      className="canvas-card a-blk"
+      onClick={() => setUploaded(!uploaded)}
+      style={{
+        padding: "16px",
+        background: "var(--surface)",
+        border: "1.5px dashed var(--line)",
+        borderRadius: "var(--r)",
+        textAlign: "center",
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span style={{ color: "var(--accent)" }}><I.file size={20} /></span>
+      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)" }}>{label}</span>
+      <span style={{ fontSize: "10.5px", color: "var(--text-faint)" }}>{accept}</span>
+      {uploaded && (
+        <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5, fontSize: "10.5px", color: "var(--ok)", background: "rgba(34,197,94,0.1)", padding: "2px 8px", borderRadius: 4 }}>
+          ✓ dataset-v2.csv (1.4MB) ready
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- segmented control tabs */
+export function SegmentedControlBlock({ b, onChange }: { b: any; onChange?: (val: string) => void }) {
+  const options = (b.options || ["1H", "24H", "7D", "30D"]).map((o: any) =>
+    typeof o === "string" ? { id: o, label: o } : o
+  );
+  const [val, setVal] = useState(b.value || options[0]?.id);
+
+  const handleSelect = (id: string) => {
+    setVal(id);
+    if (onChange) onChange(id);
+    if (b.onChange) b.onChange(id);
+  };
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "8px 10px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "inline-flex", width: "fit-content" }}>
+      <div className="comp-switcher" style={{ margin: 0 }}>
+        {options.map((opt: any) => (
+          <button
+            key={opt.id}
+            type="button"
+            data-active={val === opt.id}
+            onClick={() => handleSelect(opt.id)}
+            style={{ fontSize: "11px", padding: "3px 10px" }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- button group */
+export function ButtonGroupBlock({ b }: { b: any }) {
+  const items = b.items || [{ label: "Copy" }, { label: "Share" }, { label: "Export" }];
+  const [clickedIdx, setClickedIdx] = useState<number | null>(null);
+
+  const handleClick = (idx: number, it: any) => {
+    setClickedIdx(idx);
+    setTimeout(() => setClickedIdx(null), 900);
+    if (it.action && typeof it.action === "function") it.action();
+  };
+
+  return (
+    <div style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", margin: "4px 0" }}>
+      {items.map((it: any, idx: number) => {
+        const isClicked = clickedIdx === idx;
+        return (
+          <button
+            key={idx}
+            type="button"
+            className="btn"
+            onClick={() => handleClick(idx, it)}
+            style={{
+              height: 28,
+              padding: "0 11px",
+              fontSize: "11.5px",
+              background: isClicked ? "var(--surface-3)" : "var(--surface-2)",
+              color: isClicked ? "var(--accent)" : "var(--text)",
+            }}
+          >
+            {isClicked ? "✓ Done" : it.label || `Button ${idx + 1}`}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- modular form container */
+function renderFormField(f: any, val: any, onChange: (v: any) => void) {
+  const type = f.type || f.kind || "text";
+  switch (type) {
+    case "dropdown":
+    case "select":
+      return <DropdownBlock b={{ ...f, value: val, onChange }} />;
+    case "slider":
+      return <SliderBlock b={{ ...f, value: val, onChange }} />;
+    case "color-picker":
+    case "palette":
+      return <ColorPickerBlock b={{ ...f, value: val, onChange }} />;
+    case "checkbox":
+      return <CheckboxBlock b={{ ...f, checked: Boolean(val), onChange: (c: boolean) => onChange(c) }} />;
+    case "radio":
+      return <RadioBlock b={{ ...f, value: val, onChange }} />;
+    case "rating":
+      return <RatingBlock b={{ ...f, value: val, onChange }} />;
+    case "date":
+    case "calendar":
+      return <CalendarBlock b={{ ...f, value: val, onChange }} />;
+    case "input":
+    case "text":
+    case "number":
+    default:
+      return (
+        <input
+          type={type === "number" ? "number" : "text"}
+          value={val ?? ""}
+          onChange={(e) => onChange(type === "number" ? Number(e.target.value) : e.target.value)}
+          placeholder={f.placeholder || `Enter ${f.label || ""}`}
+          className="comp-custom-input"
+          style={{ width: "100%", boxSizing: "border-box" }}
+        />
+      );
+  }
+}
+
+export function FormBlock({ b }: { b: CanvasBlock }) {
+  const title = b.title || "Form";
+  const desc = b.description || b.desc;
+  const submitLabel = b.submitLabel || b.submitButton || "Submit Answers";
+  const fields = b.fields || b.items || [];
+  const [values, setValues] = useState<Record<string, any>>(() => {
+    const init: Record<string, any> = {};
+    for (const f of fields) {
+      if (f.value !== undefined) init[f.id || f.name] = f.value;
+      else if (f.type === "color-picker") init[f.id || f.name] = "#7C3AED";
+      else if (f.type === "slider") init[f.id || f.name] = f.min ?? 0;
+      else if (f.type === "dropdown" && f.options?.[0]) init[f.id || f.name] = f.options[0].value ?? f.options[0];
+    }
+    return init;
+  });
+  const [submitted, setSubmitted] = useState(false);
+
+  const updateField = (id: string, val: any) => {
+    setValues((prev) => ({ ...prev, [id]: val }));
+  };
+
+  const handleSubmit = () => {
+    setSubmitted(true);
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      const payload = JSON.stringify({
+        form: title,
+        answers: values,
+      }, null, 2);
+      send(activeId, payload, []);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="canvas-card a-blk" style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--line-soft)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--fs-sm)", fontWeight: 550, color: "var(--text)" }}>
+            <span style={{ color: "var(--ok)", fontWeight: 700 }}>✓</span>
+            <span>{title} Submitted</span>
+          </div>
+          <button className="comp-action-btn" onClick={() => setSubmitted(false)}>
+            Modify answers
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", fontSize: "11.5px" }}>
+          {Object.entries(values).map(([k, v]) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ color: "var(--text-faint)" }}>{k}</span>
+              <span style={{ color: "var(--text)", fontWeight: 500, fontFamily: typeof v === "number" ? "var(--mono)" : "inherit" }}>
+                {typeof v === "object" ? JSON.stringify(v) : String(v)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div>
+        <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)" }}>{title}</div>
+        {desc && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>{desc}</div>}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {fields.map((f: any, idx: number) => {
+          const fid = f.id || f.name || `field_${idx}`;
+          const currentVal = values[fid] ?? f.value ?? "";
+          return (
+            <div key={fid} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {f.label && <label style={{ fontSize: "11px", fontWeight: 500, color: "var(--text-dim)" }}>{f.label}</label>}
+              {renderFormField(f, currentVal, (newVal) => updateField(fid, newVal))}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--line-soft)" }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleSubmit}
+          style={{ height: 30, padding: "0 16px", fontSize: "12px" }}
+        >
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- reactive widget & live formula calculator */
+export function ReactiveWidgetBlock({ b }: { b: CanvasBlock }) {
+  const title = b.title || "Interactive Scenario Simulator";
+  const desc = b.description || b.desc;
+  const initialVars = (b as any).state || (b as any).variables || { price: 49, units: 150, discount: 10 };
+  const [vars, setVars] = useState<Record<string, any>>(initialVars);
+
+  const calculate = (state: Record<string, any>) => {
+    const s = { ...state };
+    try {
+      const price = Number(s.price ?? 49);
+      const units = Number(s.units ?? s.quantity ?? 100);
+      const discount = Number(s.discount ?? 0);
+      s.gross = Math.round(price * units);
+      s.net = Math.round(price * units * (1 - discount / 100));
+      s.mrr = s.net;
+      s.arr = s.net * 12;
+    } catch {}
+    return s;
+  };
+
+  const computed = useMemo(() => calculate(vars), [vars]);
+
+  const updateVar = (key: string, val: any) => {
+    setVars((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const sendToAi = () => {
+    const activeId = useApp.getState().activeId;
+    if (activeId) {
+      const payload = JSON.stringify({
+        scenario: title,
+        inputs: vars,
+        computedResults: computed,
+      }, null, 2);
+      send(activeId, payload, []);
+    }
+  };
+
+  const controls = (b as any).controls || [
+    { id: "price", label: "Seat Price ($)", type: "slider", min: 10, max: 200, step: 5, value: vars.price },
+    { id: "units", label: "Active Subscriptions", type: "stepper", min: 10, max: 1000, step: 25, value: vars.units },
+  ];
+
+  return (
+    <div className="canvas-card a-blk" style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line-soft)", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text)" }}>{title}</div>
+          {desc && <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)", marginTop: 2 }}>{desc}</div>}
+        </div>
+        <button
+          type="button"
+          onClick={sendToAi}
+          className="btn"
+          style={{ height: 26, fontSize: "11px", padding: "0 10px" }}
+        >
+          Send scenario to AI ↗
+        </button>
+      </div>
+
+      {/* Reactive controls */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+        {controls.map((c: any) => {
+          const cid = c.bind || c.id;
+          return (
+            <div key={cid} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {c.type === "slider" ? (
+                <SliderBlock b={{ ...c, value: vars[cid] ?? c.value, onChange: (v: any) => updateVar(cid, v) }} />
+              ) : c.type === "stepper" ? (
+                <StepperBlock b={{ ...c, value: vars[cid] ?? c.value, onChange: (v: any) => updateVar(cid, v) }} />
+              ) : (
+                <InputBlock b={{ ...c, value: vars[cid] ?? c.value, onChange: (v: any) => updateVar(cid, v) }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Dynamically recalculated metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 4 }}>
+        <div style={{ padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+          <div style={{ fontSize: "10.5px", color: "var(--text-faint)", textTransform: "uppercase" }}>Gross Revenue</div>
+          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>${computed.gross}</div>
+        </div>
+        <div style={{ padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+          <div style={{ fontSize: "10.5px", color: "var(--text-faint)", textTransform: "uppercase" }}>Monthly Run Rate</div>
+          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>${computed.mrr}</div>
+        </div>
+        <div style={{ padding: "8px 10px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+          <div style={{ fontSize: "10.5px", color: "var(--text-faint)", textTransform: "uppercase" }}>Annual Run Rate</div>
+          <div style={{ fontSize: "var(--fs-lg)", fontWeight: 600, color: "var(--ok)", fontVariantNumeric: "tabular-nums" }}>${computed.arr}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function parseXmlAttrs(attrStr?: string): Record<string, any> {
   if (!attrStr) return {};
   const attrs: Record<string, any> = {};
@@ -2405,6 +3367,7 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
     case "volume": return <SliderBlock b={b} />;
     case "button":
     case "btn": return <ButtonBlock b={b} />;
+    case "button-group": return <ButtonGroupBlock b={b} />;
     case "checkbox":
     case "check": return <CheckboxBlock b={b} />;
     case "radio":
@@ -2421,6 +3384,25 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
     case "stars": return <RatingBlock b={b} />;
     case "progress":
     case "meter": return <ProgressBlock b={b} />;
+    case "color-picker":
+    case "palette": return <ColorPickerBlock b={b} />;
+    case "calendar":
+    case "date-picker": return <CalendarBlock b={b} />;
+    case "clock":
+    case "world-clock":
+    case "time-picker": return <ClockBlock b={b} />;
+    case "weather": return <WeatherBlock b={b} />;
+    case "search-bar": return <SearchBarBlock b={b} />;
+    case "tags-input":
+    case "tags": return <TagsInputBlock b={b} />;
+    case "file-upload":
+    case "dropzone": return <FileUploadBlock b={b} />;
+    case "segmented-control": return <SegmentedControlBlock b={b} />;
+    case "form":
+    case "survey": return <FormBlock b={b} />;
+    case "reactive":
+    case "calculator":
+    case "widget": return <ReactiveWidgetBlock b={b} />;
     case "callout":
     case "alert": return <Callout b={b} />;
     case "accordion": return <Accordion b={b} />;

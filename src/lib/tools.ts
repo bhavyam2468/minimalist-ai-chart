@@ -55,18 +55,16 @@ export function baseToolDefs() {
     { name: "open_canvas", description: "Show something in the user's canvas right now: a workspace file path, a folder, an artifact id, or an http(s) url. Creates nothing.", parameters: P({ target: str("file path, folder, artifact id, or url"), title: str("optional label") }, ["target"]) },
     {
       name: "search_components",
-      description: "Search the UI Component Marketplace & Library of 90+ components across interactive controls, precision sliders, charts, presentation slides, visualizers, and data cards. Search by type name, category, or semantic tags.",
+      description: "Search the UI Component Library for pre-existing components (sliders, color-pickers, calendars, clocks, weather, search bars, forms, charts, visualizers, slides). Pass a keyword to search by name/tags/type, or leave empty to list all available components.",
       parameters: P({
-        query: str("search query, tag, or component type (e.g. 'slider', 'button', 'chart', 'roadmap', 'math', 'metrics')"),
-        category: { type: "string", enum: ["interactive", "chart", "slides", "visualizer", "data", "layout"], description: "optional category filter" },
-        tag: str("optional specific tag to filter by"),
+        query: { type: "string", description: "optional search keyword (e.g. 'color', 'calendar', 'slider', 'form', 'weather', 'chart') or leave empty/pass 'all' to list all components" },
       }),
     },
     {
       name: "get_component_schema",
-      description: "Get the full schema, accepted props, and live <component> code example for a specific UI component type (e.g. 'slider', 'button', 'checkbox', 'radio', 'dropdown', 'switch', 'chart', 'math', 'chemistry').",
+      description: "Get the exact <component> code snippet and json example for a specific component type (e.g. 'color-picker', 'calendar', 'slider', 'form', 'reactive', 'dropdown', 'radio').",
       parameters: P({
-        type: str("component type name, e.g. 'slider', 'button', 'checkbox', 'dropdown', 'switch', 'chart'"),
+        type: str("component type name"),
       }, ["type"]),
     },
     {
@@ -166,33 +164,31 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
 
     /* ---- UI Component Library & Marketplace ---- */
     case "search_components": {
-      const hits = searchComponents(args.query || "", { category: args.category, tag: args.tag });
+      const hits = searchComponents(args.query || "");
       if (!hits.length) {
-        return `No components found for query "${args.query || ""}". Available types: slider, button, checkbox, radio, dropdown, switch, input, stepper, rating, progress, chart, math, chemistry, switcher, metrics, question.`;
+        return `No components found for query "${args.query || ""}". Available types: slider, color-picker, calendar, clock, timer, stopwatch, weather, search-bar, tags-input, file-upload, button, button-group, checkbox, radio, switch, dropdown, input, stepper, rating, progress, todo, form, question, reactive, chart, math, chemistry, metrics, table, switcher, accordion, callout. Call search_components with no arguments or query="all" to see all.`;
       }
       return hits
         .map(
           (h) =>
             `### ${h.name} (\`<component type="${h.type}" />\`)\n` +
             `Type: \`${h.type}\` | Category: ${h.category}\n` +
-            `Tags: ${h.tags.join(", ")}\n` +
             `Description: ${h.description}\n` +
-            `Example:\n\`\`\`html\n${h.snippet}\n\`\`\``
+            `Ready-to-use tag:\n\`\`\`html\n${h.snippet}\n\`\`\``
         )
         .join("\n\n---\n\n");
     }
     case "get_component_schema": {
-      const def = getComponentDef(args.type);
+      const def = getComponentDef(args.type || args.query || "");
       if (!def) {
-        return `Component type "${args.type}" not found. Use search_components to explore available component types.`;
+        return `Component type "${args.type || ""}" not found. Use search_components to explore available component types.`;
       }
       return (
-        `# Component: ${def.name} (\`${def.type}\`)\n` +
+        `# Component: ${def.name} (\`<component type="${def.type}" />\`)\n` +
         `Category: ${def.category}\n` +
         `Description: ${def.description}\n\n` +
-        `## Properties Schema:\n\`\`\`json\n${JSON.stringify(def.schema, null, 2)}\n\`\`\`\n\n` +
-        `## Quick Snippet:\n\`\`\`html\n${def.snippet}\n\`\`\`\n\n` +
-        `## Full JSON Structure:\n\`\`\`json\n${def.jsonSnippet}\n\`\`\``
+        `## Ready-to-use HTML Tag:\n\`\`\`html\n${def.snippet}\n\`\`\`\n\n` +
+        `## JSON Format:\n\`\`\`json\n${def.jsonSnippet}\n\`\`\``
       );
     }
 

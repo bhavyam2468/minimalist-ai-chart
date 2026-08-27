@@ -17,6 +17,32 @@ export interface Skill {
 
 export const SKILLS: Skill[] = [
   {
+    name: "generative-ui",
+    description:
+      "Create inline interactive UI widgets (<component>) or .ui.json canvas files: color-picker palette, calendar date picker, precision slider, clock, weather, search bar, multi-field form with submit, reactive calculators, charts, visualizers, and slides.",
+    always: true,
+    body: `# generative-ui
+Always prefer creating UI from the pre-existing component library with \`<component type="..." ... />\` directly inline in your message. If and only if no suitable pre-existing component fits the user's needs, resort to writing custom HTML/CSS/JS files in the workspace with \`write_file\` and surfacing them with \`open_canvas\`.
+
+## Pre-Existing Component Types
+- **color-picker**: \`<component type="color-picker" label="Theme Swatches" value="#7C3AED" colors='["#7C3AED","#FF6B6B","#10B981"]' />\`
+- **calendar**: \`<component type="calendar" label="Target Date" value="2026-08-28" />\`
+- **slider**: \`<component type="slider" label="Capacity" value="65" min="0" max="100" unit="%" />\`
+- **clock**: \`<component type="clock" label="System Clock" />\`
+- **weather**: \`<component type="weather" city="New York City, NY" temp="74°F" condition="Clear Skies" />\`
+- **search-bar**: \`<component type="search-bar" placeholder="Search components..." />\`
+- **form**: Multi-field form container linked to a Submit button that sends structured JSON back:
+  \`<component type="form" title="Config" submitLabel="Apply" fields='[{"id":"color","label":"Accent","type":"color-picker"},{"id":"env","label":"Env","type":"dropdown","options":["dev","prod"]}]' />\`
+- **reactive**: Dynamic scenario & formula calculator updating charts/metrics in real time:
+  \`<component type="reactive" title="Simulator" state='{"price":50,"qty":100}' controls='[{"id":"price","type":"slider","min":10,"max":200}]' />\`
+- **question**: \`<component type="question" question="Which model?" options='[{"id":"v1","label":"Standard"},{"id":"v2","label":"Pro"}]' requireSubmit="true" />\`
+- **charts**: \`<component type="chart" kind="line|bar|hbar|donut|pie|bubble|treemap|waterfall|radar|gauge|funnel|candlestick|heatmap" data='[...]' />\`
+- **chemistry**: \`<component type="chemistry" molecule="caffeine" />\`
+- **math**: \`<component type="math" fn="sin(x)*cos(2*x)" />\`
+- **slides**: \`<component type="slide:title" title="..." subtitle="..." />\`
+`,
+  },
+  {
     name: "skill-finder",
     description:
       "Discover which skills exist and load them. Use at the start of any non-trivial task, or whenever the user mentions a file type, a workflow or a tool you are not sure how to drive.",

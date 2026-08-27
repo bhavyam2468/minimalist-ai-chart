@@ -42,14 +42,44 @@ Use \`artifact\` when a chart, dashboard, tool or embed communicates better than
 Keep context lean with add_context / remove_context / compact_context.
 
 ## Summoning Tools & Inline Generative UI (<component>)
-- **Summon Tools Inline**: Prefer doing over describing. You have tools: \`web_search\`, \`web_fetch\`, \`run_python\`, \`read_file\`, \`edit_file\`, \`write_file\`, \`list_files\`, \`open_canvas\`, etc. Summon them whenever freshness, computations, or workspace actions are needed.
-- **Inline Generative UI (<component>)**: Whenever data, metrics, comparisons, chemistry, or math communicate better than prose, summon an interactive UI block inline using \`<component type="..." ...>\` or \`<component>{ ... }</component>\`.
-  - **Uniform Parameters**: All components and charts use uniform, intuitive attributes. Actively guess natural parameters — the SDK is lenient and automatically normalizes attributes or JSON body:
-    - **Charts** (\`type="chart" kind="..."\`): Kinds: \`line\`, \`area\`, \`bar\`, \`hbar\`, \`donut\`, \`pie\`, \`scatter\`, \`radar\`, \`gauge\`, \`funnel\`, \`heatmap\`, \`candlestick\`. Unified data: \`data: [{ label, value }]\` (or \`[x, y]\`), optional \`series\`.
-    - **Chemistry** (\`type="chemistry"\`): Renders 2D organic molecular structures. Pass \`smiles="c1ccccc1"\` or common name \`molecule="aspirin"\`.
-    - **Math Plot** (\`type="math"\`): Interactive 2D function visualizer (Desmos-like). Pass \`fn="sin(x)*cos(2*x)"\` or \`functions=["sin(x)", "cos(x)"]\`.
-    - **Cards & Dashboards**: \`metrics\` (\`items: [{ label, value, delta }]\`), \`switcher\` (\`tabs: [{ label, content }]\`), \`question\` (\`question: "...", options: [{ label }]\`), \`prompts\` (\`prompts: ["..."]\`).
-  If you ever need the exhaustive reference manual, call \`read_skill("generative-ui")\`.
+- **Summon Tools Inline**: Prefer doing over describing. You have tools: \`web_search\`, \`web_fetch\`, \`run_python\`, \`read_file\`, \`edit_file\`, \`write_file\`, \`list_files\`, \`open_canvas\`, \`search_components\`.
+- **Pre-existing UI Component Priority**: ALWAYS try to create UI from the pre-existing component library first using \`<component type="..." ... />\` or \`<component>{ ... }</component>\`. If there is no suitable component in the library, then resort to using HTML and creating custom UI in the workspace with \`write_file\` and presenting it with \`open_canvas\`.
+- **Inline Generative UI (<component>)**: Whenever a widget, input, color palette, calendar, form, metric, chart, slide, chemistry, or math communicates better than prose, summon it inline using \`<component type="..." ... />\`.
+  - **Syntax Rules**:
+    1. ALWAYS start with \`<component type="TYPE" ... />\` or \`<component type="TYPE">JSON</component>\`. NEVER omit \`<component \` at the start.
+    2. Self-closing components end with \`/>\`.
+  - **Pre-existing Component Types**:
+    - **Interactive Controls**:
+      - \`slider\`: \`<component type="slider" label="Compute Capacity" value="65" min="0" max="100" unit="%" />\`
+      - \`color-picker\`: \`<component type="color-picker" label="Accent Palette" value="#7C3AED" colors='["#7C3AED","#FF6B6B","#F59E0B","#10B981","#38BDF8"]' />\`
+      - \`calendar\`: \`<component type="calendar" label="Target Date" value="2026-08-28" />\`
+      - \`clock\`: \`<component type="clock" label="System Clock" />\`
+      - \`timer\`: \`<component type="timer" label="Sprint Countdown" seconds="300" />\`
+      - \`stopwatch\`: \`<component type="stopwatch" label="Benchmark" />\`
+      - \`weather\`: \`<component type="weather" city="New York City, NY" temp="74°F" condition="Clear Skies" />\`
+      - \`search-bar\`: \`<component type="search-bar" placeholder="Search..." />\`
+      - \`tags-input\`: \`<component type="tags-input" label="Tags" tags='["Frontend","UI"]' />\`
+      - \`file-upload\`: \`<component type="file-upload" label="Upload Dataset" accept="CSV, JSON" />\`
+      - \`dropdown\`: \`<component type="dropdown" label="Environment" value="prod" options='[{"value":"dev","label":"Dev"},{"value":"prod","label":"Prod"}]' />\`
+      - \`radio\`: \`<component type="radio" value="balanced" options='[{"id":"fast","label":"Fast"},{"id":"balanced","label":"Balanced"}]' />\`
+      - \`checkbox\`: \`<component type="checkbox" label="Enable telemetry" checked="true" />\`
+      - \`switch\`: \`<component type="switch" label="Auto-save" checked="true" />\`
+      - \`stepper\`: \`<component type="stepper" label="Replicas" value="4" min="1" max="16" unit="nodes" />\`
+      - \`button\`: \`<component type="button" label="Deploy Cluster" variant="primary" />\`
+      - \`button-group\`: \`<component type="button-group" items='[{"label":"Copy"},{"label":"Share"}]' />\`
+      - \`segmented-control\`: \`<component type="segmented-control" value="24H" options='["1H","24H","7D","30D"]' />\`
+      - \`todo\`: \`<component type="todo" title="Sprint Tasks" items='[{"text":"Task 1","done":true}]' />\`
+    - **Forms & Reactive Widgets**:
+      - \`form\`: Multi-field form container with a linked Submit button that returns structured JSON answers to the conversation:
+        \`<component type="form" title="Config Form" submitLabel="Submit" fields='[{"id":"env","label":"Env","type":"dropdown","options":["dev","prod"]},{"id":"nodes","label":"Nodes","type":"slider","value":4}]' />\`
+      - \`question\`: \`<component type="question" question="Which strategy?" options='[{"id":"a","label":"Option A"},{"id":"b","label":"Option B"}]' requireSubmit="true" />\`
+      - \`reactive\`: Live client-side calculator combining inputs + dynamically recalculating metrics/charts:
+        \`<component type="reactive" title="Revenue Calculator" state='{"price":49,"units":100}' controls='[{"id":"price","type":"slider","min":10,"max":200}]' />\`
+    - **Charts** (\`type="chart" kind="..."\`): Kinds: \`line\`, \`area\`, \`bar\`, \`hbar\`, \`donut\`, \`pie\`, \`bubble\`, \`treemap\`, \`waterfall\`, \`radar\`, \`gauge\`, \`funnel\`, \`heatmap\`, \`candlestick\`.
+    - **Visualizers**: \`chemistry\` (2D molecular SMILES, e.g. \`molecule="caffeine"\`), \`math\` (2D function plotter, e.g. \`fn="sin(x)*cos(2*x)"\`).
+    - **Presentation Slides**: \`slide:title\`, \`slide:hero\`, \`slide:split\`, \`slide:features\`, \`slide:stats\`, \`slide:roadmap\`, \`slide:quote\`, \`slide:team\`, \`slide:cta\`.
+    - **Data & Layout Cards**: \`metrics\`, \`table\`, \`switcher\`, \`accordion\`, \`callout\`.
+  If you ever need the exhaustive reference manual, call \`read_skill("generative-ui")\` or \`search_components\`.
 
 ## Search Efficiency & Anti-Looping
 Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter
@@ -428,7 +458,30 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       accumulatedContent = hopBase + (out.content || "");
       S().updateNode(chatId, id, { content: accumulatedContent });
 
-      if (ctl.signal.aborted || !out.toolCalls.length) break;
+      if (ctl.signal.aborted) break;
+
+      if (!out.toolCalls.length) {
+        const content = out.content || "";
+        let syntaxError: string | null = null;
+
+        // Missing <component opening tag (e.g. starts with type="dropdown" ...)
+        if (/(?:^|\n)\s*type=["']?(?:slider|dropdown|radio|checkbox|button|input|stepper|rating|progress|color-picker|palette|calendar|date-picker|weather|clock|chart|metrics|form|reactive|question)["']?\s/i.test(content)) {
+          syntaxError = "Your output contained an orphan 'type=\"...\"' attribute without the opening '<component ' tag. Every UI component MUST start with '<component type=\"...\" ... />'.";
+        } else if (/<component\b/i.test(content) && !/<component[\s\S]*?(?:\/>|<\/component>)/i.test(content)) {
+          syntaxError = "Unclosed '<component>' tag. Please close self-closing components with '/>' or container components with '</component>'.";
+        }
+
+        if (syntaxError && hop < 2 && !ctl.signal.aborted) {
+          accumulatedContent = hopBase;
+          cleaned.push({ role: "assistant", content });
+          cleaned.push({
+            role: "system",
+            content: `[UI SYNTAX ERROR]: ${syntaxError}\nRule: Always create UI using valid '<component type="..." ... />' syntax from the pre-existing component library. Example:\n<component type="color-picker" label="Theme Palette" value="#7C3AED" colors='["#7C3AED","#FF6B6B","#10B981"]' />\nPlease output the UI again with valid syntax.`,
+          });
+          continue;
+        }
+        break;
+      }
 
       const records: ToolCallRecord[] = out.toolCalls.map((t) => {
         let args: any = {};

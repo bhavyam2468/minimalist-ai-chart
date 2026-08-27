@@ -293,10 +293,29 @@ export function parseBlocks(src: string): Block[] {
       continue;
     }
 
+    /* Self-healing: if line starts directly with type="..." omitting <component */
+    if (/^\s*type=["']?(?:slider|dropdown|radio|checkbox|button|input|stepper|rating|progress|color-picker|palette|calendar|date-picker|weather|clock|chart|metrics|form|reactive|question)["']?\s/i.test(line)) {
+      let healed = line.trim();
+      if (healed.endsWith(">")) healed = healed.slice(0, -1).trim();
+      if (healed.endsWith("/")) healed = healed.slice(0, -1).trim();
+      out.push({ t: "component", raw: "", attrs: healed, open: false });
+      i++;
+      continue;
+    }
+
     /* <component> */
     if (/^\s*<component/i.test(line)) {
-      // Check immediate self-closing tag: <component ... /> or <component .../>
-      const selfClosing = line.match(/^\s*<component([^>]*?)\s*\/>([\s\S]*)$/i);
+      // Gather multiline opening tag if needed
+      let tagLine = line;
+      let tagEnd = tagLine.indexOf(">");
+      while (tagEnd === -1 && i + 1 < lines.length) {
+        i++;
+        tagLine += " " + lines[i];
+        tagEnd = tagLine.indexOf(">");
+      }
+
+      // Check immediate self-closing tag: <component ... />
+      const selfClosing = tagLine.match(/^\s*<component([\s\S]*?)\s*\/>([\s\S]*)$/i);
       if (selfClosing) {
         const attrs = selfClosing[1].trim();
         const inlineRest = selfClosing[2].trim();
@@ -310,7 +329,7 @@ export function parseBlocks(src: string): Block[] {
 
       const body: string[] = [];
       let closed = false;
-      const tagM = line.match(/^\s*<component([^>]*)>([\s\S]*)$/i);
+      const tagM = tagLine.match(/^\s*<component([\s\S]*?)>([\s\S]*)$/i);
       let attrs = tagM ? tagM[1].trim() : "";
       if (attrs.endsWith("/")) {
         attrs = attrs.slice(0, -1).trim();
