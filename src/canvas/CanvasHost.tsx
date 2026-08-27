@@ -250,9 +250,6 @@ export function CanvasHost({ chatId }: { chatId: string }) {
       onPointerMove={onCanvasPointerMove}
       onPointerLeave={onCanvasPointerLeave}
     >
-      {/* Top Edge Hover Detection Strip */}
-      <div className="cv-top-edge" onMouseEnter={() => setTopHover(true)} />
-
       {/* Floating Top Window Controls Bar — ONLY shows on top hover */}
       <div
         className="cv-floating-bar"
@@ -308,9 +305,6 @@ export function CanvasHost({ chatId }: { chatId: string }) {
 
       {/* Canvas Body — full bleed immersion */}
       <div className="cv-body">{body}</div>
-
-      {/* Bottom Edge Hover Detection Strip */}
-      <div className="cv-bottom-edge" onMouseEnter={() => setBottomHover(true)} />
 
       {!maximized && handles.map((d) => (
         <div key={d} className={`cv-h cv-h-${d}`} onPointerDown={(e) => onPointerDown(e, d)} />

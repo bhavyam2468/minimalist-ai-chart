@@ -89,7 +89,7 @@ function ToolTrace({ node }: { node: Node }) {
               <I.alert size={12} />
             </span>
           ) : (
-            <span style={{ color: "var(--ok, #22c55e)", display: "inline-flex", alignItems: "center" }}>
+            <span style={{ color: "var(--text-faint)", display: "inline-flex", alignItems: "center" }}>
               <I.check size={12} />
             </span>
           )}

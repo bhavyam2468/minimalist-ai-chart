@@ -53,13 +53,13 @@
   top: 12px;
   left: 12px;
   right: 12px;
-  height: 38px;
+  height: 40px;
   max-width: calc(100% - 24px);
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 0 16px;
   background: rgba(14, 16, 22, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -81,8 +81,6 @@
 /* ONLY reveal top bar when hovering top edge/area */
 .cv-win[data-top-hover="true"] .cv-floating-bar,
 .cv-win[data-top-hover="true"] .cv-floating-panel,
-.cv-top-edge:hover ~ .cv-floating-bar,
-.cv-top-edge:hover ~ .cv-floating-panel,
 .cv-floating-bar:hover,
 .cv-floating-panel:hover {
   opacity: 1;
@@ -93,7 +91,7 @@
 .cv-floating-left {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   max-width: 68%;
   overflow: hidden;
 }
@@ -108,7 +106,7 @@
 }
 
 .cv-floating-meta {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -126,9 +124,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-sm);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
@@ -172,16 +170,16 @@
 .cv-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); position: relative; height: 100%; width: 100%; }
 .cv-body > * { flex: 1; min-height: 0; }
 
-/* ---- resize handles ---------------------------------------------------- */
-.cv-h { position: absolute; touch-action: none; z-index: 2; }
-.cv-h-n  { top: -3px;  left: 14px; right: 14px; height: 8px;  cursor: n-resize; }
-.cv-h-s  { bottom: -3px; left: 14px; right: 14px; height: 8px; cursor: s-resize; }
-.cv-h-e  { right: -3px; top: 14px; bottom: 14px; width: 8px;   cursor: e-resize; }
-.cv-h-w  { left: -3px;  top: 14px; bottom: 14px; width: 8px;   cursor: w-resize; }
-.cv-h-ne { top: -4px; right: -4px; width: 18px; height: 18px; cursor: ne-resize; }
-.cv-h-nw { top: -4px; left: -4px;  width: 18px; height: 18px; cursor: nw-resize; }
-.cv-h-se { bottom: -4px; right: -4px; width: 18px; height: 18px; cursor: se-resize; }
-.cv-h-sw { bottom: -4px; left: -4px;  width: 18px; height: 18px; cursor: sw-resize; }
+/* ---- resize handles — high z-index to never be blocked by floating bars -- */
+.cv-h { position: absolute; touch-action: none; z-index: 95; }
+.cv-h-n  { top: -4px;  left: 16px; right: 16px; height: 12px; cursor: ns-resize; }
+.cv-h-s  { bottom: -4px; left: 16px; right: 16px; height: 12px; cursor: ns-resize; }
+.cv-h-e  { right: -4px; top: 16px; bottom: 16px; width: 12px; cursor: ew-resize; }
+.cv-h-w  { left: -4px;  top: 16px; bottom: 16px; width: 12px; cursor: ew-resize; }
+.cv-h-ne { top: -6px; right: -6px; width: 22px; height: 22px; cursor: nesw-resize; z-index: 98; }
+.cv-h-nw { top: -6px; left: -6px;  width: 22px; height: 22px; cursor: nwse-resize; z-index: 98; }
+.cv-h-se { bottom: -6px; right: -6px; width: 22px; height: 22px; cursor: nwse-resize; z-index: 98; }
+.cv-h-sw { bottom: -6px; left: -6px;  width: 22px; height: 22px; cursor: nesw-resize; z-index: 98; }
 
 /* the one visible affordance */
 .cv-grip {
@@ -242,15 +240,15 @@
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 14px;
-  height: 38px;
+  gap: 12px;
+  padding: 6px 16px;
+  height: 42px;
   background: rgba(14, 16, 22, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--r);
-  box-shadow: 0 12px 34px -4px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 38px -4px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   z-index: 55;
   opacity: 0;
   pointer-events: none;
@@ -288,7 +286,7 @@
 .fe-seg button {
   font-size: 12px;
   font-family: var(--font-sans);
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: var(--r-xs);
   color: var(--text-faint);
   transition: all var(--t-fast) var(--ease);
@@ -306,9 +304,9 @@
 }
 
 .fe-bar .icon-btn.sm {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-sm);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
@@ -324,6 +322,8 @@
 .fe-bar .icon-btn.sm:hover {
   background: rgba(255, 255, 255, 0.16);
   color: var(--text);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .fe-bar .icon-btn.sm[data-active="true"] {

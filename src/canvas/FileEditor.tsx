@@ -262,14 +262,16 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
             <button data-active={uiMode === "preview"} onClick={() => setMode("preview")}>view</button>
             <button data-active={uiMode === "edit"} onClick={() => setMode("edit")}>code</button>
           </div>
-          <button
-            className="icon-btn sm"
-            data-active={wrap}
-            title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
-            onClick={() => setWrap((w) => !w)}
-          >
-            <I.wrap size={13} />
-          </button>
+          {uiMode === "edit" && (
+            <button
+              className="icon-btn sm"
+              data-active={wrap}
+              title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
+              onClick={() => setWrap((w) => !w)}
+            >
+              <I.wrap size={13} />
+            </button>
+          )}
           <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
           <button className="icon-btn sm" title="Save (⌘S)" data-active={saved} onClick={save} disabled={!dirty}>
             {saved ? <I.check size={13} /> : "save"}
@@ -301,14 +303,16 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
             ))}
           </div>
         )}
-        <button
-          className="icon-btn sm"
-          data-active={wrap}
-          title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
-          onClick={() => setWrap((w) => !w)}
-        >
-          <I.wrap size={13} />
-        </button>
+        {(!isMd || mode === "edit" || mode === "split") && (
+          <button
+            className="icon-btn sm"
+            data-active={wrap}
+            title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
+            onClick={() => setWrap((w) => !w)}
+          >
+            <I.wrap size={13} />
+          </button>
+        )}
         <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
         <button className="icon-btn sm" data-active={saved} title="Save (⌘S)" onClick={save} disabled={!dirty && !saved}>
           {saved ? <I.check size={13} /> : "save"}

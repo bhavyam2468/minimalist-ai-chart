@@ -37,6 +37,7 @@ function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: 
 /* ------------------------------------------------------- syntax highlight */
 import { highlight } from "./highlight";
 import { copyToClipboard } from "../lib/clipboard";
+import { BlocksView } from "../canvas/Blocks";
 
 /* ---------------------------------------------------------------- helpers */
 function copy(text: string) { return copyToClipboard(text); }
@@ -49,6 +50,9 @@ function openInCanvas(url: string) {
 const Ico = {
   copy: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>,
   chev: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7" /></svg>,
+  chart: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="12" width="4" height="8" rx="1" /><rect x="10" y="6" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="17" rx="1" /></svg>,
+  canvas: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>,
+  bolt: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>,
 };
 
 /* ------------------------------------------------------------------ inline */
@@ -101,8 +105,236 @@ function renderInline(nodes: Inline[], ctx: Ctx, keyPrefix = ""): React.ReactNod
 }
 
 /* ------------------------------------------------------------------ blocks */
+function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open: boolean }) {
+  const [mode, setMode] = useState<"preview" | "code">("preview");
+  const [copied, setCopied] = useState(false);
+
+  const title = useMemo(() => {
+    try {
+      const j = JSON.parse(code);
+      return j.title || (Array.isArray(j) ? "Dashboard" : undefined);
+    } catch {
+      const m = code.match(/"title"\s*:\s*"([^"]+)"/);
+      return m ? m[1] : undefined;
+    }
+  }, [code]);
+
+  const onCopy = async () => {
+    const ok = await copy(code);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }
+  };
+
+  const onOpenCanvas = () => {
+    import("../lib/store").then(({ useApp, uid }) => {
+      const state = useApp.getState();
+      const chatId = state.activeChatId;
+      if (!chatId) return;
+      const fileName = `dash-${uid("ui")}.ui.json`;
+      state.putFile(chatId, {
+        path: fileName,
+        content: code,
+        size: code.length,
+        kind: "ui",
+        state: "idle",
+        updatedAt: Date.now(),
+      });
+      state.openCanvas({ kind: "file", path: fileName });
+    });
+  };
+
+  return (
+    <div className="inline-ui-block a-blk" style={{ margin: "14px 0", borderRadius: "var(--r)", border: "1px solid var(--line-soft)", overflow: "hidden", background: "var(--surface)" }}>
+      <div
+        className="inline-ui-bar"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "7px 12px",
+          background: "var(--surface-2)",
+          borderBottom: "1px solid var(--line-soft)",
+        }}
+      >
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+          <span style={{ color: "var(--accent)", display: "inline-flex", alignItems: "center" }}>
+            {Ico.chart}
+          </span>
+          <span style={{ fontSize: "12.5px", fontWeight: 550, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {title || "Generative UI"}
+          </span>
+          <span
+            style={{
+              fontSize: "10.5px",
+              fontFamily: "var(--mono)",
+              color: "var(--text-faint)",
+              padding: "1px 6px",
+              borderRadius: "var(--r-xs)",
+              background: "rgba(255, 255, 255, 0.05)",
+            }}
+          >
+            {lang || "c1"}
+          </span>
+        </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <div className="fe-seg" style={{ display: "inline-flex", gap: 2, background: "rgba(255, 255, 255, 0.06)", borderRadius: "var(--r-xs)", padding: 2 }}>
+            <button
+              data-active={mode === "preview"}
+              onClick={() => setMode("preview")}
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "var(--r-xs)",
+                border: "none",
+                cursor: "pointer",
+                background: mode === "preview" ? "rgba(255, 255, 255, 0.16)" : "transparent",
+                color: mode === "preview" ? "var(--text)" : "var(--text-faint)",
+                fontWeight: mode === "preview" ? 500 : 400,
+              }}
+            >
+              preview
+            </button>
+            <button
+              data-active={mode === "code"}
+              onClick={() => setMode("code")}
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "var(--r-xs)",
+                border: "none",
+                cursor: "pointer",
+                background: mode === "code" ? "rgba(255, 255, 255, 0.16)" : "transparent",
+                color: mode === "code" ? "var(--text)" : "var(--text-faint)",
+                fontWeight: mode === "code" ? 500 : 400,
+              }}
+            >
+              code
+            </button>
+          </div>
+          <button
+            className="icon-btn sm"
+            title="Open as file in canvas"
+            onClick={onOpenCanvas}
+            style={{ width: 26, height: 26, borderRadius: "var(--r-xs)" }}
+          >
+            {Ico.canvas}
+          </button>
+          <button
+            className="icon-btn sm"
+            title="Copy JSON"
+            onClick={onCopy}
+            style={{ width: 26, height: 26, borderRadius: "var(--r-xs)" }}
+          >
+            {copied ? "copied" : Ico.copy}
+          </button>
+        </div>
+      </div>
+      {mode === "preview" ? (
+        <div className="inline-ui-wrap" style={{ padding: "16px", overflowX: "auto" }}>
+          <BlocksView content={code} />
+        </div>
+      ) : (
+        <div className="md-pre" style={{ margin: 0, border: "none", borderRadius: 0 }}>
+          <code>{highlight(code, "json")}</code>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineToolBlock({ lang, code }: { lang: string; code: string }) {
+  const [open, setOpen] = useState(false);
+  const toolName = lang.startsWith("call:")
+    ? lang.slice(5)
+    : (() => {
+        try {
+          const j = JSON.parse(code);
+          return j.name || j.tool || "tool";
+        } catch {
+          const m = code.match(/"(?:name|tool)"\s*:\s*"([^"]+)"/);
+          return m ? m[1] : "tool";
+        }
+      })();
+
+  const argsHint = useMemo(() => {
+    try {
+      const j = JSON.parse(code);
+      const args = j.arguments || j.args || j;
+      const firstVal = Object.values(args)[0];
+      return typeof firstVal === "string" ? firstVal.slice(0, 60) : "";
+    } catch {
+      return "";
+    }
+  }, [code]);
+
+  return (
+    <div className="inline-tool-call a-blk" style={{ margin: "8px 0" }}>
+      <div
+        className="trace-summary"
+        data-status="done"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 7,
+          height: 28,
+          padding: "0 10px",
+          cursor: "pointer",
+          borderRadius: "var(--r-sm)",
+          background: "var(--surface)",
+          border: "1px solid var(--line-soft)",
+          fontSize: "12px",
+          color: "var(--text-dim)",
+        }}
+      >
+        <span style={{ color: "var(--accent)", display: "inline-flex", alignItems: "center" }}>
+          {Ico.bolt}
+        </span>
+        <b>{toolName}</b>
+        {argsHint && <span style={{ color: "var(--text-faint)" }}>{argsHint}</span>}
+        <span style={{ marginLeft: "auto", color: "var(--text-faint)" }}>{open ? "−" : "+"}</span>
+      </div>
+      {open && (
+        <div
+          className="md-pre"
+          style={{
+            marginTop: 6,
+            padding: "8px 12px",
+            borderRadius: "var(--r-sm)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--line-soft)",
+          }}
+        >
+          <code>{highlight(code, "json")}</code>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boolean }) {
   const [done, setDone] = useState(false);
+
+  const cleanLang = (lang || "").trim().toLowerCase();
+
+  // 1. Inline tool call blocks
+  if (cleanLang === "tool_call" || cleanLang === "call" || cleanLang === "tool" || cleanLang.startsWith("call:")) {
+    return <InlineToolBlock lang={cleanLang} code={code} />;
+  }
+
+  // 2. Inline generative UI blocks (C1 / Thesys declarative JSON)
+  const isUiLang = /^(ui|c1|blocks|ui\.json|json:ui)$/i.test(cleanLang);
+  const isUiJson = cleanLang === "json" && (
+    code.includes('"blocks"') ||
+    (code.includes('"type"') && /"(chart|metrics?|table|tabs|callout|accordion)"/.test(code))
+  );
+
+  if (isUiLang || isUiJson) {
+    return <InlineUIBlock lang={cleanLang} code={code} open={open} />;
+  }
+
   return (
     <div className="md-pre a-blk">
       <div className="md-pre-bar">

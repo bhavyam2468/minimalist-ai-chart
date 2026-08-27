@@ -31,9 +31,9 @@
   --mark-bg:        #d7b28c26;
 
   /* ---- geometry --------------------------------------------------------- */
-  --r:              18px;   /* the radius. bubbles, input bar, panels, cards */
-  --r-sm:           10px;
-  --r-xs:           7px;
+  --r:              14px;   /* standard uniform radius: windows, cards, floating bars, bubbles, inputs */
+  --r-sm:           10px;   /* interactive elements: buttons, dropdown summaries, badges, segments */
+  --r-xs:           6px;    /* inner chips, small toggles, code tags */
   --r-full:         999px;
 
   --sp-1:           4px;

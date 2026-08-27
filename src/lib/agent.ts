@@ -33,7 +33,7 @@ completes — at most one or two per answer), LaTeX with $inline$ and $$display$
 images ![alt](url), bare YouTube links (auto-embedded), and
 <details><summary>title</summary> … </details> for anything long or optional.
 
-## Tools
+## Tools & Generative UI
 Prefer doing over describing. Use \`find_skills\` before an unfamiliar workflow;
 skills carry the exact procedure. Search the web whenever freshness matters.
 Write artefacts to the workspace instead of dumping them in the reply, then
@@ -41,6 +41,18 @@ surface them with \`open_canvas\` — the canvas is a floating viewport beside t
 conversation that holds files (with a real editor), web pages and artefacts.
 Use \`artifact\` when a chart, dashboard, tool or embed communicates better than prose.
 Keep context lean with add_context / remove_context / compact_context.
+
+## Summoning Tools & Generative UI Inline
+- **Summon Tools Inline**: Prefer doing over describing. You have tools: \`web_search\`, \`web_fetch\`, \`run_python\`, \`read_file\`, \`edit_file\`, \`write_file\`, \`list_files\`, \`open_canvas\`, etc. Summon them whenever freshness, computations, or workspace actions are needed.
+- **Inline Generative UI (C1 by Thesys)**: Whenever a chart, metric breakdown, or interactive widget communicates data better than prose, summon an interactive UI block inline in your response using \`\`\`ui (or \`\`\`c1 / \`\`\`blocks) fences containing declarative JSON.
+  Available blocks:
+  - \`{ "type": "chart", "kind": "bar"|"line"|"area"|"pie"|"donut"|"scatter"|"hbar", "title": str, "data": [{ "label": str, "value": num }] }\`
+  - \`{ "type": "metrics", "items": [{ "label": str, "value": str, "delta": str }] }\`
+  - \`{ "type": "table", "columns": [str], "rows": [[str|num]] }\`
+  - \`{ "type": "tabs", "tabs": [{ "label": str, "blocks": [...] }] }\`
+  - \`{ "type": "callout", "kind": "info"|"success"|"warn"|"err", "title": str, "text": str }\`
+  - Sliders, accordions, lists, and markdown blocks.
+  These render as rich, interactive, animated components directly inline in the user's chat!
 
 ## Search Efficiency & Anti-Looping
 Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter
@@ -112,6 +124,49 @@ function buildMessages(c: Chat, threadId?: string | null, excludeId?: string): a
 
 /* --------------------------------------------------------------- network */
 interface StreamOut { content: string; toolCalls: { id: string; name: string; args: string }[]; }
+
+function extractInlineToolCalls(text: string): { id: string; name: string; args: string }[] {
+  const calls: { id: string; name: string; args: string }[] = [];
+
+  // Pattern A: <tool_call> ... </tool_call>
+  const tagRegex = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = tagRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      const name = parsed.name || parsed.tool;
+      const rawArgs = parsed.arguments || parsed.args || {};
+      const args = typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs);
+      if (name) calls.push({ id: uid("call"), name, args });
+    } catch {}
+  }
+
+  // Pattern B: ```tool_call ... ``` or ```call:tool_name ... ```
+  const codeRegex = /```(?:tool_call|call|tool)(?::(\w+))?\s*([\s\S]*?)```/gi;
+  while ((match = codeRegex.exec(text)) !== null) {
+    try {
+      const langTool = match[1];
+      const parsed = JSON.parse(match[2].trim());
+      const name = langTool || parsed.name || parsed.tool;
+      const rawArgs = langTool ? parsed : (parsed.arguments || parsed.args || {});
+      const args = typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs);
+      if (name) calls.push({ id: uid("call"), name, args });
+    } catch {}
+  }
+
+  // Pattern C: <call:(\w+)> ... </call:\1>
+  const tagCallRegex = /<call:(\w+)>([\s\S]*?)<\/call:\1>/gi;
+  while ((match = tagCallRegex.exec(text)) !== null) {
+    try {
+      const name = match[1];
+      const parsed = JSON.parse(match[2].trim());
+      const args = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+      if (name) calls.push({ id: uid("call"), name, args });
+    } catch {}
+  }
+
+  return calls;
+}
 
 async function streamChat(
   messages: any[],
@@ -190,7 +245,16 @@ async function streamChat(
       }
     }
   }
-  return { content, toolCalls: Object.values(calls) };
+
+  const resultCalls = Object.values(calls);
+  if (!resultCalls.length && content) {
+    const inlineCalls = extractInlineToolCalls(content);
+    if (inlineCalls.length) {
+      return { content, toolCalls: inlineCalls };
+    }
+  }
+
+  return { content, toolCalls: resultCalls };
 }
 
 /* ------------------------------------------------------------ compaction */

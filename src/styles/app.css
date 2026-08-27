@@ -76,18 +76,22 @@
 }
 .trace-summary:hover { background: var(--surface-2); border-color: var(--line); color: var(--text); }
 
-/* Status styling for summary pill: green when ok, red when error */
+/* Status styling for summary pill: calm neutral when done, red when error, pulsing when running */
 .trace-summary[data-status="done"] {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.08);
-  color: var(--text);
+  border-color: var(--line-soft);
+  background: var(--surface);
+  color: var(--text-dim);
 }
 .trace-summary[data-status="done"]:hover {
-  border-color: rgba(34, 197, 94, 0.5);
-  background: rgba(34, 197, 94, 0.14);
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
 }
 .trace-summary[data-status="done"] .trace-summary-icon {
-  color: var(--ok, #22c55e);
+  color: var(--text-faint);
+}
+.trace-summary[data-status="done"]:hover .trace-summary-icon {
+  color: var(--text-dim);
 }
 
 .trace-summary[data-status="error"], .trace-summary[data-error="true"] {
@@ -105,6 +109,7 @@
 
 .trace-summary[data-status="running"] {
   border-color: var(--accent-line);
+  background: var(--surface-2);
   color: var(--text);
   animation: pulse 1.6s ease-in-out infinite;
 }
@@ -309,6 +314,12 @@
   transition: border-color var(--t-fast), color var(--t-fast);
 }
 .canvas-thumb:hover { border-color: var(--accent-line); color: var(--text); }
+
+/* inline generative UI in chat */
+.inline-ui-block { width: 100%; max-width: 100%; margin: 14px 0; box-sizing: border-box; }
+.inline-ui-wrap { width: 100%; box-sizing: border-box; }
+.inline-ui-wrap .canvas-inner { padding: 0 !important; overflow: visible !important; height: auto !important; min-height: auto !important; }
+.inline-ui-wrap .canvas-stage { max-width: 100% !important; padding: 0 !important; background: transparent !important; border: none !important; box-shadow: none !important; }
 
 /* selection quote popup */
 .sel-pop {
