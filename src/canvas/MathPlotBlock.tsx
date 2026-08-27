@@ -6,7 +6,8 @@ interface MathPlotProps {
   expr?: string;
   formula?: string;
   equation?: string;
-  desmos?: string;
+  desmos?: string | boolean;
+  embed?: boolean;
   title?: string;
   caption?: string;
   xmin?: number;
@@ -24,49 +25,91 @@ const MATH_PALETTE = [
   "#a78bfa",
 ];
 
-function compileMathExpr(expr: string): ((x: number) => number) | null {
-  try {
-    let clean = expr.trim();
-    clean = clean.replace(/^(?:f\(x\)|y)\s*=\s*/i, "");
-    clean = clean
-      .replace(/\^/g, "**")
-      .replace(/\bpi\b/gi, "Math.PI")
-      .replace(/\be\b/g, "Math.E")
-      .replace(/\bsin\b/gi, "Math.sin")
-      .replace(/\bcos\b/gi, "Math.cos")
-      .replace(/\btan\b/gi, "Math.tan")
-      .replace(/\bsqrt\b/gi, "Math.sqrt")
-      .replace(/\babs\b/gi, "Math.abs")
-      .replace(/\bexp\b/gi, "Math.exp")
-      .replace(/\bln\b/gi, "Math.log")
-      .replace(/\blog\b/gi, "Math.log10")
-      .replace(/\basin\b/gi, "Math.asin")
-      .replace(/\bacos\b/gi, "Math.acos")
-      .replace(/\batan\b/gi, "Math.atan")
-      .replace(/(\d+)\s*([a-zA-Z(])/g, "$1 * $2");
+function cleanMathExpr(expr: string): string {
+  let clean = expr.trim();
+  clean = clean.replace(/\\left/g, "").replace(/\\right/g, "");
+  clean = clean.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "(($1)/($2))");
+  clean = clean.replace(/\\sqrt\{([^}]+)\}/g, "sqrt($1)");
+  clean = clean.replace(/\\sqrt\(([^)]+)\)/g, "sqrt($1)");
+  clean = clean.replace(/\\(?:cdot|times)/g, "*");
+  clean = clean.replace(/\\(sin|cos|tan|exp|ln|log|abs|sinh|cosh|tanh|asin|acos|atan)/g, "$1");
+  clean = clean.replace(/[{]/g, "(").replace(/[}]/g, ")");
+  clean = clean.replace(/\^/g, "**");
+  clean = clean.replace(/\bpi\b/gi, "Math.PI");
+  clean = clean.replace(/\be\b/g, "Math.E");
 
-    const fn = new Function("x", `"use strict"; return (${clean});`) as (x: number) => number;
-    const testVal = fn(1);
-    if (typeof testVal !== "number" || isNaN(testVal)) {
-      // test with 0 or 2 in case of singularity at 1
-      const testVal2 = fn(2);
-      if (typeof testVal2 !== "number" || isNaN(testVal2)) return null;
+  ["sin", "cos", "tan", "sqrt", "abs", "exp", "sinh", "cosh", "tanh", "asin", "acos", "atan"].forEach((fn) => {
+    const re = new RegExp("\\b" + fn + "\\b", "g");
+    clean = clean.replace(re, "Math." + fn);
+  });
+
+  clean = clean.replace(/\bln\b/g, "Math.log");
+  clean = clean.replace(/\blog\b/g, "Math.log10");
+  clean = clean.replace(/(\d+)\s*([a-zA-Z])/g, "$1 * $2");
+  clean = clean.replace(/(\))\s*(\()/g, "$1 * $2");
+  clean = clean.replace(/(\d+)\s*\(/g, "$1 * (");
+  clean = clean.replace(/([xXyY])\s*\(/g, "$1 * (");
+  clean = clean.replace(/(\))\s*([xXyY])/g, "$1 * $2");
+  return clean;
+}
+
+type CompiledEquation =
+  | { type: "explicit"; fn: (x: number) => number }
+  | { type: "implicit"; fn: (x: number, y: number) => number }
+  | null;
+
+function compileEquation(raw: string): CompiledEquation {
+  try {
+    let s = raw.trim();
+    if (s.includes("=")) {
+      const parts = s.split("=");
+      const leftPart = parts[0].trim();
+      const rightPart = parts.slice(1).join("=").trim();
+      const lhs = cleanMathExpr(leftPart);
+      const rhs = cleanMathExpr(rightPart);
+
+      // Check if explicit y = f(x)
+      if (/^[yY]$/.test(leftPart) || /^f\(x\)$/i.test(leftPart)) {
+        const fn = new Function("x", `"use strict"; return (${rhs});`) as (x: number) => number;
+        fn(1);
+        return { type: "explicit", fn };
+      }
+      if (/^[yY]$/.test(rightPart)) {
+        const fn = new Function("x", `"use strict"; return (${lhs});`) as (x: number) => number;
+        fn(1);
+        return { type: "explicit", fn };
+      }
+
+      // Implicit equation LHS - RHS = 0
+      const fn = new Function("x", "y", `"use strict"; return ((${lhs}) - (${rhs}));`) as (x: number, y: number) => number;
+      fn(1, 1);
+      return { type: "implicit", fn };
     }
-    return fn;
+
+    const clean = cleanMathExpr(s);
+    const fn = new Function("x", `"use strict"; return (${clean});`) as (x: number) => number;
+    fn(1);
+    return { type: "explicit", fn };
   } catch {
     return null;
   }
 }
 
 export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
-  // If Desmos iframe URL is specified:
-  const desmosUrl = b.desmos || (typeof b.url === "string" && b.url.includes("desmos.com") ? b.url : null);
-  if (desmosUrl) {
-    const embedSrc = desmosUrl.includes("embed") ? desmosUrl : `${desmosUrl.replace(/\/$/, "")}?embed`;
+  // Only embed iframe if an explicit URL or embed request is made
+  const hasDesmosUrl = typeof b.desmos === "string" && /^https?:\/\//i.test(b.desmos);
+  const hasGenericUrl = typeof b.url === "string" && /^https?:\/\//i.test(b.url) && b.url.includes("desmos.com");
+  const wantsEmbed = b.embed === true || b.desmos === true;
+
+  if (hasDesmosUrl || hasGenericUrl || wantsEmbed) {
+    let embedSrc = "https://www.desmos.com/calculator?embed";
+    if (hasDesmosUrl) embedSrc = b.desmos.includes("embed") ? b.desmos : `${b.desmos.replace(/\/$/, "")}?embed`;
+    else if (hasGenericUrl) embedSrc = b.url.includes("embed") ? b.url : `${b.url.replace(/\/$/, "")}?embed`;
+
     return (
       <div className="canvas-card" style={{ gap: 8 }}>
         {b.title && <div className="metric-k">{b.title}</div>}
-        <div style={{ width: "100%", height: 320, borderRadius: "var(--r-sm)", overflow: "hidden", border: "1px solid var(--line-soft)" }}>
+        <div style={{ width: "100%", height: 340, borderRadius: "var(--r-sm)", overflow: "hidden", border: "1px solid var(--line-soft)" }}>
           <iframe
             src={embedSrc}
             width="100%"
@@ -80,23 +123,23 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
     );
   }
 
-  // Parse input functions
+  // Parse input functions/equations
   const funcs = useMemo(() => {
     const rawList: (string | { expr: string; label?: string; color?: string })[] = [];
     if (Array.isArray(b.functions)) {
       rawList.push(...b.functions);
-    } else if (b.fn || b.expr || b.formula || b.equation) {
-      rawList.push(b.fn || b.expr || b.formula || b.equation);
     } else {
-      rawList.push("sin(x)");
+      const single = b.fn || b.expr || b.formula || b.equation || (typeof b.desmos === "string" ? b.desmos : null);
+      if (single) rawList.push(single);
+      else rawList.push("sin(x)");
     }
 
     return rawList.map((item, idx) => {
       const exprStr = typeof item === "string" ? item : item.expr || "x";
       const label = typeof item === "object" && item.label ? item.label : exprStr;
       const color = typeof item === "object" && item.color ? item.color : MATH_PALETTE[idx % MATH_PALETTE.length];
-      const fn = compileMathExpr(exprStr);
-      return { expr: exprStr, label, color, fn };
+      const compiled = compileEquation(exprStr);
+      return { expr: exprStr, label, color, compiled };
     });
   }, [b]);
 
@@ -117,7 +160,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
     origDomain: domain,
   });
 
-  const W = 460;
+  const W = 480;
   const H = 280;
 
   const toPxX = useCallback((x: number) => ((x - domain.xmin) / (domain.xmax - domain.xmin)) * W, [domain.xmin, domain.xmax]);
@@ -155,13 +198,15 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
     const rect = svgRef.current.getBoundingClientRect();
     const px = Math.max(0, Math.min(W, ((e.clientX - rect.left) / rect.width) * W));
     const mx = toMathX(px);
-    const primaryFn = funcs[0]?.fn;
-    if (primaryFn) {
-      const my = primaryFn(mx);
-      if (typeof my === "number" && !isNaN(my) && isFinite(my)) {
-        setHoverCoord({ x: mx, y: my, px, py: toPxY(my) });
-        return;
-      }
+    const primary = funcs[0]?.compiled;
+    if (primary && primary.type === "explicit") {
+      try {
+        const my = primary.fn(mx);
+        if (typeof my === "number" && !isNaN(my) && isFinite(my)) {
+          setHoverCoord({ x: mx, y: my, px, py: toPxY(my) });
+          return;
+        }
+      } catch {}
     }
     setHoverCoord(null);
   };
@@ -170,7 +215,6 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
     dragRef.current.dragging = false;
   };
 
-  // Zoom controls
   const handleZoom = (factor: number) => {
     const cx = (domain.xmin + domain.xmax) / 2;
     const cy = (domain.ymin + domain.ymax) / 2;
@@ -193,7 +237,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
     });
   };
 
-  // Grid lines & ticks
+  // Grid steps
   const xSpan = domain.xmax - domain.xmin;
   const rawStepX = Math.pow(10, Math.floor(Math.log10(xSpan / 6)));
   const stepX = xSpan / rawStepX > 12 ? rawStepX * 2 : rawStepX;
@@ -217,42 +261,105 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
   const originX = toPxX(0);
   const originY = toPxY(0);
 
-  // Generate SVG curve paths for each function
+  // Generate curves for explicit and implicit equations
   const paths = useMemo(() => {
-    const numSamples = 240;
     return funcs.map((fItem) => {
-      if (!fItem.fn) return "";
+      const comp = fItem.compiled;
+      if (!comp) return "";
+
+      if (comp.type === "explicit") {
+        const numSamples = 240;
+        let d = "";
+        let prevValid = false;
+
+        for (let i = 0; i <= numSamples; i++) {
+          const px = (i / numSamples) * W;
+          const x = toMathX(px);
+          try {
+            const y = comp.fn(x);
+            if (typeof y !== "number" || isNaN(y) || !isFinite(y) || Math.abs(y) > 1000) {
+              prevValid = false;
+              continue;
+            }
+            const py = toPxY(y);
+            if (py < -H || py > H * 2) {
+              prevValid = false;
+              continue;
+            }
+
+            if (!prevValid) {
+              d += ` M ${px.toFixed(1)} ${py.toFixed(1)}`;
+              prevValid = true;
+            } else {
+              d += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+            }
+          } catch {
+            prevValid = false;
+          }
+        }
+        return d;
+      }
+
+      // Implicit equation (e.g. x^2 + y^2 = 25)
+      const nx = 70, ny = 50;
+      const dx = (domain.xmax - domain.xmin) / nx;
+      const dy = (domain.ymax - domain.ymin) / ny;
+      const grid: number[][] = [];
+
+      for (let j = 0; j <= ny; j++) {
+        const row: number[] = [];
+        const y = domain.ymin + j * dy;
+        for (let i = 0; i <= nx; i++) {
+          const x = domain.xmin + i * dx;
+          try {
+            const v = comp.fn(x, y);
+            row.push(isNaN(v) ? 1000 : v);
+          } catch {
+            row.push(1000);
+          }
+        }
+        grid.push(row);
+      }
+
       let d = "";
-      let prevValid = false;
+      for (let j = 0; j < ny; j++) {
+        const y0 = domain.ymin + j * dy;
+        const y1 = y0 + dy;
+        for (let i = 0; i < nx; i++) {
+          const x0 = domain.xmin + i * dx;
+          const x1 = x0 + dx;
 
-      for (let i = 0; i <= numSamples; i++) {
-        const px = (i / numSamples) * W;
-        const x = toMathX(px);
-        try {
-          const y = fItem.fn(x);
-          if (typeof y !== "number" || isNaN(y) || !isFinite(y) || Math.abs(y) > 1000) {
-            prevValid = false;
-            continue;
+          const vBL = grid[j][i];
+          const vBR = grid[j][i + 1];
+          const vTL = grid[j + 1][i];
+          const vTR = grid[j + 1][i + 1];
+
+          const pts: { x: number; y: number }[] = [];
+          if ((vBL > 0 && vBR <= 0) || (vBL <= 0 && vBR > 0)) {
+            const t = Math.abs(vBL) / (Math.abs(vBL) + Math.abs(vBR) || 1);
+            pts.push({ x: x0 + t * dx, y: y0 });
           }
-          const py = toPxY(y);
-          if (py < -H || py > H * 2) {
-            prevValid = false;
-            continue;
+          if ((vBR > 0 && vTR <= 0) || (vBR <= 0 && vTR > 0)) {
+            const t = Math.abs(vBR) / (Math.abs(vBR) + Math.abs(vTR) || 1);
+            pts.push({ x: x1, y: y0 + t * dy });
+          }
+          if ((vTL > 0 && vTR <= 0) || (vTL <= 0 && vTR > 0)) {
+            const t = Math.abs(vTL) / (Math.abs(vTL) + Math.abs(vTR) || 1);
+            pts.push({ x: x0 + t * dx, y: y1 });
+          }
+          if ((vBL > 0 && vTL <= 0) || (vBL <= 0 && vTL > 0)) {
+            const t = Math.abs(vBL) / (Math.abs(vBL) + Math.abs(vTL) || 1);
+            pts.push({ x: x0, y: y0 + t * dy });
           }
 
-          if (!prevValid) {
-            d += ` M ${px.toFixed(1)} ${py.toFixed(1)}`;
-            prevValid = true;
-          } else {
-            d += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+          if (pts.length >= 2) {
+            d += ` M ${toPxX(pts[0].x).toFixed(1)} ${toPxY(pts[0].y).toFixed(1)} L ${toPxX(pts[1].x).toFixed(1)} ${toPxY(pts[1].y).toFixed(1)}`;
           }
-        } catch {
-          prevValid = false;
         }
       }
       return d;
     });
-  }, [funcs, toMathX, toPxY]);
+  }, [funcs, toMathX, toPxY, toPxX, domain]);
 
   return (
     <div className="canvas-card math-plot-card" style={{ gap: 8 }}>
@@ -265,11 +372,11 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             </svg>
           </span>
           <span style={{ fontWeight: 550, fontSize: "var(--fs-xs)", color: "var(--text)" }}>
-            {b.title || "Function Plot"}
+            {b.title || "Mathematical Plot"}
           </span>
         </div>
 
-        {/* Zoom & Reset Controls */}
+        {/* Pan & Zoom Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button
             type="button"
@@ -301,8 +408,8 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
         </div>
       </div>
 
-      {/* Function Legend */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "2px 0" }}>
+      {/* Equations Legend */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "2px 0" }}>
         {funcs.map((fItem, idx) => (
           <span
             key={idx}
@@ -320,12 +427,12 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             }}
           >
             <span style={{ width: 8, height: 2.5, borderRadius: 1, background: fItem.color }} />
-            <span>f(x) = {fItem.label}</span>
+            <span>{fItem.label}</span>
           </span>
         ))}
       </div>
 
-      {/* Coordinate Canvas */}
+      {/* Coordinate SVG */}
       <div style={{ position: "relative", width: "100%", background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", overflow: "hidden" }}>
         <svg
           ref={svgRef}
@@ -339,8 +446,8 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             setHoverCoord(null);
           }}
         >
-          {/* Subtle Grid Lines */}
-          <g opacity="0.35">
+          {/* Grid lines */}
+          <g opacity="0.3">
             {xTicks.map((x, i) => (
               <line
                 key={`grid-x-${i}`}
@@ -373,7 +480,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             x2={W}
             y1={Math.max(0, Math.min(H, originY))}
             y2={Math.max(0, Math.min(H, originY))}
-            stroke="var(--line-strong, rgba(255,255,255,0.25))"
+            stroke="var(--line-strong, rgba(255,255,255,0.22))"
             strokeWidth="1.2"
           />
           <line
@@ -381,7 +488,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             x2={Math.max(0, Math.min(W, originX))}
             y1={0}
             y2={H}
-            stroke="var(--line-strong, rgba(255,255,255,0.25))"
+            stroke="var(--line-strong, rgba(255,255,255,0.22))"
             strokeWidth="1.2"
           />
 
@@ -389,11 +496,10 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
           <g fontSize="9" fill="var(--text-faint)" fontFamily="var(--mono)">
             {xTicks.map((x, i) => {
               if (Math.abs(x) < 0.0001) return null;
-              const px = toPxX(x);
               return (
                 <text
                   key={`tx-${i}`}
-                  x={px}
+                  x={toPxX(x)}
                   y={Math.min(H - 4, Math.max(14, originY + 12))}
                   textAnchor="middle"
                 >
@@ -403,12 +509,11 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             })}
             {yTicks.map((y, i) => {
               if (Math.abs(y) < 0.0001) return null;
-              const py = toPxY(y);
               return (
                 <text
                   key={`ty-${i}`}
                   x={Math.min(W - 6, Math.max(18, originX - 6))}
-                  y={py + 3}
+                  y={toPxY(y) + 3}
                   textAnchor="end"
                 >
                   {y}
@@ -417,7 +522,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             })}
           </g>
 
-          {/* Function Curves */}
+          {/* Curves */}
           {paths.map((d, idx) => (
             <path
               key={idx}
@@ -430,7 +535,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
             />
           ))}
 
-          {/* Hover Crosshair and Dot */}
+          {/* Hover Crosshairs & Focal Dot */}
           {hoverCoord && (
             <g>
               <line
@@ -438,7 +543,7 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
                 x2={hoverCoord.px}
                 y1={0}
                 y2={H}
-                stroke="var(--line-strong, rgba(255,255,255,0.22))"
+                stroke="rgba(255,255,255,0.2)"
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
@@ -447,11 +552,10 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
                 x2={W}
                 y1={hoverCoord.py}
                 y2={hoverCoord.py}
-                stroke="var(--line-strong, rgba(255,255,255,0.22))"
+                stroke="rgba(255,255,255,0.2)"
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
-              {/* Steady Focal Dot with calm ring — NO infinite pulse loop */}
               <circle cx={hoverCoord.px} cy={hoverCoord.py} r={6} fill={funcs[0]?.color || "var(--accent)"} opacity="0.2" />
               <circle
                 cx={hoverCoord.px}
@@ -465,7 +569,6 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
           )}
         </svg>
 
-        {/* Hover Coordinate Badge */}
         {hoverCoord && (
           <div
             style={{
@@ -480,10 +583,10 @@ export function MathPlotBlock({ b }: { b: MathPlotProps | any }) {
               fontFamily: "var(--mono)",
               color: "var(--text)",
               pointerEvents: "none",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
               display: "inline-flex",
               alignItems: "center",
               gap: 4,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
             }}
           >
             <span>x: {hoverCoord.x.toFixed(2)}</span>

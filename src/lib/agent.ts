@@ -50,7 +50,7 @@ Keep context lean with add_context / remove_context / compact_context.
     - **Chemistry** (\`type="chemistry"\`): Renders 2D organic molecular structures. Pass \`smiles="c1ccccc1"\` or common name \`molecule="aspirin"\`.
     - **Math Plot** (\`type="math"\`): Interactive 2D function visualizer (Desmos-like). Pass \`fn="sin(x)*cos(2*x)"\` or \`functions=["sin(x)", "cos(x)"]\`.
     - **Cards & Dashboards**: \`metrics\` (\`items: [{ label, value, delta }]\`), \`switcher\` (\`tabs: [{ label, content }]\`), \`question\` (\`question: "...", options: [{ label }]\`), \`prompts\` (\`prompts: ["..."]\`).
-  If you ever need the exhaustive reference manual, the deep \`generative-ui\` skill is always available.
+  If you ever need the exhaustive reference manual, call \`read_skill("generative-ui")\`.
 
 ## Search Efficiency & Anti-Looping
 Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter

@@ -440,13 +440,14 @@ function Chart({ b }: { b: CanvasBlock }) {
                   </span>
                 </span>
               </div>
-              <div style={{ height: 20, background: "var(--surface-3)", borderRadius: "var(--r-xs)", overflow: "hidden", display: "flex", alignItems: "center" }}>
+              <div style={{ height: 20, background: "var(--surface-3)", borderRadius: "var(--r-xs)", overflow: "hidden", position: "relative" }}>
                 <div
                   style={{
                     width: `${widthPct}%`,
                     height: "100%",
                     background: col,
                     borderRadius: "var(--r-xs)",
+                    transformOrigin: "left center",
                     animation: `chart-hbar-wipe 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${i * 45}ms both`,
                   }}
                 />
@@ -1631,11 +1632,41 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
     return fromJson;
   }, [raw, attrs]);
 
-  if (!data && open) {
+  if (open) {
+    const rawKind = String(data?.type || data?.kind || attrs || "component").toLowerCase();
+    let label = "interactive dashboard";
+    if (rawKind.includes("chart") || rawKind.includes("graph")) label = "chart";
+    else if (rawKind.includes("question") || rawKind.includes("ask")) label = "question card";
+    else if (rawKind.includes("chemistry") || rawKind.includes("molecule")) label = "molecular structure";
+    else if (rawKind.includes("math") || rawKind.includes("desmos") || rawKind.includes("plot")) label = "function plot";
+    else if (rawKind.includes("switcher")) label = "multi-view dashboard";
+
+    const title = data?.title || data?.question;
+
     return (
-      <div className="component-block" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-faint)", fontSize: "var(--fs-xs)" }}>
-        <span className="spinner sm" />
-        <span>Rendering component...</span>
+      <div
+        className="component-block comp-streaming-card"
+        style={{
+          padding: "12px 16px",
+          background: "var(--surface)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: "var(--r)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          minHeight: 52,
+          boxSizing: "border-box",
+        }}
+      >
+        <span className="spinner sm" style={{ flexShrink: 0, borderColor: "var(--accent)", borderRightColor: "transparent" }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <span style={{ fontSize: "var(--fs-xs)", fontWeight: 540, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {title ? String(title) : `Rendering ${label}...`}
+          </span>
+          <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
+            Building interactive interface...
+          </span>
+        </div>
       </div>
     );
   }

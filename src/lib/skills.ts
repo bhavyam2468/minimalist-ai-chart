@@ -53,8 +53,7 @@ Rules
   {
     name: "generative-ui",
     description:
-      "Render rich interactive charts (line, area, bar, hbar, donut, pie, scatter, radar, gauge, funnel, heatmap, candlestick), organic chemistry SMILES molecular diagrams, interactive 2D math function visualizers (Desmos-style), metric cards, multi-view switchers, and interactive questions inline in chat using <component> tags. Always enabled.",
-    always: true,
+      "Specification for interactive charts (line, area, bar, hbar, donut, pie, scatter, radar, gauge, funnel, heatmap, candlestick), organic chemistry SMILES molecular diagrams, interactive 2D math function visualizers (Desmos-style), metric cards, multi-view switchers, and interactive questions inline using <component> tags.",
     body: `# generative-ui
 You can embed rich, interactive, animated Generative UI directly inline in your responses using the \`<component>\` tag. These blend seamlessly into the conversation, feature Google-quality fluid animations (smooth Bézier splines, gradient reveals, hover crosshairs, tooltips), and support full user interactivity.
 

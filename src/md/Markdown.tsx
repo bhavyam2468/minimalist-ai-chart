@@ -168,6 +168,29 @@ function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open:
     });
   };
 
+  if (open) {
+    return (
+      <div
+        className="inline-ui-block comp-streaming-card"
+        style={{
+          margin: "10px 0",
+          padding: "14px 18px",
+          borderRadius: "var(--r)",
+          border: "1px solid var(--line-soft)",
+          background: "var(--surface)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <span className="spinner sm" style={{ flexShrink: 0, borderColor: "var(--accent)", borderRightColor: "transparent" }} />
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>
+          Rendering {title || "interactive interface"}...
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="inline-ui-block a-blk" style={{ margin: "14px 0", borderRadius: "var(--r)", border: "1px solid var(--line-soft)", overflow: "hidden", background: "var(--surface)" }}>
       <div

@@ -27,8 +27,16 @@ export function Sidebar() {
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px 6px" }}>
         <button className="icon-btn" title="New chat" onClick={() => createChat()}><I.plus size={16} /></button>
         <span className="grow" style={{ flex: 1 }} />
-        <button className="icon-btn" title="Theme" onClick={() => setSettings({ theme: settings.theme === "dark" ? "light" : "dark" })}><I.spark size={15} /></button>
-        <button className="icon-btn" title="Settings" onClick={() => setUI({ modal: "settings" })}><I.settings size={15} /></button>
+        <button
+          className="icon-btn"
+          title={settings.theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={() => setSettings({ theme: settings.theme === "dark" ? "light" : "dark" })}
+        >
+          {settings.theme === "dark" ? <I.sun size={15} /> : <I.moon size={15} />}
+        </button>
+        <button className="icon-btn" title="Settings" onClick={() => setUI({ modal: "settings" })}>
+          <I.settings size={15} />
+        </button>
       </div>
       <div className="side-scroll">
         {order.filter((id) => chats[id]).map((id) => (

@@ -183,7 +183,7 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         <button className="icon-btn" data-active={menu === "plus"} onClick={() => setMenu(menu === "plus" ? null : "plus")}><I.plus size={16} /></button>
         <button className="icon-btn" data-active={menu === "tools"} onClick={() => setMenu(menu === "tools" ? null : "tools")}><I.tools size={16} /></button>
         <span className="grow" />
-        <button className="icon-btn" data-active={menu === "knowledge"} onClick={() => setMenu(menu === "knowledge" ? null : "knowledge")}><I.knowledge size={16} /></button>
+        <button className="icon-btn" title="Skills" data-active={menu === "knowledge"} onClick={() => setMenu(menu === "knowledge" ? null : "knowledge")}><I.knowledge size={16} /></button>
         {busy ? (
           <button className="send" onClick={() => stopGeneration(chatId)}><I.stop size={14} /></button>
         ) : (
