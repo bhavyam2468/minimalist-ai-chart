@@ -50,22 +50,22 @@
 .cv-floating-bar,
 .cv-floating-panel {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  height: 34px;
-  max-width: calc(100% - 20px);
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  height: 38px;
+  max-width: calc(100% - 24px);
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  background: rgba(14, 16, 22, 0.9);
+  gap: 10px;
+  padding: 0 14px;
+  background: rgba(14, 16, 22, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.65), 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: var(--r);
+  box-shadow: 0 12px 34px -4px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   z-index: 60;
   cursor: grab;
   user-select: none;
@@ -99,7 +99,7 @@
 }
 
 .cv-floating-title {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -118,7 +118,7 @@
 .cv-floating-win-ctrls {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -126,13 +126,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   flex-shrink: 0;
   transition: all var(--t-fast) var(--ease);
@@ -235,22 +235,22 @@
 /* Floating contextual menu aligned to bottom */
 .fe-bar {
   position: absolute;
-  bottom: 14px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%) translateY(8px);
   max-width: calc(100% - 24px);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 10px;
-  height: 32px;
-  background: rgba(14, 16, 22, 0.9);
+  gap: 9px;
+  padding: 6px 14px;
+  height: 38px;
+  background: rgba(14, 16, 22, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.65), 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: var(--r);
+  box-shadow: 0 12px 34px -4px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   z-index: 55;
   opacity: 0;
   pointer-events: none;
@@ -270,26 +270,26 @@
 
 .fe-tag {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   letter-spacing: .02em;
-  padding: 0 4px;
+  padding: 0 5px;
   white-space: nowrap;
 }
 
 .fe-seg {
   display: inline-flex;
-  gap: 1px;
+  gap: 2px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   padding: 2px;
 }
 
 .fe-seg button {
-  font-size: 11px;
+  font-size: 12px;
   font-family: var(--font-sans);
-  padding: 2px 9px;
-  border-radius: 999px;
+  padding: 3px 10px;
+  border-radius: var(--r-xs);
   color: var(--text-faint);
   transition: all var(--t-fast) var(--ease);
   cursor: pointer;
@@ -302,16 +302,17 @@
   background: rgba(255, 255, 255, 0.18);
   color: var(--text);
   font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .fe-bar .icon-btn.sm {
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -338,6 +339,33 @@
   white-space: pre-wrap; color: var(--text-dim);
 }
 .fe-preview { padding: 36px var(--sp-5) 60px; overflow: auto; height: 100%; }
+
+/* ---- Word wrap support ------------------------------------------------- */
+.fe-code[data-wrap="true"] .fe-hl,
+.fe-code[data-wrap="true"] .fe-ta {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.fe-code[data-wrap="false"] .fe-hl,
+.fe-code[data-wrap="false"] .fe-ta {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.fe-preview[data-wrap="true"] pre,
+.fe-preview[data-wrap="true"] pre code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.fe-pre[data-wrap="true"] {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.fe-pre[data-wrap="false"] {
+  white-space: pre;
+  word-break: normal;
+}
 
 /* ---- code editor: highlighted layer under a transparent textarea ------- */
 .fe-code { display: flex; height: 100%; min-height: 0; background: var(--surface); }

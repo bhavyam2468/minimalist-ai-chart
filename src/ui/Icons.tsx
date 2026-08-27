@@ -34,4 +34,5 @@ export const I = {
   thread: s(<><path d="M4 6h16M4 11h10M8 16h12M8 16l-3 3M8 16l-3-3" /></>),
   video: s(<><rect x="2" y="4" width="14" height="16" rx="2" /><path d="M16 8l5-3v14l-5-3" /></>),
   play: s(<><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" /></>),
+  wrap: s(<><path d="M4 6h16M4 12h10a3 3 0 0 1 3 3v0a3 3 0 0 1-3 3H10" /><path d="M13 15l-3 3 3 3" /></>),
 };

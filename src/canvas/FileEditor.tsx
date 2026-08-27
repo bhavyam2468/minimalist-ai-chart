@@ -176,8 +176,8 @@ function SheetView({ text, path }: { text: string; path: string }) {
 
 /* ------------------------------------------------- code / text / markdown */
 function CodeArea({
-  value, onChange, lang, readOnly,
-}: { value: string; onChange: (v: string) => void; lang: string; readOnly?: boolean }) {
+  value, onChange, lang, readOnly, wrap = true,
+}: { value: string; onChange: (v: string) => void; lang: string; readOnly?: boolean; wrap?: boolean }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const pre = useRef<HTMLPreElement>(null);
   const lines = value.split("\n").length;
@@ -201,7 +201,7 @@ function CodeArea({
   };
 
   return (
-    <div className="fe-code">
+    <div className="fe-code" data-wrap={wrap}>
       <div className="fe-lines" aria-hidden>
         {Array.from({ length: lines }).map((_, i) => <span key={i}>{i + 1}</span>)}
       </div>
@@ -230,6 +230,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
   const [mode, setMode] = useState<Mode>(view === "ui" ? "preview" : "preview");
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [wrap, setWrap] = useState(true);
 
   useEffect(() => { setDraft(file?.content ?? ""); setDirty(false); }, [path, file?.updatedAt]);
 
@@ -261,6 +262,14 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
             <button data-active={uiMode === "preview"} onClick={() => setMode("preview")}>view</button>
             <button data-active={uiMode === "edit"} onClick={() => setMode("edit")}>code</button>
           </div>
+          <button
+            className="icon-btn sm"
+            data-active={wrap}
+            title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
+            onClick={() => setWrap((w) => !w)}
+          >
+            <I.wrap size={13} />
+          </button>
           <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
           <button className="icon-btn sm" title="Save (⌘S)" data-active={saved} onClick={save} disabled={!dirty}>
             {saved ? <I.check size={13} /> : "save"}
@@ -269,7 +278,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
         <div className="fe-body" style={{ padding: 0 }}
              onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
           {uiMode === "edit"
-            ? <CodeArea value={draft} onChange={change} lang="json" />
+            ? <CodeArea value={draft} onChange={change} lang="json" wrap={wrap} />
             : <div className="fe-preview" style={{ height: "100%", overflow: "auto" }}><BlocksView content={draft} /></div>}
         </div>
       </div>
@@ -292,6 +301,14 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
             ))}
           </div>
         )}
+        <button
+          className="icon-btn sm"
+          data-active={wrap}
+          title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
+          onClick={() => setWrap((w) => !w)}
+        >
+          <I.wrap size={13} />
+        </button>
         <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
         <button className="icon-btn sm" data-active={saved} title="Save (⌘S)" onClick={save} disabled={!dirty && !saved}>
           {saved ? <I.check size={13} /> : "save"}
@@ -300,15 +317,15 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
 
       <div className="fe-body" style={{ padding: 0 }}
            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
-        {isMd && mode === "preview" && <div className="fe-preview"><Markdown text={draft} animate={false} /></div>}
-        {isMd && mode === "edit" && <CodeArea value={draft} onChange={change} lang="markdown" />}
+        {isMd && mode === "preview" && <div className="fe-preview" data-wrap={wrap}><Markdown text={draft} animate={false} /></div>}
+        {isMd && mode === "edit" && <CodeArea value={draft} onChange={change} lang="markdown" wrap={wrap} />}
         {isMd && mode === "split" && (
           <div className="fe-split">
-            <CodeArea value={draft} onChange={change} lang="markdown" />
-            <div className="fe-preview"><Markdown text={draft} animate={false} /></div>
+            <CodeArea value={draft} onChange={change} lang="markdown" wrap={wrap} />
+            <div className="fe-preview" data-wrap={wrap}><Markdown text={draft} animate={false} /></div>
           </div>
         )}
-        {!isMd && <CodeArea value={draft} onChange={change} lang={lang} />}
+        {!isMd && <CodeArea value={draft} onChange={change} lang={lang} wrap={wrap} />}
       </div>
     </div>
   );
