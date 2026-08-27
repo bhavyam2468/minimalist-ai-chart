@@ -1,0 +1,135 @@
+@import "tailwindcss";
+@import "./styles/globals.css";
+@import "./styles/prose.css";
+@import "./styles/app.css";
+@import "./styles/canvas.css";
+
+/* ====================================================================
+   Mobile / narrow viewports
+   Everything under ~900px: sidebars become slide-in sheets, touch targets
+   grow, composer uses dvh to behave with the mobile keyboard, hover-only
+   UI turns into always-visible or tap-to-reveal.
+   ==================================================================== */
+
+@media (max-width: 900px) {
+  html, body, #root { height: 100dvh; min-height: 100svh; }
+
+  .app { height: 100dvh; }
+
+  /* ---- sidebars as sheets ------------------------------------------- */
+  .side {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 86vw; max-width: 340px;
+    margin-left: 0 !important;
+    transform: translateX(-105%);
+    transition: transform var(--t) var(--ease);
+    z-index: 80;
+    border-right: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+  .side[data-collapsed="false"] { transform: translateX(0); }
+
+  .panel {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    width: 88vw; max-width: 360px;
+    margin-right: 0 !important;
+    transform: translateX(105%);
+    transition: transform var(--t) var(--ease);
+    z-index: 80;
+    border-left: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+  .panel[data-collapsed="false"] { transform: translateX(0); }
+
+  /* backdrop */
+  .sheet-backdrop {
+    position: fixed; inset: 0;
+    background: #00000050;
+    z-index: 70;
+    backdrop-filter: blur(2px);
+    animation: fade-in var(--t-fast) var(--ease) both;
+  }
+
+  /* ---- touch targets ----------------------------------------------- */
+  .icon-btn { min-width: 38px; min-height: 38px; padding: 0 8px; }
+  .icon-btn.sm { min-width: 32px; min-height: 32px; }
+  .btn { height: 36px; padding: 0 14px; }
+
+  /* ---- bubbles ------------------------------------------------------ */
+  .bubble { max-width: 100%; font-size: 15px; }
+  .turn.user { align-items: stretch; }
+  .turn.user .bubble { max-width: 100%; }
+  .acts { opacity: 1 !important; display: flex; flex-wrap: wrap; gap: 0; }
+
+  /* ---- checkpoint rail: hide on small screens ---------------------- */
+  .rail { display: none; }
+
+  /* ---- threads: tighter indent ------------------------------------- */
+  .thread { padding-left: 10px; }
+
+  /* ---- composer: dvh + safe-area ----------------------------------- */
+  .composer-wrap {
+    padding: 8px 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 72%, transparent);
+  }
+  .composer {
+    padding: 6px;
+    border-radius: calc(var(--r) - 2px);
+  }
+  .composer textarea {
+    font-size: 16px;   /* prevents iOS zoom on focus */
+    line-height: 1.45;
+  }
+  .composer-row { padding: 0 2px; }
+
+  /* composer menus: full-width bottom sheets; actual positioning
+     comes from inline styles computed against visualViewport.        */
+  .menu {
+    width: auto;
+    max-height: 55vh;
+    overflow-y: auto;
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+  }
+
+  /* ---- canvas ------------------------------------------------------- */
+  .fe-split { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .fe-preview { padding: var(--sp-4) var(--sp-4) 40px; }
+  .fe-lines { display: none; }
+  .cv-title { max-width: 55%; }
+
+  /* ---- prose / tables ---------------------------------------------- */
+  .prose { font-size: 15px; }
+  .md-pre code { font-size: 12px; }
+  .md-table-wrap { margin-left: -10px; margin-right: -10px; border-radius: 0; border-left: 0; border-right: 0; overflow-x: auto; }
+  .md-table { min-width: 420px; }
+  .md-img { max-height: 60vh; }
+
+  /* ---- selection popup stays in viewport --------------------------- */
+  .sel-pop {
+    position: fixed !important;
+    max-width: calc(100vw - 16px);
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+
+  /* ---- column / layout helpers ------------------------------------ */
+  .col { padding: 64px 16px 220px; }
+}
+
+@media (max-width: 520px) {
+  .col { padding: 56px 10px 220px; }
+  .composer-wrap { padding: 6px 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+  .md-table { min-width: 360px; }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,33 @@
+const s = (d: React.ReactNode, size = 15) => (p: { size?: number }) => (
+  <svg width={p.size ?? size} height={p.size ?? size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+);
+
+export const I = {
+  plus: s(<><path d="M12 5v14M5 12h14" /></>),
+  tools: s(<><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></>),
+  knowledge: s(<><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" /></>),
+  send: s(<><path d="M12 19V5M6 11l6-6 6 6" /></>),
+  stop: s(<><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" /></>),
+  copy: s(<><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>),
+  check: s(<><path d="M4 12.5l5.5 5.5L20 6" /></>),
+  refresh: s(<><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></>),
+  edit: s(<><path d="M4 20h4L20 8l-4-4L4 16z" /></>),
+  branch: s(<><circle cx="6" cy="6" r="2.4" /><circle cx="6" cy="18" r="2.4" /><circle cx="18" cy="9" r="2.4" /><path d="M6 8.5v7M8.4 6H13a3 3 0 0 1 3 3" /></>),
+  quote: s(<><path d="M9 7H5v5h4c0 3-1.5 4-3 4.5M19 7h-4v5h4c0 3-1.5 4-3 4.5" /></>),
+  left: s(<><path d="M15 5l-7 7 7 7" /></>),
+  right: s(<><path d="M9 5l7 7-7 7" /></>),
+  down: s(<><path d="M5 9l7 7 7-7" /></>),
+  x: s(<><path d="M6 6l12 12M18 6L6 18" /></>),
+  canvas: s(<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 10h18M10 10v10" /></>),
+  file: s(<><path d="M14 3v5h5" /><path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" /></>),
+  globe: s(<><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z" /></>),
+  trash: s(<><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></>),
+  settings: s(<><circle cx="12" cy="12" r="3" /><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.6 6.6l1.4 1.4M16 16l1.4 1.4M17.4 6.6L16 8M8 16l-1.4 1.4" /></>),
+  sidebar: s(<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16" /></>),
+  panel: s(<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M15 4v16" /></>),
+  compact: s(<><path d="M4 8h16M4 16h16M9 12h6" /></>),
+  book: s(<><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" /><path d="M4 17.5V5.5" /></>),
+  plug: s(<><path d="M9 3v6M15 3v6M6 9h12v3a6 6 0 0 1-12 0z" /><path d="M12 18v3" /></>),
+  spark: s(<><path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z" /></>),
+  thread: s(<><path d="M4 6h16M4 11h10M8 16h12M8 16l-3 3M8 16l-3-3" /></>),
+};

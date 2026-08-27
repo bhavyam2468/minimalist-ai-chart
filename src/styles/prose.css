@@ -1,0 +1,161 @@
+/* ===========================================================================
+   prose.css — streaming markdown surface. Every element animates in as it is
+   parsed; completion-only animations (highlight sweep, footnotes, table rows)
+   are triggered by the [data-complete] flag set by the renderer.
+   ========================================================================= */
+
+.prose {
+  font-size: var(--fs-md);
+  line-height: var(--lh);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.prose > * + * { margin-top: var(--sp-4); }
+.prose > .md-h + * { margin-top: var(--sp-2); }
+
+.md-p { margin: 0; }
+
+.md-h { margin: 0; font-weight: 560; letter-spacing: -.012em; line-height: 1.3; color: var(--text); }
+.prose > .md-h { margin-top: var(--sp-6); }
+.prose > *:first-child { margin-top: 0; }
+.md-h1 { font-size: var(--fs-xl); }
+.md-h2 { font-size: var(--fs-lg); }
+.md-h3 { font-size: var(--fs-md); }
+.md-h4, .md-h5, .md-h6 { font-size: var(--fs); color: var(--text-dim); text-transform: none; }
+
+.md-b { font-weight: 640; color: var(--text); }
+.md-i { font-style: italic; }
+.md-s { text-decoration: line-through; color: var(--text-faint); }
+.md-sub { vertical-align: -.25em; font-size: .8em; }
+.md-sup { vertical-align: .4em; font-size: .8em; }
+
+.md-code {
+  font-family: var(--mono); font-size: .86em;
+  background: var(--surface-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-xs); padding: .1em .34em;
+  color: var(--text);
+}
+
+.md-a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--accent-line); transition: color var(--t-fast); }
+.md-a:hover { color: var(--accent); }
+
+/* ---- highlight: sweeps only once the enclosing block is complete -------- */
+.md-mark {
+  color: var(--text);
+  background-image: linear-gradient(var(--mark-bg), var(--mark-bg));
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  border-radius: 3px;
+  padding: .06em .18em;
+  margin: 0 -.06em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.md-mark[data-complete="true"] { animation: sweep 620ms var(--ease-out) 140ms forwards; }
+
+/* ---- lists ------------------------------------------------------------- */
+.md-list { margin: 0; padding-left: 1.35em; display: flex; flex-direction: column; gap: 6px; }
+.md-list.tight { gap: 2px; }
+.md-li { margin: 0; }
+.md-list ul, .md-list ol { margin-top: 6px; }
+.md-ul { list-style: none; padding-left: 1.1em; }
+.md-ul > .md-li { position: relative; }
+.md-ul > .md-li::before {
+  content: ""; position: absolute; left: -.95em; top: .62em;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--text-faint);
+}
+.md-ol { list-style: decimal; }
+.md-ol > .md-li::marker { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: .9em; }
+
+.md-task { display: flex; gap: 9px; align-items: flex-start; list-style: none; margin-left: -1.1em; }
+.md-box {
+  flex: none; width: 15px; height: 15px; margin-top: .22em;
+  border: 1px solid var(--line); border-radius: 4px;
+  display: grid; place-items: center; color: var(--bg);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+  cursor: pointer;
+}
+.md-box[data-on="true"] { background: var(--accent); border-color: var(--accent); }
+.md-task[data-on="true"] > span:last-child { color: var(--text-dim); }
+
+/* ---- quote / rule ------------------------------------------------------ */
+.md-quote {
+  margin: 0; padding: 2px 0 2px var(--sp-4);
+  border-left: 2px solid var(--accent-line);
+  color: var(--text-dim); font-style: normal;
+}
+.md-hr { height: 1px; background: var(--line); border: 0; margin: var(--sp-5) 0; transform-origin: left; animation: rule-in 420ms var(--ease-out) both; }
+
+/* ---- code block -------------------------------------------------------- */
+.md-pre {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.md-pre-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line-soft);
+  color: var(--text-faint); font-size: var(--fs-xs);
+  font-family: var(--mono); letter-spacing: .04em;
+}
+.md-pre code {
+  display: block; padding: var(--sp-4);
+  font-family: var(--mono); font-size: 13px; line-height: 1.62;
+  white-space: pre; overflow-x: auto; color: var(--text);
+}
+.tk-key { color: #c8a2e0; } .tk-str { color: #a8c98f; } .tk-num { color: #d7b28c; }
+.tk-com { color: var(--text-faint); font-style: italic; } .tk-fn { color: #86b0d8; }
+.tk-op  { color: var(--text-dim); } .tk-tag { color: #d98f8f; } .tk-atr { color: #d7b28c; }
+
+/* ---- table ------------------------------------------------------------- */
+.md-table-wrap { border: 1px solid var(--line-soft); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.md-table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
+.md-table th, .md-table td { padding: 9px 14px; text-align: left; vertical-align: top; }
+.md-table thead th {
+  color: var(--text-dim); font-weight: 520; font-size: var(--fs-sm);
+  letter-spacing: .04em; text-transform: uppercase;
+  border-bottom: 1px solid var(--line-soft); background: var(--surface-2);
+}
+.md-table tbody tr { border-top: 1px solid var(--line-soft); }
+.md-table tbody tr:first-child { border-top: 0; }
+.md-table tbody tr { animation: blk-in 260ms var(--ease-out) both; }
+.md-table td[data-partial="true"] { color: var(--text-dim); }
+
+/* ---- math -------------------------------------------------------------- */
+.md-math-block { overflow-x: auto; padding: var(--sp-3) 0; text-align: center; }
+.md-math-raw { font-family: var(--mono); font-size: .9em; color: var(--text-faint); }
+
+/* ---- media ------------------------------------------------------------- */
+.md-img { max-width: 100%; border-radius: var(--r); border: 1px solid var(--line-soft); display: block; animation: fade-in var(--t-slow) var(--ease) both; }
+.md-embed { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line-soft); background: #000; }
+.md-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.md-figcap { font-size: var(--fs-sm); color: var(--text-faint); margin-top: 6px; }
+
+/* ---- details ----------------------------------------------------------- */
+.md-details { border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+.md-summary {
+  display: flex; align-items: center; gap: 8px; padding: 10px var(--sp-4);
+  cursor: pointer; color: var(--text); user-select: none; font-size: var(--fs);
+}
+.md-summary:hover { background: var(--surface-2); }
+.md-summary svg { transition: transform var(--t) var(--ease); color: var(--text-faint); }
+.md-details[data-open="true"] .md-summary svg { transform: rotate(90deg); }
+.md-details-body { padding: 0 var(--sp-4) var(--sp-4); animation: blk-in var(--t) var(--ease-out) both; }
+
+/* ---- footnotes (revealed after the stream ends) ------------------------ */
+.md-fn-ref {
+  font-size: .72em; vertical-align: .45em; color: var(--accent);
+  text-decoration: none; padding: 0 1px;
+}
+.md-footnotes {
+  margin-top: var(--sp-6); padding-top: var(--sp-4);
+  border-top: 1px solid var(--line-soft);
+  animation: blk-in 420ms var(--ease-out) both;
+}
+.md-footnotes ol { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.md-footnotes li { font-size: var(--fs-sm); color: var(--text-dim); }
+.md-footnotes li::marker { color: var(--accent); }
+
+/* ---- inline stream token ----------------------------------------------- */
+.tok { animation: tok-in 240ms var(--ease-out) both; }

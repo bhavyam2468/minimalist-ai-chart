@@ -1,0 +1,256 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { highlight, langOf } from "../md/highlight";
+import { Markdown } from "../md/Markdown";
+import { BlocksView } from "./Blocks";
+import { I } from "../ui/Icons";
+import { useApp } from "../lib/store";
+import type { WFile } from "../lib/types";
+
+/* ===========================================================================
+   FileEditor — the canvas' file SDK. One entry point, adapts to the file:
+     image  -> zoomable viewer
+     md/mdx -> editor  |  preview  |  split
+     csv    -> grid viewer + raw toggle
+     code   -> syntax-highlighted editor
+     text   -> plain editor
+   ========================================================================= */
+
+type Mode = "edit" | "preview" | "split";
+
+function kindOf(f: WFile): "image" | "markdown" | "sheet" | "code" | "text" {
+  if (f.kind === "image" || f.dataUrl) return "image";
+  const e = (f.path.split(".").pop() || "").toLowerCase();
+  if (e === "md" || e === "mdx" || e === "markdown") return "markdown";
+  if (e === "csv" || e === "tsv") return "sheet";
+  if (f.kind === "code") return "code";
+  if (["ts","tsx","js","jsx","py","rs","go","java","c","cpp","h","css","html","json","yaml","yml","sh","sql","toml","xml"].includes(e)) return "code";
+  return "text";
+}
+
+/* ------------------------------------------------------------ image view */
+function ImageView({ f }: { f: WFile }) {
+  const [zoom, setZoom] = useState(1);
+  const [fit, setFit] = useState(true);
+  return (
+    <div className="fe">
+      <div className="fe-bar">
+        <span className="fe-tag">image</span>
+        <span className="grow" />
+        <button className="icon-btn sm" onClick={() => { setFit(false); setZoom((z) => Math.max(0.1, z - 0.25)); }}>−</button>
+        <span className="fe-tag">{fit ? "fit" : `${Math.round(zoom * 100)}%`}</span>
+        <button className="icon-btn sm" onClick={() => { setFit(false); setZoom((z) => Math.min(6, z + 0.25)); }}>+</button>
+        <button className="icon-btn sm" onClick={() => { setFit(true); setZoom(1); }} title="Fit">⤢</button>
+      </div>
+      <div className="fe-body" style={{ display: "grid", placeItems: "center", background: "var(--bg)" }}>
+        <img
+          src={f.dataUrl || f.content}
+          alt={f.path}
+          style={fit
+            ? { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "var(--r-sm)" }
+            : { transform: `scale(${zoom})`, transformOrigin: "center", borderRadius: "var(--r-sm)" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ sheet view */
+function SheetView({ text, path }: { text: string; path: string }) {
+  const [raw, setRaw] = useState(false);
+  const rows = useMemo(() => {
+    const delim = path.endsWith(".tsv") ? "\t" : ",";
+    return text.trim().split(/\r?\n/).map((line) => {
+      const out: string[] = []; let cur = ""; let q = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; continue; }
+        if (ch === delim && !q) { out.push(cur); cur = ""; continue; }
+        cur += ch;
+      }
+      out.push(cur);
+      return out;
+    });
+  }, [text, path]);
+
+  if (raw) {
+    return (
+      <div className="fe">
+        <div className="fe-bar">
+          <span className="fe-tag">{rows.length} rows</span>
+          <span className="grow" />
+          <button className="icon-btn sm" data-active onClick={() => setRaw(false)}>grid</button>
+        </div>
+        <div className="fe-body"><pre className="fe-pre">{text}</pre></div>
+      </div>
+    );
+  }
+
+  const width = Math.max(...rows.map((r) => r.length), 1);
+  return (
+    <div className="fe">
+      <div className="fe-bar">
+        <span className="fe-tag">{rows.length - 1} rows × {width} cols</span>
+        <span className="grow" />
+        <button className="icon-btn sm" onClick={() => setRaw(true)}>raw</button>
+      </div>
+      <div className="fe-body" style={{ padding: 0 }}>
+        <table className="fe-grid">
+          <thead>
+            <tr>
+              <th className="fe-gutter" />
+              {Array.from({ length: width }).map((_, i) => <th key={i}>{rows[0]?.[i] ?? ""}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(1).map((r, i) => (
+              <tr key={i}>
+                <td className="fe-gutter">{i + 1}</td>
+                {Array.from({ length: width }).map((_, j) => <td key={j}>{r[j] ?? ""}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------- code / text / markdown */
+function CodeArea({
+  value, onChange, lang, readOnly,
+}: { value: string; onChange: (v: string) => void; lang: string; readOnly?: boolean }) {
+  const ta = useRef<HTMLTextAreaElement>(null);
+  const pre = useRef<HTMLPreElement>(null);
+  const lines = value.split("\n").length;
+
+  const sync = () => {
+    if (pre.current && ta.current) {
+      pre.current.scrollTop = ta.current.scrollTop;
+      pre.current.scrollLeft = ta.current.scrollLeft;
+    }
+  };
+
+  const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const s = el.selectionStart, en = el.selectionEnd;
+      const next = value.slice(0, s) + "  " + value.slice(en);
+      onChange(next);
+      requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+    }
+  };
+
+  return (
+    <div className="fe-code">
+      <div className="fe-lines" aria-hidden>
+        {Array.from({ length: lines }).map((_, i) => <span key={i}>{i + 1}</span>)}
+      </div>
+      <div className="fe-code-inner">
+        <pre ref={pre} className="fe-hl" aria-hidden><code>{highlight(value + "\n", lang)}</code></pre>
+        <textarea
+          ref={ta}
+          className="fe-ta"
+          value={value}
+          spellCheck={false}
+          readOnly={readOnly}
+          onScroll={sync}
+          onKeyDown={onKey}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== main */
+export function FileEditor({ chatId, path, view }: { chatId: string; path: string; view?: "ui" }) {
+  const file = useApp((s) => s.chats[chatId]?.files[path]);
+  const putFile = useApp((s) => s.putFile);
+  const [draft, setDraft] = useState(file?.content ?? "");
+  const [mode, setMode] = useState<Mode>(view === "ui" ? "preview" : "preview");
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setDraft(file?.content ?? ""); setDirty(false); }, [path, file?.updatedAt]);
+
+  if (!file) return <div className="empty-hint" style={{ padding: 20 }}>file not found: {path}</div>;
+
+  const kind = kindOf(file);
+  const lang = langOf(file.path);
+
+  const save = () => {
+    putFile(chatId, { ...file, content: draft, size: draft.length, updatedAt: Date.now() });
+    setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 1400);
+  };
+  const change = (v: string) => { setDraft(v); setDirty(true); };
+
+  if (kind === "image") return <ImageView f={file} />;
+  if (kind === "sheet") return <SheetView text={file.content} path={file.path} />;
+
+  /* ---- view format: *.ui.json — live blocks, still just a file ---- */
+  if (view === "ui") {
+    const uiMode: "preview" | "edit" = mode === "edit" ? "edit" : "preview";
+    return (
+      <div className="fe">
+        <div className="fe-bar">
+          <span className="fe-tag">ui.json</span>
+          <span className="fe-tag">{draft.split("\n").length} lines</span>
+          {dirty && <span className="fe-tag" style={{ color: "var(--warn)" }}>unsaved</span>}
+          <span className="grow" />
+          <div className="fe-seg">
+            <button data-active={uiMode === "preview"} onClick={() => setMode("preview")}>view</button>
+            <button data-active={uiMode === "edit"} onClick={() => setMode("edit")}>code</button>
+          </div>
+          <button className="icon-btn sm" title="Copy" onClick={() => navigator.clipboard?.writeText(draft)}><I.copy size={13} /></button>
+          <button className="icon-btn sm" title="Save (⌘S)" data-active={saved} onClick={save} disabled={!dirty}>
+            {saved ? <I.check size={13} /> : "save"}
+          </button>
+        </div>
+        <div className="fe-body" style={{ padding: 0 }}
+             onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
+          {uiMode === "edit"
+            ? <CodeArea value={draft} onChange={change} lang="json" />
+            : <div className="fe-preview" style={{ height: "100%", overflow: "auto" }}><BlocksView content={draft} /></div>}
+        </div>
+      </div>
+    );
+  }
+
+  const isMd = kind === "markdown";
+
+  return (
+    <div className="fe">
+      <div className="fe-bar">
+        <span className="fe-tag">{lang}</span>
+        <span className="fe-tag">{draft.split("\n").length} lines</span>
+        {dirty && <span className="fe-tag" style={{ color: "var(--warn)" }}>unsaved</span>}
+        <span className="grow" />
+        {isMd && (
+          <div className="fe-seg">
+            {(["edit", "split", "preview"] as Mode[]).map((m) => (
+              <button key={m} data-active={mode === m} onClick={() => setMode(m)}>{m}</button>
+            ))}
+          </div>
+        )}
+        <button className="icon-btn sm" title="Copy" onClick={() => navigator.clipboard?.writeText(draft)}><I.copy size={13} /></button>
+        <button className="icon-btn sm" data-active={saved} title="Save (⌘S)" onClick={save} disabled={!dirty && !saved}>
+          {saved ? <I.check size={13} /> : "save"}
+        </button>
+      </div>
+
+      <div className="fe-body" style={{ padding: 0 }}
+           onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
+        {isMd && mode === "preview" && <div className="fe-preview"><Markdown text={draft} animate={false} /></div>}
+        {isMd && mode === "edit" && <CodeArea value={draft} onChange={change} lang="markdown" />}
+        {isMd && mode === "split" && (
+          <div className="fe-split">
+            <CodeArea value={draft} onChange={change} lang="markdown" />
+            <div className="fe-preview"><Markdown text={draft} animate={false} /></div>
+          </div>
+        )}
+        {!isMd && <CodeArea value={draft} onChange={change} lang={lang} />}
+      </div>
+    </div>
+  );
+}
