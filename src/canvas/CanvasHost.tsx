@@ -179,6 +179,7 @@ export function CanvasHost({ chatId }: { chatId: string }) {
 
   const isVid = isVideo(res?.url);
   const [webTab, setWebTab] = useState<"video" | "reader" | "live">(isVid ? "video" : "reader");
+  const [copied, setCopied] = useState(false);
 
   // Keep webTab in sync when target URL changes
   useEffect(() => {
@@ -270,80 +271,127 @@ export function CanvasHost({ chatId }: { chatId: string }) {
         setControlsVisible(false);
       }}
     >
-      {/* Floating Controls Bar with Soft Shadow that appears on hover */}
+      {/* Floating Controls Panel with Soft Shadow that appears on hover */}
       <div
-        className="cv-floating-bar"
+        className="cv-floating-panel"
         data-visible={controlsVisible}
         onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest("button, a")) return;
+          if ((e.target as HTMLElement).closest("button, a, input")) return;
           onPointerDown(e, "move");
         }}
       >
-        <div className="cv-floating-left">
-          {res.url ? (isVid ? <I.video size={13} /> : <I.globe size={13} />) : res.path && viewOf(res.path, file) === "project" ? <I.canvas size={13} /> : <I.file size={13} />}
-          <span className="cv-floating-title">{res.title}</span>
-          <span className="chip sm">{res.badge}</span>
-        </div>
+        {/* Row 1: Identity & Window Controls */}
+        <div className="cv-floating-row top">
+          <div className="cv-floating-info">
+            <span className="cv-floating-icon">
+              {res.url ? (
+                isVid ? <I.video size={14} /> : <I.globe size={14} />
+              ) : res.path && viewOf(res.path, file) === "project" ? (
+                <I.canvas size={14} />
+              ) : (
+                <I.file size={14} />
+              )}
+            </span>
+            <div className="cv-floating-titles">
+              <span className="cv-floating-title" title={res.title}>
+                {res.title}
+              </span>
+              {res.url && (
+                <span className="cv-floating-meta">
+                  {hostOf(res.url)}
+                </span>
+              )}
+              {!res.url && res.path && (
+                <span className="cv-floating-meta">
+                  {res.path}
+                </span>
+              )}
+            </div>
+          </div>
 
-        {res.url && (
-          <div className="cv-floating-seg">
-            {isVid && (
-              <button data-active={webTab === "video"} onClick={() => setWebTab("video")}>
-                video
-              </button>
-            )}
-            <button data-active={webTab === "reader"} onClick={() => setWebTab("reader")}>
-              {isVid ? "notes" : "reader"}
+          <div className="cv-floating-win-ctrls">
+            <button
+              className="cv-floating-btn"
+              title="Reload"
+              onClick={() => setRect((r) => (r ? { ...r } : r))}
+            >
+              <I.refresh size={13} />
             </button>
-            <button data-active={webTab === "live"} onClick={() => setWebTab("live")}>
-              live
+            <button
+              className="cv-floating-btn"
+              title={maximized ? "Restore" : "Maximise"}
+              onClick={() => setUI({ canvasMax: !maximized })}
+            >
+              {maximized ? "▫" : "▢"}
+            </button>
+            <button
+              className="cv-floating-btn close"
+              title="Close (Esc)"
+              onClick={closeCanvas}
+            >
+              <I.x size={14} />
             </button>
           </div>
-        )}
+        </div>
 
-        <div className="cv-floating-actions">
-          {res.url && (
-            <>
+        {/* Row 2: View Modes & Quick Actions (shown when applicable) */}
+        {res.url && (
+          <div className="cv-floating-row bottom">
+            <div className="cv-floating-tabs">
+              {isVid && (
+                <button
+                  data-active={webTab === "video"}
+                  onClick={() => setWebTab("video")}
+                  className="cv-floating-tab"
+                >
+                  <I.video size={12} />
+                  <span>video</span>
+                </button>
+              )}
               <button
-                className="cv-floating-btn"
-                title="Copy link"
-                onClick={() => copyToClipboard(res.url!)}
+                data-active={webTab === "reader"}
+                onClick={() => setWebTab("reader")}
+                className="cv-floating-tab"
               >
-                <I.copy size={12} />
+                <I.file size={12} />
+                <span>{isVid ? "notes" : "reader"}</span>
+              </button>
+              <button
+                data-active={webTab === "live"}
+                onClick={() => setWebTab("live")}
+                className="cv-floating-tab"
+              >
+                <I.globe size={12} />
+                <span>live</span>
+              </button>
+            </div>
+
+            <div className="cv-floating-actions">
+              <button
+                className="cv-floating-action-pill"
+                title="Copy link"
+                onClick={() => {
+                  copyToClipboard(res.url!);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1600);
+                }}
+              >
+                {copied ? <I.check size={12} /> : <I.copy size={12} />}
+                <span>{copied ? "copied" : "copy link"}</span>
               </button>
               <a
-                className="cv-floating-btn"
+                className="cv-floating-action-pill"
                 href={res.url}
                 target="_blank"
                 rel="noreferrer noopener"
                 title="Open in new tab"
               >
-                ↗
+                <span>open</span>
+                <span style={{ fontSize: 11 }}>↗</span>
               </a>
-            </>
-          )}
-          <button
-            className="cv-floating-btn"
-            title="Reload"
-            onClick={() => setRect((r) => (r ? { ...r } : r))}
-          >
-            <I.refresh size={12} />
-          </button>
-          <button
-            className="cv-floating-btn"
-            title={maximized ? "Restore" : "Maximise"}
-            onClick={() => setUI({ canvasMax: !maximized })}
-          >
-            {maximized ? "▫" : "▢"}
-          </button>
-          <button
-            className="cv-floating-btn close"
-            title="Close (Esc)"
-            onClick={closeCanvas}
-          >
-            <I.x size={13} />
-          </button>
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="cv-body">{body}</div>
