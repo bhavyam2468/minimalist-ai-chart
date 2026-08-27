@@ -33,6 +33,7 @@ export type Block =
   | { t: "media"; kind: "youtube" | "video" | "image"; src: string; caption?: string }
   | { t: "html"; html: string }
   | { t: "fndef"; id: string; kids: Inline[] }
+  | { t: "tool"; id?: string; name: string; argsRaw: string; open: boolean }
   | { t: "component"; raw: string; attrs?: string; open: boolean };
 
 export interface ListItem {
@@ -322,6 +323,50 @@ export function parseBlocks(src: string): Block[] {
       continue;
     }
 
+    /* split inline <tool-call or <tool_call tag if glued to preceding text */
+    if (/(<tool[-_]call)/i.test(line) && !/^\s*<tool[-_]call/i.test(line)) {
+      const idx = line.search(/<tool[-_]call/i);
+      const before = line.slice(0, idx);
+      const after = line.slice(idx);
+      lines.splice(i, 1, before, after);
+      continue;
+    }
+
+    /* <tool_call> or <tool-call> */
+    if (/^\s*<tool[-_]call/i.test(line)) {
+      const body: string[] = [];
+      let closed = false;
+      const tagM = line.match(/^\s*<tool[-_]call([^>]*)>([\s\S]*)$/i);
+      const attrs = tagM ? tagM[1].trim() : "";
+      const inlineRest = tagM ? tagM[2] : "";
+      const idMatch = attrs.match(/id="([^"]+)"/i);
+      const nameMatch = attrs.match(/name="([^"]+)"/i);
+      const callId = idMatch ? idMatch[1] : undefined;
+      const callName = nameMatch ? nameMatch[1] : "tool";
+
+      if (/<\/tool[-_]call>/i.test(inlineRest)) {
+        body.push(inlineRest.replace(/<\/tool[-_]call>[\s\S]*$/i, ""));
+        closed = true;
+        i++;
+      } else {
+        if (inlineRest.trim()) body.push(inlineRest);
+        i++;
+        while (i < lines.length) {
+          const l = lines[i];
+          if (/<\/tool[-_]call>/i.test(l)) {
+            body.push(l.replace(/<\/tool[-_]call>[\s\S]*$/i, ""));
+            closed = true;
+            i++;
+            break;
+          }
+          body.push(l);
+          i++;
+        }
+      }
+      out.push({ t: "tool", id: callId, name: callName, argsRaw: body.join("\n").trim(), open: !closed });
+      continue;
+    }
+
     /* thematic break */
     if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(line)) { out.push({ t: "hr" }); i++; continue; }
 
@@ -431,7 +476,7 @@ export function parseBlocks(src: string): Block[] {
     while (i < lines.length) {
       const l = lines[i];
       if (!l.trim()) break;
-      if (/^\s{0,3}(#{1,6}\s|>|```|~~~|\$\$|<details|<component)/i.test(l)) break;
+      if (/^\s{0,3}(#{1,6}\s|>|```|~~~|\$\$|<details|<component|<tool[-_]call)/i.test(l)) break;
       if (/^(\s*)([-*+]|\d{1,9}[.)])\s+/.test(l)) break;
       if (l.trim().startsWith("|")) break;
       if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(l)) break;

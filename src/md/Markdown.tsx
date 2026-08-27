@@ -24,6 +24,7 @@ function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: 
 /* ------------------------------------------------------- syntax highlight */
 import { highlight } from "./highlight";
 import { copyToClipboard } from "../lib/clipboard";
+import { useApp } from "../lib/store";
 import { BlocksView, ComponentBlock } from "../canvas/Blocks";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 
@@ -32,7 +33,7 @@ function copy(text: string) { return copyToClipboard(text); }
 
 /** Links inside a response open in the canvas viewport, not a new tab. */
 function openInCanvas(url: string) {
-  import("../lib/store").then(({ useApp }) => useApp.getState().openCanvas({ kind: "source", url }));
+  useApp.getState().openCanvas({ kind: "source", url });
 }
 
 const Ico = {
@@ -41,6 +42,8 @@ const Ico = {
   chart: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="12" width="4" height="8" rx="1" /><rect x="10" y="6" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="17" rx="1" /></svg>,
   canvas: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>,
   bolt: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>,
+  check: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>,
+  alert: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>,
 };
 
 /* ------------------------------------------------------------------ inline */
@@ -290,40 +293,66 @@ function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open:
   );
 }
 
-function InlineToolBlock({ lang, code }: { lang: string; code: string }) {
-  const [open, setOpen] = useState(false);
-  const toolName = lang.startsWith("call:")
-    ? lang.slice(5)
-    : (() => {
-        try {
-          const j = JSON.parse(code);
-          return j.name || j.tool || "tool";
-        } catch {
-          const m = code.match(/"(?:name|tool)"\s*:\s*"([^"]+)"/);
-          return m ? m[1] : "tool";
-        }
-      })();
+function getArgHint(args: any): string {
+  if (!args) return "";
+  if (typeof args === "string") return args.slice(0, 60);
+  const q = args.query || args.q || args.url || args.path || args.target || args.name || args.ref;
+  if (q && typeof q === "string") return q.slice(0, 60);
+  const vals = Object.values(args);
+  if (!vals.length) return "";
+  const first = vals[0];
+  return typeof first === "string" ? first.slice(0, 60) : "";
+}
 
-  const argsHint = useMemo(() => {
-    try {
-      const j = JSON.parse(code);
-      const args = j.arguments || j.args || j;
-      if (typeof args === "string") return args.slice(0, 60);
-      if (typeof args !== "object" || !args) return "";
-      const vals = Object.values(args);
-      if (!vals.length) return "";
-      const firstVal = vals[0];
-      return typeof firstVal === "string" ? firstVal.slice(0, 60) : "";
-    } catch {
-      return "";
+function InlineToolBlock({
+  id,
+  name,
+  argsRaw,
+  openBlock,
+  lang,
+  code,
+}: {
+  id?: string;
+  name?: string;
+  argsRaw?: string;
+  openBlock?: boolean;
+  lang?: string;
+  code?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rawCode = argsRaw || code || "";
+  const initialName = name || (lang?.startsWith("call:") ? lang.slice(5) : "tool");
+
+  const toolCall = useApp((s) => {
+    if (!id) return null;
+    const chat = s.chats[s.activeChatId || ""];
+    if (!chat) return null;
+    for (const n of Object.values(chat.nodes)) {
+      const found = n.toolCalls?.find((t) => t.id === id);
+      if (found) return found;
     }
-  }, [code]);
+    return null;
+  });
+
+  const toolName = toolCall?.name || initialName;
+  const isRunning = toolCall?.status === "running" || (openBlock && !toolCall);
+  const isErr = toolCall?.status === "error";
+  const ms = toolCall?.ms;
+
+  const hint = useMemo(() => {
+    if (toolCall?.args) return getArgHint(toolCall.args);
+    try {
+      return getArgHint(JSON.parse(rawCode));
+    } catch {
+      return rawCode.slice(0, 60);
+    }
+  }, [toolCall, rawCode]);
 
   return (
     <div className="inline-tool-call a-blk" style={{ margin: "8px 0" }}>
       <div
         className="trace-summary"
-        data-status="done"
+        data-status={isRunning ? "running" : isErr ? "error" : "done"}
         onClick={() => setOpen((o) => !o)}
         style={{
           display: "inline-flex",
@@ -334,30 +363,80 @@ function InlineToolBlock({ lang, code }: { lang: string; code: string }) {
           cursor: "pointer",
           borderRadius: "var(--r-sm)",
           background: "var(--surface)",
-          border: "1px solid var(--line-soft)",
+          border: `1px solid ${isErr ? "rgba(239, 68, 68, 0.4)" : "var(--line-soft)"}`,
           fontSize: "12px",
           color: "var(--text-dim)",
         }}
       >
-        <span style={{ color: "var(--accent)", display: "inline-flex", alignItems: "center" }}>
-          {Ico.bolt}
+        <span
+          style={{
+            color: isRunning ? "var(--accent)" : isErr ? "var(--err)" : "var(--ok)",
+            display: "inline-flex",
+            alignItems: "center",
+          }}
+        >
+          {isRunning ? (
+            <span className="spinner sm" style={{ width: 11, height: 11, borderWidth: 1.5 }} />
+          ) : isErr ? (
+            Ico.alert
+          ) : (
+            Ico.check
+          )}
         </span>
-        <b>{toolName}</b>
-        {argsHint && <span style={{ color: "var(--text-faint)" }}>{argsHint}</span>}
-        <span style={{ marginLeft: "auto", color: "var(--text-faint)" }}>{open ? "−" : "+"}</span>
+        <b style={{ color: "var(--text)" }}>{toolName}</b>
+        {hint && (
+          <span
+            style={{
+              color: "var(--text-faint)",
+              maxWidth: 260,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {hint}
+          </span>
+        )}
+        {ms != null && (
+          <span style={{ fontSize: "11px", color: "var(--text-faint)", marginLeft: 2 }}>
+            · {ms > 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`}
+          </span>
+        )}
+        <span style={{ marginLeft: "auto", color: "var(--text-faint)", paddingLeft: 4 }}>{open ? "−" : "+"}</span>
       </div>
       {open && (
         <div
-          className="md-pre"
+          className="trace-out"
           style={{
             marginTop: 6,
             padding: "8px 12px",
             borderRadius: "var(--r-sm)",
             background: "var(--surface-2)",
-            border: "1px solid var(--line-soft)",
+            border: `1px solid ${isErr ? "rgba(239, 68, 68, 0.3)" : "var(--line-soft)"}`,
+            fontSize: "12px",
           }}
         >
-          <code>{highlight(code, "json")}</code>
+          {rawCode && (
+            <div className="trace-args" style={{ marginBottom: toolCall?.output ? 6 : 0 }}>
+              <span style={{ color: "var(--text-faint)", fontWeight: 540 }}>args: </span>
+              <code>{rawCode}</code>
+            </div>
+          )}
+          {toolCall?.output && (
+            <div
+              className="trace-result"
+              style={{
+                color: isErr ? "var(--err)" : "var(--text)",
+                whiteSpace: "pre-wrap",
+                maxHeight: 240,
+                overflowY: "auto",
+                fontFamily: "var(--mono)",
+                fontSize: "11px",
+              }}
+            >
+              {typeof toolCall.output === "string" ? toolCall.output : JSON.stringify(toolCall.output, null, 2)}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -514,6 +593,12 @@ const BlockView = memo(function BlockView({ b, ctx }: { b: Block; ctx: Ctx }) {
       );
     }
     case "html": return <div className="a-blk" dangerouslySetInnerHTML={{ __html: b.html }} />;
+    case "tool":
+      return (
+        <ErrorBoundary name="Inline Tool">
+          <InlineToolBlock id={b.id} name={b.name} argsRaw={b.argsRaw} openBlock={b.open} />
+        </ErrorBoundary>
+      );
     case "component":
       return (
         <ErrorBoundary name="Component">

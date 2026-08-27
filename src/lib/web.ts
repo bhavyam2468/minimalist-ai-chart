@@ -333,6 +333,42 @@ async function duckDuckGoInstantSearch(query: string, limit: number, signal?: Ab
   }
 }
 
+// 3.5 Jina AI Full-Web Search (searches Google/Bing, returns external URLs & snippets, open CORS)
+async function jinaSearch(query: string, limit: number, signal?: AbortSignal): Promise<SearchHit[]> {
+  try {
+    const url = `https://s.jina.ai/${encodeURIComponent(query)}`;
+    const r = await withTimeout(
+      fetch(url, {
+        headers: {
+          Accept: "application/json",
+          "X-Retain-Images": "none",
+        },
+        signal,
+      }),
+      4200,
+      "jina search timeout",
+      signal
+    );
+    if (!r.ok) return [];
+    const j = await r.json();
+    const items = Array.isArray(j?.data) ? j.data : [];
+    const hits: SearchHit[] = [];
+    for (const item of items) {
+      if (hits.length >= limit) break;
+      if (item.url) {
+        hits.push({
+          title: item.title || item.url,
+          url: item.url,
+          snippet: (item.description || item.content || "").slice(0, 300),
+        });
+      }
+    }
+    return hits;
+  } catch {
+    return [];
+  }
+}
+
 // 4. Public SearXNG Multi-Instance Web Aggregator (Native JSON + CORS)
 async function searxngSearch(query: string, limit: number, signal?: AbortSignal): Promise<SearchHit[]> {
   const instances = [
@@ -340,6 +376,7 @@ async function searxngSearch(query: string, limit: number, signal?: AbortSignal)
     "https://priv.au",
     "https://searx.be",
     "https://search.mdosch.de",
+    "https://baresearch.org",
   ];
 
   // Try instances concurrently with quick race
@@ -476,15 +513,19 @@ export async function webSearch(
   const signal = opts.signal;
   const key = opts.key;
 
+  // Detect industry / business / report queries vs metadata discography queries
+  const isReportOrStatsQuery = /\b(report|stats|statistics|revenue|market|streaming|industry|sales|forecast|growth|overview|ifpi|billboard|riaa)\b/i.test(query);
+
   // Detect niche category if not explicitly specified
   const isMusicQuery =
-    niche === "music" ||
-    site.includes("bandcamp") ||
-    site.includes("rateyourmusic") ||
-    site.includes("spotify") ||
-    site.includes("last.fm") ||
-    site.includes("discogs") ||
-    /\b(band|bands|album|albums|track|discography|emo|punk|indie|guitar|musician|singer|metal|revival)\b/i.test(query);
+    !isReportOrStatsQuery &&
+    (niche === "music" ||
+      site.includes("bandcamp") ||
+      site.includes("rateyourmusic") ||
+      site.includes("spotify") ||
+      site.includes("last.fm") ||
+      site.includes("discogs") ||
+      /\b(band|bands|album|albums|track|discography|musician|singer|discogs)\b/i.test(query));
 
   const isDiscussionQuery =
     niche === "discussions" ||
@@ -539,10 +580,19 @@ export async function webSearch(
   }
 
   // Always include fast general search engines
-  const effectiveQ = site ? `site:${site} ${query}` : query;
+  const hasSite = Boolean(site);
+  const cleanQ = query.trim();
+  const effectiveQ = hasSite && !cleanQ.toLowerCase().includes(`site:${site}`) ? `site:${site} ${cleanQ}` : cleanQ;
+
+  // Jina AI Web Search (searches the live web including specific domains, open CORS)
+  tasks.push(jinaSearch(effectiveQ, limit, signal));
   tasks.push(searxngSearch(effectiveQ, limit, signal));
   tasks.push(duckDuckGoInstantSearch(query, limit, signal));
-  tasks.push(wikipediaSearch(query, limit, signal));
+
+  // Only query Wikipedia if no specific external site is targeted, or if Wikipedia itself is the target
+  if (!hasSite || site.includes("wikipedia")) {
+    tasks.push(wikipediaSearch(query, limit, signal));
+  }
 
   // Run all providers concurrently with timeout protection
   const results = await Promise.allSettled(tasks);
@@ -565,9 +615,18 @@ export async function webSearch(
     return combined.slice(0, limit);
   }
 
-  // Ultimate fallback: Wikipedia direct
-  const fallback = await wikipediaSearch(query, limit, signal);
-  if (fallback.length) return fallback;
+  // Fallback: If site filter was too narrow, try Jina without the site prefix
+  if (hasSite) {
+    const broaderQ = cleanQ.replace(/site:\S+/gi, "").trim() || cleanQ;
+    const broaderHits = await jinaSearch(broaderQ, limit, signal);
+    if (broaderHits.length > 0) return broaderHits.slice(0, limit);
+  }
+
+  // Ultimate fallback: Wikipedia direct ONLY if not targeting a specific external site
+  if (!hasSite || site.includes("wikipedia")) {
+    const fallback = await wikipediaSearch(query, limit, signal);
+    if (fallback.length) return fallback;
+  }
 
   return [
     {

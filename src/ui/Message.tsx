@@ -66,8 +66,11 @@ function getArgHint(args: any): string {
 }
 
 function ToolTrace({ node }: { node: Node }) {
-  const calls = node.toolCalls;
-  if (!calls?.length) return null;
+  const content = node.content || "";
+  const calls = (node.toolCalls || []).filter(
+    (t) => !content.includes(t.id) && !content.includes(`<tool_call id="${t.id}"`) && !content.includes(`<tool-call id="${t.id}"`)
+  );
+  if (!calls.length) return null;
 
   const [isOpen, setIsOpen] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);

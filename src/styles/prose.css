@@ -41,20 +41,20 @@
 
 /* ---- highlight: sweeps only once the enclosing block is complete -------- */
 .md-mark {
-  color: #fde047;
-  background-color: rgba(234, 179, 8, 0.16);
-  border-bottom: 1.5px solid rgba(234, 179, 8, 0.45);
-  border-radius: 3px;
-  padding: .08em .26em;
-  margin: 0 -.04em;
-  font-weight: 500;
+  color: var(--text);
+  background-color: var(--accent-soft);
+  border-bottom: 1.5px solid var(--accent-line);
+  border-radius: var(--r-xs);
+  padding: .1em .32em;
+  margin: 0 -.02em;
+  font-weight: 520;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 [data-theme="light"] .md-mark {
-  color: #854d0e;
-  background-color: rgba(234, 179, 8, 0.22);
-  border-bottom-color: rgba(234, 179, 8, 0.6);
+  color: var(--text);
+  background-color: var(--accent-soft);
+  border-bottom-color: var(--accent-line);
 }
 .md-mark[data-complete="true"] { animation: sweep 620ms var(--ease-out) 140ms forwards; }
 

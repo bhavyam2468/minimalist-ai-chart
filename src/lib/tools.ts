@@ -1,5 +1,6 @@
 import { useApp, uid } from "./store";
 import { findSkills, skillByName, SKILLS } from "./skills";
+import { searchComponents, getComponentDef } from "./ui-library";
 import { hostOf, siteSearch, webCrawl, webFetch, webSearch } from "./web";
 import type { Artifact, WFile } from "./types";
 
@@ -52,6 +53,22 @@ export function baseToolDefs() {
     { name: "run_python", description: "Execute python in a sandbox (numpy/pandas/matplotlib available). Workspace files are mounted at /work. Returns stdout.", parameters: P({ code: str("python source") }, ["code"]) },
 
     { name: "open_canvas", description: "Show something in the user's canvas right now: a workspace file path, a folder, an artifact id, or an http(s) url. Creates nothing.", parameters: P({ target: str("file path, folder, artifact id, or url"), title: str("optional label") }, ["target"]) },
+    {
+      name: "search_components",
+      description: "Search the UI Component Marketplace & Library for interactive components, form elements (sliders, buttons, checkboxes, dropdowns, switches, steppers), charts, math/science visualizers, and dashboards. Search by type name, category, or semantic tags.",
+      parameters: P({
+        query: str("search query, tag, or component type (e.g. 'slider', 'form', 'button', 'chart', 'ios volume', 'math', 'chemistry')"),
+        category: { type: "string", enum: ["form", "chart", "math-science", "data", "feedback", "layout", "interactive"], description: "optional category filter" },
+        tag: str("optional specific tag to filter by"),
+      }),
+    },
+    {
+      name: "get_component_schema",
+      description: "Get the full schema, accepted props, and live <component> code example for a specific UI component type (e.g. 'slider', 'button', 'checkbox', 'radio', 'dropdown', 'switch', 'chart', 'math', 'chemistry').",
+      parameters: P({
+        type: str("component type name, e.g. 'slider', 'button', 'checkbox', 'dropdown', 'switch', 'chart'"),
+      }, ["type"]),
+    },
     {
       name: "artifact",
       description: "Name a reference so the user can reopen it from the artifacts list: point at a workspace file/folder or a url. No content is stored — the target file stays the source of truth, and editing it updates the artifact. Files you write that are presentational get an artifact automatically, so only use this to label, annotate, or reference a url.",
@@ -145,6 +162,38 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
       if (!s) return `No skill named ${args.name}. Available: ${SKILLS.map((x) => x.name).join(", ")}`;
       ctx.onSkillLoaded?.(s.name);
       return s.body;
+    }
+
+    /* ---- UI Component Library & Marketplace ---- */
+    case "search_components": {
+      const hits = searchComponents(args.query || "", { category: args.category, tag: args.tag });
+      if (!hits.length) {
+        return `No components found for query "${args.query || ""}". Available types: slider, button, checkbox, radio, dropdown, switch, input, stepper, rating, progress, chart, math, chemistry, switcher, metrics, question.`;
+      }
+      return hits
+        .map(
+          (h) =>
+            `### ${h.name} (\`<component type="${h.type}" />\`)\n` +
+            `Type: \`${h.type}\` | Category: ${h.category}\n` +
+            `Tags: ${h.tags.join(", ")}\n` +
+            `Description: ${h.description}\n` +
+            `Example:\n\`\`\`html\n${h.snippet}\n\`\`\``
+        )
+        .join("\n\n---\n\n");
+    }
+    case "get_component_schema": {
+      const def = getComponentDef(args.type);
+      if (!def) {
+        return `Component type "${args.type}" not found. Use search_components to explore available component types.`;
+      }
+      return (
+        `# Component: ${def.name} (\`${def.type}\`)\n` +
+        `Category: ${def.category}\n` +
+        `Description: ${def.description}\n\n` +
+        `## Properties Schema:\n\`\`\`json\n${JSON.stringify(def.schema, null, 2)}\n\`\`\`\n\n` +
+        `## Quick Snippet:\n\`\`\`html\n${def.snippet}\n\`\`\`\n\n` +
+        `## Full JSON Structure:\n\`\`\`json\n${def.jsonSnippet}\n\`\`\``
+      );
     }
 
     /* ---- common aliases ---- */

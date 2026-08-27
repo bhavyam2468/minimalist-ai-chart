@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Markdown } from "../md/Markdown";
 import { useApp } from "../lib/store";
 import { send } from "../lib/agent";
@@ -1588,6 +1588,598 @@ export function FollowupsBlock({ b }: { b: CanvasBlock }) {
   );
 }
 
+/* -------------------------------------------------- form components */
+export function SliderBlock({ b }: { b: any }) {
+  const min = Number(b.min ?? 0);
+  const max = Number(b.max ?? 100);
+  const step = Number(b.step ?? 1);
+  const unit = b.unit ?? "%";
+  const label = b.label || b.title || "Slider";
+  const [val, setVal] = useState<number>(() => Number(b.value ?? Math.round((min + max) / 2)));
+  const [isDragging, setIsDragging] = useState(false);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  const pct = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
+
+  const updateFromPointer = (clientX: number) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const rawVal = min + ratio * (max - min);
+    const stepped = Math.round(rawVal / step) * step;
+    setVal(Math.min(max, Math.max(min, stepped)));
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    updateFromPointer(e.clientX);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (isDragging) updateFromPointer(e.clientX);
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+  };
+
+  return (
+    <div
+      className="comp-slider-card a-blk"
+      style={{
+        padding: "12px 16px",
+        background: "var(--surface)",
+        border: "1px solid var(--line-soft)",
+        borderRadius: "var(--r)",
+        margin: "8px 0",
+        userSelect: "none",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <I.sliders size={13} />
+          {label}
+        </span>
+        <span style={{ fontSize: "var(--fs-xs)", fontFamily: "var(--mono)", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
+          {val}{unit}
+        </span>
+      </div>
+      {/* iOS Volume-Style Fluid Slider Pill */}
+      <div
+        ref={trackRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        className="ios-slider-pill"
+        data-active={isDragging}
+        style={{
+          position: "relative",
+          height: 38,
+          background: "var(--surface-2)",
+          borderRadius: 9999,
+          cursor: "ew-resize",
+          overflow: "hidden",
+          border: "1px solid var(--line-soft)",
+          touchAction: "none",
+          transform: isDragging ? "scaleY(1.12)" : "scaleY(1)",
+          transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s ease",
+        }}
+      >
+        {/* Fill level */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct}%`,
+            background: "var(--accent)",
+            opacity: 0.88,
+            borderRadius: 9999,
+            transition: isDragging ? "none" : "width 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+        />
+        {/* Icon & readout */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 14px",
+            pointerEvents: "none",
+            color: "var(--text)",
+            mixBlendMode: "difference",
+          }}
+        >
+          <I.volume size={14} />
+          <span style={{ fontSize: "11.5px", fontWeight: 600, fontFamily: "var(--mono)" }}>{Math.round(pct)}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ButtonBlock({ b }: { b: any }) {
+  const [loading, setLoading] = useState(Boolean(b.loading));
+  const [clicked, setClicked] = useState(false);
+  const variant = b.variant || "primary";
+  const size = b.size || "md";
+
+  const onClick = () => {
+    if (b.disabled || loading) return;
+    setClicked(true);
+    if (b.action === "loading" || !b.disabled) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        setTimeout(() => setClicked(false), 900);
+      }, 1100);
+    }
+  };
+
+  const bg = variant === "primary" ? "var(--accent)" : variant === "danger" ? "var(--err)" : "var(--surface-2)";
+  const color = variant === "primary" || variant === "danger" ? "#fff" : "var(--text)";
+
+  return (
+    <div style={{ display: "inline-flex", margin: "4px 4px 4px 0" }}>
+      <button
+        onClick={onClick}
+        disabled={b.disabled}
+        className={`comp-btn comp-btn-${variant}`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: size === "sm" ? "5px 10px" : size === "lg" ? "10px 18px" : "7px 14px",
+          borderRadius: variant === "pill" ? 9999 : "var(--r-sm)",
+          background: bg,
+          color,
+          border: variant === "outline" ? "1px solid var(--line-strong)" : "1px solid transparent",
+          fontSize: size === "sm" ? "12px" : "13px",
+          fontWeight: 540,
+          cursor: b.disabled ? "not-allowed" : "pointer",
+          opacity: b.disabled ? 0.6 : 1,
+          transform: clicked ? "scale(0.96)" : "scale(1)",
+          transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease",
+        }}
+      >
+        {loading ? <span className="spinner sm" style={{ width: 12, height: 12, borderWidth: 2 }} /> : clicked ? <I.check size={13} /> : null}
+        <span>{b.label || b.title || "Button"}</span>
+      </button>
+    </div>
+  );
+}
+
+export function CheckboxBlock({ b }: { b: any }) {
+  const [checked, setChecked] = useState(Boolean(b.checked));
+
+  return (
+    <div
+      onClick={() => setChecked(!checked)}
+      className="comp-checkbox-row a-blk"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "9px 13px",
+        borderRadius: "var(--r-sm)",
+        background: "var(--surface)",
+        border: "1px solid var(--line-soft)",
+        cursor: "pointer",
+        margin: "4px 0",
+        userSelect: "none",
+        transition: "background var(--t-fast), border-color var(--t-fast)",
+      }}
+    >
+      <div
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: "var(--r-xs)",
+          border: `1.5px solid ${checked ? "var(--accent)" : "var(--line-strong)"}`,
+          background: checked ? "var(--accent)" : "transparent",
+          display: "grid",
+          placeItems: "center",
+          marginTop: 2,
+          flexShrink: 0,
+          transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          transform: checked ? "scale(1.05)" : "scale(1)",
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline
+            points="20 6 9 17 4 12"
+            style={{
+              strokeDasharray: 24,
+              strokeDashoffset: checked ? 0 : 24,
+              transition: "stroke-dashoffset 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          />
+        </svg>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title}</span>
+        {b.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{b.description}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function RadioBlock({ b }: { b: any }) {
+  const options = Array.isArray(b.options) ? b.options : [];
+  const [selected, setSelected] = useState(b.value || options[0]?.id || "");
+
+  return (
+    <div className="comp-radio-group a-blk" style={{ display: "flex", flexDirection: "column", gap: 6, margin: "6px 0" }}>
+      {b.label && <div style={{ fontSize: "var(--fs-xs)", fontWeight: 550, color: "var(--text)", marginBottom: 2 }}>{b.label}</div>}
+      {options.map((opt: any) => {
+        const isSel = selected === opt.id;
+        return (
+          <div
+            key={opt.id}
+            onClick={() => setSelected(opt.id)}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              padding: "9px 13px",
+              borderRadius: "var(--r-sm)",
+              background: "var(--surface)",
+              border: `1px solid ${isSel ? "var(--accent)" : "var(--line-soft)"}`,
+              cursor: "pointer",
+              userSelect: "none",
+              transition: "border-color 0.15s ease, background 0.15s ease",
+            }}
+          >
+            <div
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                border: `1.5px solid ${isSel ? "var(--accent)" : "var(--line-strong)"}`,
+                display: "grid",
+                placeItems: "center",
+                marginTop: 2,
+                flexShrink: 0,
+              }}
+            >
+              {isSel && (
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "var(--accent)",
+                    transform: "scale(1)",
+                    animation: "fade-in 0.15s ease-out",
+                  }}
+                />
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{opt.label || opt.id}</span>
+              {opt.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{opt.description}</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function SwitchBlock({ b }: { b: any }) {
+  const [checked, setChecked] = useState(Boolean(b.checked));
+
+  return (
+    <div
+      onClick={() => setChecked(!checked)}
+      className="comp-switch-row a-blk"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 14px",
+        borderRadius: "var(--r-sm)",
+        background: "var(--surface)",
+        border: "1px solid var(--line-soft)",
+        cursor: "pointer",
+        margin: "4px 0",
+        userSelect: "none",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title}</span>
+        {b.description && <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{b.description}</span>}
+      </div>
+      {/* iOS Switch Track */}
+      <div
+        style={{
+          width: 44,
+          height: 25,
+          borderRadius: 9999,
+          background: checked ? "var(--accent)" : "var(--surface-3)",
+          position: "relative",
+          flexShrink: 0,
+          transition: "background 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          border: "1px solid var(--line-soft)",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 21 : 2,
+            width: 19,
+            height: 19,
+            borderRadius: "50%",
+            background: "#fff",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+            transition: "left 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function DropdownBlock({ b }: { b: any }) {
+  const [open, setOpen] = useState(false);
+  const options = Array.isArray(b.options) ? b.options : [];
+  const [val, setVal] = useState(b.value || (options[0]?.value ?? ""));
+  const [search, setSearch] = useState("");
+
+  const currentLabel = options.find((o: any) => o.value === val)?.label || val || b.placeholder || "Select...";
+  const filtered = options.filter((o: any) => !search || String(o.label || o.value).toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div style={{ margin: "6px 0", position: "relative" }} className="a-blk">
+      {b.label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{b.label}</div>}
+      <button
+        onClick={() => setOpen(!open)}
+        className="comp-dropdown-trigger"
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "8px 12px",
+          background: "var(--surface)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: "var(--r-sm)",
+          color: "var(--text)",
+          fontSize: "var(--fs-xs)",
+          cursor: "pointer",
+        }}
+      >
+        <span>{currentLabel}</span>
+        <span style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}>
+          <I.down size={13} />
+        </span>
+      </button>
+      {open && (
+        <div
+          className="comp-dropdown-menu"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: "var(--surface-2)",
+            border: "1px solid var(--line-soft)",
+            borderRadius: "var(--r-sm)",
+            boxShadow: "var(--sh-lg)",
+            padding: 4,
+            maxHeight: 200,
+            overflowY: "auto",
+          }}
+        >
+          {b.searchable !== false && options.length > 4 && (
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "5px 8px",
+                marginBottom: 4,
+                background: "var(--surface)",
+                border: "1px solid var(--line-soft)",
+                borderRadius: "var(--r-xs)",
+                color: "var(--text)",
+                fontSize: "11px",
+              }}
+            />
+          )}
+          {filtered.map((opt: any, i: number) => {
+            const isSel = opt.value === val;
+            return (
+              <div
+                key={i}
+                onClick={() => { setVal(opt.value); setOpen(false); }}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "var(--r-xs)",
+                  background: isSel ? "var(--accent-soft)" : "transparent",
+                  color: isSel ? "var(--accent)" : "var(--text)",
+                  fontSize: "var(--fs-xs)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>{opt.label || opt.value}</span>
+                {isSel && <I.check size={12} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function InputBlock({ b }: { b: any }) {
+  const [val, setVal] = useState(b.value || "");
+
+  return (
+    <div style={{ margin: "6px 0" }} className="a-blk">
+      {b.label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{b.label}</div>}
+      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+        <input
+          type="text"
+          placeholder={b.placeholder || "Enter value..."}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            background: "var(--surface)",
+            border: "1px solid var(--line-soft)",
+            borderRadius: "var(--r-sm)",
+            color: "var(--text)",
+            fontSize: "var(--fs-xs)",
+            outline: "none",
+            transition: "border-color var(--t-fast)",
+          }}
+        />
+        {b.clearable !== false && val && (
+          <button
+            onClick={() => setVal("")}
+            className="icon-btn sm"
+            style={{ position: "absolute", right: 6, width: 22, height: 22 }}
+          >
+            <I.x size={12} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function StepperBlock({ b }: { b: any }) {
+  const min = Number(b.min ?? 0);
+  const max = Number(b.max ?? 100);
+  const step = Number(b.step ?? 1);
+  const unit = b.unit || "";
+  const [val, setVal] = useState<number>(() => Number(b.value ?? 1));
+
+  const inc = () => setVal((v) => Math.min(max, v + step));
+  const dec = () => setVal((v) => Math.max(min, v - step));
+
+  return (
+    <div
+      className="comp-stepper-card a-blk"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 14px",
+        background: "var(--surface)",
+        border: "1px solid var(--line-soft)",
+        borderRadius: "var(--r-sm)",
+        margin: "6px 0",
+      }}
+    >
+      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 520, color: "var(--text)" }}>{b.label || b.title || "Quantity"}</span>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <button
+          className="icon-btn sm"
+          onClick={dec}
+          disabled={val <= min}
+          style={{ width: 26, height: 26, borderRadius: "var(--r-xs)" }}
+        >
+          −
+        </button>
+        <span style={{ fontSize: "var(--fs-xs)", fontFamily: "var(--mono)", fontVariantNumeric: "tabular-nums", minWidth: 28, textAlign: "center" }}>
+          {val} {unit}
+        </span>
+        <button
+          className="icon-btn sm"
+          onClick={inc}
+          disabled={val >= max}
+          style={{ width: 26, height: 26, borderRadius: "var(--r-xs)" }}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function RatingBlock({ b }: { b: any }) {
+  const max = Number(b.max ?? 5);
+  const [val, setVal] = useState<number>(Number(b.value ?? 4));
+  const [hover, setHover] = useState<number | null>(null);
+
+  const activeVal = hover ?? val;
+
+  return (
+    <div style={{ padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", margin: "6px 0" }} className="a-blk">
+      {b.label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 6 }}>{b.label}</div>}
+      <div style={{ display: "inline-flex", gap: 6 }}>
+        {Array.from({ length: max }, (_, i) => {
+          const star = i + 1;
+          const filled = star <= activeVal;
+          return (
+            <button
+              key={i}
+              onMouseEnter={() => setHover(star)}
+              onMouseLeave={() => setHover(null)}
+              onClick={() => setVal(star)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 2,
+                color: filled ? "var(--accent)" : "var(--line-strong)",
+                transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                transform: hover === star ? "scale(1.2)" : "scale(1)",
+              }}
+            >
+              ★
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function ProgressBlock({ b }: { b: any }) {
+  const val = Number(b.value ?? 50);
+  const max = Number(b.max ?? 100);
+  const unit = b.unit || "%";
+  const pct = Math.min(100, Math.max(0, (val / max) * 100));
+
+  return (
+    <div style={{ padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", margin: "6px 0" }} className="a-blk">
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--text-dim)", marginBottom: 6 }}>
+        <span>{b.label || "Progress"}</span>
+        <span style={{ fontFamily: "var(--mono)" }}>{Math.round(pct)}{unit}</span>
+      </div>
+      <div style={{ height: 8, background: "var(--surface-2)", borderRadius: 9999, overflow: "hidden", border: "1px solid var(--line-soft)" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: "var(--accent)",
+            borderRadius: 9999,
+            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function parseXmlAttrs(attrStr?: string): Record<string, any> {
   if (!attrStr) return {};
   const attrs: Record<string, any> = {};
@@ -1617,19 +2209,27 @@ export function ComponentBlock({ raw, attrs, open }: { raw: string; attrs?: stri
     }
     const fromJson = repairPartialJson(clean);
 
-    if (fromJson && typeof fromJson === "object" && !Array.isArray(fromJson)) {
-      return { ...parsedAttrs, ...fromJson };
-    }
-    if (Array.isArray(fromJson)) {
-      return fromJson;
-    }
-    if (Object.keys(parsedAttrs).length > 0) {
-      if (clean && !parsedAttrs.text && !parsedAttrs.content && !parsedAttrs.smiles && !parsedAttrs.fn) {
-        parsedAttrs.text = clean;
+    const res = (fromJson && typeof fromJson === "object" && !Array.isArray(fromJson))
+      ? { ...parsedAttrs, ...fromJson }
+      : Array.isArray(fromJson)
+      ? fromJson
+      : Object.keys(parsedAttrs).length > 0
+      ? parsedAttrs
+      : fromJson;
+
+    if (res && typeof res === "object" && !Array.isArray(res) && !res.type) {
+      for (const k of [
+        "slider", "button", "checkbox", "radio", "dropdown", "switch",
+        "input", "stepper", "rating", "progress", "chart", "math",
+        "chemistry", "question", "metrics", "switcher", "callout", "table"
+      ]) {
+        if (res[k] !== undefined) {
+          res.type = k;
+          break;
+        }
       }
-      return parsedAttrs;
     }
-    return fromJson;
+    return res;
   }, [raw, attrs]);
 
   if (open) {
@@ -1841,7 +2441,26 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
       );
     case "table": return <DataTable b={b} />;
     case "tabs": return <TabsBlock b={b} />;
-    case "slider": return <Slider b={b} />;
+    case "slider":
+    case "volume": return <SliderBlock b={b} />;
+    case "button":
+    case "btn": return <ButtonBlock b={b} />;
+    case "checkbox":
+    case "check": return <CheckboxBlock b={b} />;
+    case "radio":
+    case "radio-group": return <RadioBlock b={b} />;
+    case "dropdown":
+    case "select": return <DropdownBlock b={b} />;
+    case "switch":
+    case "toggle": return <SwitchBlock b={b} />;
+    case "input":
+    case "text-field": return <InputBlock b={b} />;
+    case "stepper":
+    case "counter": return <StepperBlock b={b} />;
+    case "rating":
+    case "stars": return <RatingBlock b={b} />;
+    case "progress":
+    case "meter": return <ProgressBlock b={b} />;
     case "callout":
     case "alert": return <Callout b={b} />;
     case "accordion": return <Accordion b={b} />;
@@ -1860,30 +2479,9 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
           ))}
         </div>
       );
-    case "progress":
-      return (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-sm)", color: "var(--text-dim)", marginBottom: 5 }}>
-            <span>{b.label}</span><span>{b.value}%</span>
-          </div>
-          <div style={{ height: 7, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden" }}>
-            <div style={{ width: `${Math.max(0, Math.min(100, b.value))}%`, height: "100%", background: "var(--accent)", transition: "width .5s var(--ease)" }} />
-          </div>
-        </div>
-      );
-    case "input":
-      return (
-        <label className="field" style={{ marginBottom: 0 }}>
-          <span className="label">{b.label}</span>
-          <input type={b.kind === "number" ? "number" : b.kind === "date" ? "date" : "text"} placeholder={b.placeholder || ""} />
-        </label>
-      );
-    case "button":
-      return <button className="btn primary" style={{ width: "fit-content" }}>{b.label}</button>;
     case "timer": return <Timer label={b.label || "Timer"} seconds={b.seconds || 300} />;
     case "stopwatch": return <Stopwatch label={b.label || "Stopwatch"} />;
     case "pomodoro": return <Pomodoro label={b.label || "Pomodoro"} work={b.work || 1500} breakFor={b.breakFor || 300} />;
-    case "counter": return <Counter b={b} />;
     case "todo": return <TodoList b={b} />;
     case "image":
       return (

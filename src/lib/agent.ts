@@ -28,8 +28,7 @@ Direct, concrete, unhurried. No filler openers ("Great question!"), no restating
 headings, **bold**, *italic*, ~~strike~~, \`code\`, fenced code with a language,
 tables, ordered/unordered/task lists, > quotes, --- rules, footnotes [^1] with
 [^1]: definitions (they are revealed after the stream finishes, so use them freely),
-==highlight== for the one line that matters most (it animates in when the block
-completes — at most one or two per answer), LaTeX with $inline$ and $$display$$,
+==highlight== only for critical key findings (never wrap artifact names, status updates, or headings in highlights; at most one per answer), LaTeX with $inline$ and $$display$$,
 images ![alt](url), bare YouTube links (auto-embedded), and
 <details><summary>title</summary> … </details> for anything long or optional.
 
@@ -88,6 +87,13 @@ export function contextTokenCount(c: Chat): number {
 }
 
 /* -------------------------------------------------------------- messages */
+function cleanContentForLlm(text?: string | null): string {
+  return (text || "")
+    .replace(/<tool[-_]call[\s\S]*?<\/tool[-_]call>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function nodeToMessage(c: Chat, n: Node): any[] {
   if (n.hidden) return n.summary ? [{ role: "user", content: `<compacted-history>\n${n.summary}\n</compacted-history>` }] : [];
   if (n.role === "user") {
@@ -103,16 +109,16 @@ function nodeToMessage(c: Chat, n: Node): any[] {
   }
   const out: any[] = [];
   const calls = (n.toolCalls || []).filter((t) => t.status !== "running");
+  const cleanContent = cleanContentForLlm(n.content);
   if (calls.length) {
     out.push({
       role: "assistant",
-      content: n.content || null,
+      content: cleanContent || null,
       tool_calls: calls.map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.argsRaw || JSON.stringify(t.args ?? {}) } })),
     });
     for (const t of calls) out.push({ role: "tool", tool_call_id: t.id, content: (t.output ?? "").slice(0, 20000) });
-    if (n.content) out.push({ role: "assistant", content: n.content });
-  } else if (n.content) {
-    out.push({ role: "assistant", content: n.content });
+  } else if (cleanContent) {
+    out.push({ role: "assistant", content: cleanContent });
   }
   return out;
 }
@@ -384,6 +390,8 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
 
   const flushEvery = 32;
   let lastFlush = 0;
+  let accumulatedContent = (nodeId ? S().chats[chatId]?.nodes[nodeId]?.content : "") || "";
+
   const onDelta = (full: string) => {
     const now = performance.now();
     if (now - lastFlush > flushEvery) { lastFlush = now; S().updateNode(chatId, id, { content: full }); }
@@ -406,14 +414,19 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       if (priorCalls.length) {
         cleaned.push({
           role: "assistant",
-          content: prior.content || null,
+          content: cleanContentForLlm(prior.content) || null,
           tool_calls: priorCalls.map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.argsRaw } })),
         });
         for (const t of priorCalls) cleaned.push({ role: "tool", tool_call_id: t.id, content: (t.output ?? "").slice(0, 20000) });
       }
 
-      const out = await streamChat(cleaned, tools, onDelta, ctl.signal);
-      S().updateNode(chatId, id, { content: out.content });
+      const hopBase = accumulatedContent;
+      const out = await streamChat(cleaned, tools, (delta) => {
+        onDelta(hopBase + delta);
+      }, ctl.signal);
+
+      accumulatedContent = hopBase + (out.content || "");
+      S().updateNode(chatId, id, { content: accumulatedContent });
 
       if (ctl.signal.aborted || !out.toolCalls.length) break;
 
@@ -423,6 +436,12 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
         return { id: t.id, name: t.name, args, argsRaw: t.args || "{}", status: "running" as const };
       });
       S().updateNode(chatId, id, (n) => ({ toolCalls: [...(n.toolCalls || []), ...records] }));
+
+      // Append inline tool call markers into accumulatedContent so collapsible appears right after preceding text!
+      for (const r of records) {
+        accumulatedContent += `\n\n<tool_call id="${r.id}" name="${r.name}">\n${r.argsRaw}\n</tool_call>\n\n`;
+      }
+      S().updateNode(chatId, id, { content: accumulatedContent });
 
       for (const r of records) {
         if (ctl.signal.aborted) break;

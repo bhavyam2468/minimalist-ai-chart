@@ -219,17 +219,35 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         )}
 
         {menu === "knowledge" && (
-          <div className="pop menu" style={menuStyle("right")}>
-            <div className="label" style={{ padding: "4px 10px 6px" }}>skills</div>
-            {SKILLS.map((s) => (
-              <button key={s.name} className="menu-item" onClick={() => toggleSkill(s.name)} title={s.description}>
-                <span className="dot" data-state={pinned.includes(s.name) || s.always ? "context" : "known"} />
-                {s.name}
-                <span className="dim">{s.always ? "always" : pinned.includes(s.name) ? "pinned" : ""}</span>
+          <div
+            className="pop menu"
+            style={{
+              ...menuStyle("right"),
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: 380,
+              paddingBottom: 4,
+            }}
+          >
+            <div className="label" style={{ padding: "6px 10px 4px", flexShrink: 0 }}>skills</div>
+            <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+              {SKILLS.map((s) => (
+                <button key={s.name} className="menu-item" onClick={() => toggleSkill(s.name)} title={s.description}>
+                  <span className="dot" data-state={pinned.includes(s.name) || s.always ? "context" : "known"} />
+                  {s.name}
+                  <span className="dim">{s.always ? "always" : pinned.includes(s.name) ? "pinned" : ""}</span>
+                </button>
+              ))}
+            </div>
+            {/* Pinned non-scrolling menu footer */}
+            <div style={{ borderTop: "1px solid var(--line-soft)", margin: "4px 0 0 0", paddingTop: 4, flexShrink: 0 }}>
+              <button className="menu-item" onClick={() => { setUI({ modal: "components" }); setMenu(null); }}>
+                <I.grid size={14} />UI Component Library
               </button>
-            ))}
-            <div style={{ borderTop: "1px solid var(--line-soft)", margin: "6px 0" }} />
-            <button className="menu-item" onClick={() => { setUI({ modal: "skills" }); setMenu(null); }}><I.book size={14} />Browse skill bodies</button>
+              <button className="menu-item" onClick={() => { setUI({ modal: "skills" }); setMenu(null); }}>
+                <I.book size={14} />Browse skill bodies
+              </button>
+            </div>
           </div>
         )}
 
