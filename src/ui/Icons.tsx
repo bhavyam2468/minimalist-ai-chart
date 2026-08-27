@@ -17,6 +17,8 @@ export const I = {
   left: s(<><path d="M15 5l-7 7 7 7" /></>),
   right: s(<><path d="M9 5l7 7-7 7" /></>),
   down: s(<><path d="M5 9l7 7 7-7" /></>),
+  up: s(<><path d="M19 15l-7-7-7 7" /></>),
+  alert: s(<><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></>),
   x: s(<><path d="M6 6l12 12M18 6L6 18" /></>),
   canvas: s(<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 10h18M10 10v10" /></>),
   file: s(<><path d="M14 3v5h5" /><path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" /></>),

@@ -9,7 +9,7 @@ const CODE = ["ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "go", "java", 
 export function viewOf(path: string, file?: WFile): CanvasView {
   const p = path.toLowerCase();
   if (p.endsWith(".ui.json") || p.endsWith(".blocks.json")) return "ui";
-  if (p.endsWith(".html") || p.endsWith(".htm")) return "project";
+  if (p.endsWith(".html") || p.endsWith(".htm") || p.endsWith("/app.tsx") || p.endsWith("/app.jsx") || p === "app.tsx" || p === "app.jsx") return "project";
   const e = p.split(".").pop() || "";
   if (IMAGE.includes(e) || file?.kind === "image" || file?.dataUrl) return "image";
   if (e === "csv" || e === "tsv" || file?.kind === "sheet") return "sheet";

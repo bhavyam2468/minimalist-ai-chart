@@ -111,7 +111,10 @@
   /* ---- selection popup stays in viewport --------------------------- */
   .sel-pop {
     position: fixed !important;
-    max-width: calc(100vw - 16px);
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
   }

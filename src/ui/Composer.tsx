@@ -19,6 +19,7 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   const [attached, setAttached] = useState<string[]>([]);
   const [menu, setMenu] = useState<null | "plus" | "tools" | "knowledge" | "mention">(null);
   const [mentionQ, setMentionQ] = useState("");
+  const [mentionIdx, setMentionIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -68,18 +69,38 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   };
 
   const onKey = (e: React.KeyboardEvent) => {
+    if (menu === "mention" && mentionHits.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIdx((i) => (i + 1) % mentionHits.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIdx((i) => (i - 1 + mentionHits.length) % mentionHits.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const pick = mentionHits[mentionIdx] || mentionHits[0];
+        if (pick) pickMention(pick);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey && menu !== "mention") { e.preventDefault(); submit(); return; }
     if (e.key === "Escape") { setMenu(null); setUI({ composerQuote: null }); }
-    if (menu === "mention" && e.key === "Enter" && mentionHits[0]) {
-      e.preventDefault();
-      pickMention(mentionHits[0]);
-    }
   };
 
   const onChange = (v: string) => {
     setText(v);
     const m = v.slice(0, ta.current?.selectionStart ?? v.length).match(/@([\w./-]*)$/);
-    if (m) { setMenu("mention"); setMentionQ(m[1]); } else if (menu === "mention") setMenu(null);
+    if (m) {
+      setMenu("mention");
+      setMentionQ(m[1]);
+      setMentionIdx(0);
+    } else if (menu === "mention") {
+      setMenu(null);
+    }
   };
 
   const pickMention = (hit: { kind: "file" | "skill"; label: string }) => {
@@ -215,7 +236,13 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         {menu === "mention" && mentionHits.length > 0 && (
           <div className="pop menu" style={menuStyle("left")}>
             {mentionHits.map((h, i) => (
-              <button key={h.kind + h.label} className="menu-item" data-active={i === 0} onClick={() => pickMention(h)}>
+              <button
+                key={h.kind + h.label}
+                className="menu-item"
+                data-active={i === mentionIdx}
+                onMouseEnter={() => setMentionIdx(i)}
+                onClick={() => pickMention(h)}
+              >
                 <span className="dot" data-state={h.state ?? "known"} />{h.label}<span className="dim">{h.meta}</span>
               </button>
             ))}

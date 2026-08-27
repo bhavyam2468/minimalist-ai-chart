@@ -196,6 +196,8 @@ export function CanvasHost({ chatId }: { chatId: string }) {
         <div className="cv-backdrop" onClick={closeCanvas} />
         <div className="cv-win cv-sheet" style={{ height: `${sheetH * 100}dvh` }}>
           <div className="cv-grab" onPointerDown={onSheetDrag}><span /></div>
+          <div className="cv-corner-h left" onPointerDown={onSheetDrag} title="Drag to resize" />
+          <div className="cv-corner-h right" onPointerDown={onSheetDrag} title="Drag to resize" />
           <div className="cv-bar">
             <span className="cv-title">{res.title}</span>
             <span className="chip">{res.badge}</span>

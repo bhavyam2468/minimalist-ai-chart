@@ -36,9 +36,10 @@ function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: 
 
 /* ------------------------------------------------------- syntax highlight */
 import { highlight } from "./highlight";
+import { copyToClipboard } from "../lib/clipboard";
 
 /* ---------------------------------------------------------------- helpers */
-function copy(text: string) { navigator.clipboard?.writeText(text); }
+function copy(text: string) { return copyToClipboard(text); }
 
 /** Links inside a response open in the canvas viewport, not a new tab. */
 function openInCanvas(url: string) {
@@ -106,7 +107,17 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
     <div className="md-pre a-blk">
       <div className="md-pre-bar">
         <span>{lang || "text"}{open ? " ·" : ""}</span>
-        <button className="icon-btn sm" onClick={() => { copy(code); setDone(true); setTimeout(() => setDone(false), 1100); }}>
+        <button
+          className="icon-btn sm"
+          title="Copy code"
+          onClick={async () => {
+            const ok = await copy(code);
+            if (ok) {
+              setDone(true);
+              setTimeout(() => setDone(false), 1200);
+            }
+          }}
+        >
           {done ? "copied" : Ico.copy}
         </button>
       </div>

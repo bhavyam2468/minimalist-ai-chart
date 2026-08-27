@@ -72,23 +72,33 @@ Conventions
   {
     name: "web-research",
     description:
-      "Search, scrape, crawl and site-restricted search (github, pubmed, arxiv, hn, docs). Use whenever the answer depends on current or external information.",
+      "High-speed web search and page fetcher with niche filtering mechanics (music, underground subcultures, reddit discussions, tech, academic). Use whenever information requires external or niche data.",
     body: `# web-research
-Tools: \`web_search\`, \`web_fetch\`, \`web_crawl\`, \`site_search\`.
+Tools: \`web_search\`, \`web_fetch\`.
 
-Method
-1. \`web_search(query, limit)\` — get candidates. Queries are keyword-shaped,
-   not questions. Run 2-4 varied queries in parallel for anything non-trivial.
-2. \`web_fetch(url)\` — full page as markdown. Fetch the 2-3 best hits only.
-3. \`site_search(site, query)\` — \`github\`, \`pubmed\`, \`arxiv\`, \`hn\`, \`stackoverflow\`,
-   \`wikipedia\`, or any bare domain (uses a site: filter).
-4. \`web_crawl(url, limit)\` — follow links from one root when you need a whole
-   docs section.
+## 1. Unified Search: \`web_search({ query, site?, niche?, limit? })\`
+- \`query\`: Specific keyword phrases (e.g. \`midwest emo underground bands revival\`), not conversational questions.
+- \`niche\` (or \`category\`):
+  - \`music\`: Activates MusicBrainz artist registries, Bandcamp metadata, indie music tags, discographies, and cult/underground scenes.
+  - \`discussions\`: Activates Reddit enthusiast threads, forum consensus, and user recommendation deep-dives.
+  - \`tech\`: Activates GitHub repositories, documentation, and HackerNews discussions.
+  - \`academic\`: Activates arXiv, PubMed, and scholarly databases.
+  - \`general\`: Multi-engine web search (fast SearXNG, DuckDuckGo, Wikipedia).
+- \`site\`: Directly target a specific platform (e.g. \`site: "reddit.com"\`, \`site: "bandcamp.com"\`, \`site: "rateyourmusic.com"\`, \`site: "github.com"\`).
 
-Rules
-- Cite inline with markdown links; every source you used appears in the panel.
-- Never state a number, price, version or date from memory when a fetch is cheap.
-- Save anything long to \`data/\` with \`edit_file\` instead of holding it in context.`,
+## 2. Niche & Underground Discovery Tactics
+When asked for niche, obscure, or underground recommendations:
+- **Use Niche Filtering**: Always set \`niche: "music"\` or \`niche: "discussions"\` to bypass generic encyclopedia overviews.
+- **High-Signal Keyword Modifiers**: Append qualifiers such as \`"underrated"\`, \`"obscure"\`, \`"hidden gems"\`, \`"revival"\`, \`"diy scene"\`, \`"lesser known"\`.
+- **Target Specialist Platforms**: Use \`site: "reddit.com"\` (e.g. \`site: "reddit.com/r/midwestemo"\`) or \`site: "bandcamp.com"\`.
+
+## 3. Page Reading: \`web_fetch({ url })\`
+- Fetches the URL and extracts clean readable markdown. Fetch only the top 1-2 most relevant URLs when deep detail is needed.
+
+## CRITICAL EFFICIENCY & ANTI-LOOPING RULES
+- **MAXIMUM 1 TO 2 SEARCHES**: Execute at most 1 or 2 targeted searches per user turn. DO NOT loop through dozens of searches or query multiple websites one by one.
+- **IMMEDIATE SYNTHESIS**: After 1-2 searches, synthesize a detailed, comprehensive, high-quality answer immediately, combining the search results with your extensive pre-trained knowledge base. The user expects instant, actionable recommendations, not endless scraping.
+- **Cite inline** with clean markdown links: e.g. \`[Mineral](https://musicbrainz.org/artist/...)\`.`,
   },
   {
     name: "canvas-design",
@@ -141,18 +151,23 @@ absolute paths, no CDNs you didn't verify.
   register quietly. A folder ref resolves to its index.html / *.ui.json /
   README.md.
 
-## The .ui.json block view
-Write it when you want a themed dashboard without writing HTML. Shape:
+## The .ui.json block view (C1 by Thesys style)
+Write it when you want a rich, interactive themed dashboard without writing manual HTML. Shape:
 \`{ "title": str, "ratio": "landscape|portrait|square|auto", "blocks": [ … ] }\`
 
 Block DSL
 { type:"heading", text, level? }
 { type:"text", text }                              markdown inline supported
-{ type:"metric", label, value, delta?, hint? }
+{ type:"metric", label, value, delta?, hint? }    delta tags show trends (+14.2% vs prev)
 { type:"metrics", items:[{label,value,delta?}] }
 { type:"chart", kind:"bar"|"line"|"area"|"pie"|"donut"|"scatter"|"hbar",
-  data:[{label, value}] | series:[{name, points:[{x,y}]}], caption? }
-{ type:"table", columns:[...], rows:[[...]] }
+  data:[{label, value}] | series:[{name, points:[{x,y}]}], title?, caption? }
+  -> Interactive hover tooltips, crosshairs, and multi-series toggle legends supported
+{ type:"table", columns:[...], rows:[[...]] }     sortable columns + search filter input
+{ type:"tabs", tabs:[{label, blocks:[...]}] }     multi-tab dashboard switching
+{ type:"slider", label, min, max, step, value, unit? }  interactive range slider
+{ type:"callout"|"alert", kind:"info"|"success"|"warn"|"err", title?, text }
+{ type:"accordion", items:[{title, content?, blocks?:[...]}] }
 { type:"list", items:[...], ordered? }
 { type:"kv", items:[{k,v}] }
 { type:"progress", label, value /*0-100*/ }
@@ -160,6 +175,9 @@ Block DSL
 { type:"button", label, action? }
 { type:"timer", label, seconds }
 { type:"stopwatch", label }
+{ type:"pomodoro", label, work?:1500, breakFor?:300 }
+{ type:"counter", label, value?, step? }
+{ type:"todo", label, items:[str] }
 { type:"image", src, caption? }
 { type:"video", youtube }
 { type:"code", language, content }
@@ -167,9 +185,12 @@ Block DSL
 { type:"divider" }
 { type:"grid", of:[block…] }
 { type:"columns", of:[[block…],[block…]] }
-{ type:"pomodoro", label, work?:1500, breakFor?:300 }
-{ type:"counter", label, value?, step? }
-{ type:"todo", label, items:[str] }
+
+## React apps in the canvas
+You can create full React applications in the workspace:
+1. Write an \`app/App.tsx\` or \`app/index.html\` with React & Tailwind CSS.
+2. The canvas automatically bundles and transpiles JSX/TSX with in-browser Babel and mounts into \`<div id="root"></div>\`.
+3. Sibling CSS and JS/TSX files are resolved and inlined seamlessly.
 
 Design law — everything you emit must look like it shipped with the app:
 solid background, one accent, generous whitespace, uppercase micro-labels,

@@ -4,6 +4,7 @@ import { Markdown } from "../md/Markdown";
 import { BlocksView } from "./Blocks";
 import { I } from "../ui/Icons";
 import { useApp } from "../lib/store";
+import { copyToClipboard } from "../lib/clipboard";
 import type { WFile } from "../lib/types";
 
 /* ===========================================================================
@@ -57,9 +58,36 @@ function ImageView({ f }: { f: WFile }) {
 /* ------------------------------------------------------------ sheet view */
 function SheetView({ text, path }: { text: string; path: string }) {
   const [raw, setRaw] = useState(false);
-  const rows = useMemo(() => {
+  const [filter, setFilter] = useState("");
+  const [activeSheet, setActiveSheet] = useState(0);
+
+  // Parse sheets (either multi-sheet markdown from ingest or CSV/TSV)
+  const sheets = useMemo(() => {
+    if (text.includes("## sheet: ")) {
+      const parts = text.split(/(?=## sheet:\s*)/);
+      const parsed = parts
+        .map((part) => {
+          const titleMatch = part.match(/## sheet:\s*([^\n(]+)/);
+          const name = titleMatch ? titleMatch[1].trim() : "Sheet";
+          const tableLines = part.split("\n").filter((l) => l.trim().startsWith("|"));
+          const sheetRows = tableLines
+            .filter((l) => !/^\s*\|?\s*:?-{2,}:?/.test(l))
+            .map((l) =>
+              l
+                .trim()
+                .replace(/^\|/, "")
+                .replace(/\|$/, "")
+                .split("|")
+                .map((c) => c.trim())
+            );
+          return { name, rows: sheetRows };
+        })
+        .filter((s) => s.rows.length > 0);
+      if (parsed.length) return parsed;
+    }
+
     const delim = path.endsWith(".tsv") ? "\t" : ",";
-    return text.trim().split(/\r?\n/).map((line) => {
+    const csvRows = text.trim().split(/\r?\n/).map((line) => {
       const out: string[] = []; let cur = ""; let q = false;
       for (let i = 0; i < line.length; i++) {
         const ch = line[i];
@@ -70,7 +98,19 @@ function SheetView({ text, path }: { text: string; path: string }) {
       out.push(cur);
       return out;
     });
+    return [{ name: path.split("/").pop() || "Sheet1", rows: csvRows }];
   }, [text, path]);
+
+  const curSheet = sheets[activeSheet] || sheets[0] || { name: "Sheet", rows: [] };
+  const rows = curSheet.rows;
+
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return rows;
+    const q = filter.toLowerCase();
+    const head = rows[0] || [];
+    const body = rows.slice(1).filter((r) => r.some((c) => String(c).toLowerCase().includes(q)));
+    return [head, ...body];
+  }, [rows, filter]);
 
   if (raw) {
     return (
@@ -85,24 +125,43 @@ function SheetView({ text, path }: { text: string; path: string }) {
     );
   }
 
-  const width = Math.max(...rows.map((r) => r.length), 1);
+  const width = Math.max(...filtered.map((r) => r.length), 1);
   return (
     <div className="fe">
       <div className="fe-bar">
-        <span className="fe-tag">{rows.length - 1} rows × {width} cols</span>
+        <span className="fe-tag">{Math.max(0, filtered.length - 1)} rows × {width} cols</span>
+        {rows.length > 8 && (
+          <input
+            placeholder="Filter cells..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{ fontSize: "var(--fs-xs)", padding: "3px 8px", maxWidth: 160, background: "var(--surface-3)", borderRadius: "var(--r-xs)" }}
+          />
+        )}
         <span className="grow" />
         <button className="icon-btn sm" onClick={() => setRaw(true)}>raw</button>
       </div>
+
+      {sheets.length > 1 && (
+        <div className="pj-files">
+          {sheets.map((s, idx) => (
+            <button key={idx} data-active={activeSheet === idx} onClick={() => { setActiveSheet(idx); setFilter(""); }}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="fe-body" style={{ padding: 0 }}>
         <table className="fe-grid">
           <thead>
             <tr>
               <th className="fe-gutter" />
-              {Array.from({ length: width }).map((_, i) => <th key={i}>{rows[0]?.[i] ?? ""}</th>)}
+              {Array.from({ length: width }).map((_, i) => <th key={i}>{filtered[0]?.[i] ?? ""}</th>)}
             </tr>
           </thead>
           <tbody>
-            {rows.slice(1).map((r, i) => (
+            {filtered.slice(1).map((r, i) => (
               <tr key={i}>
                 <td className="fe-gutter">{i + 1}</td>
                 {Array.from({ length: width }).map((_, j) => <td key={j}>{r[j] ?? ""}</td>)}
@@ -202,7 +261,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
             <button data-active={uiMode === "preview"} onClick={() => setMode("preview")}>view</button>
             <button data-active={uiMode === "edit"} onClick={() => setMode("edit")}>code</button>
           </div>
-          <button className="icon-btn sm" title="Copy" onClick={() => navigator.clipboard?.writeText(draft)}><I.copy size={13} /></button>
+          <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
           <button className="icon-btn sm" title="Save (⌘S)" data-active={saved} onClick={save} disabled={!dirty}>
             {saved ? <I.check size={13} /> : "save"}
           </button>
@@ -233,7 +292,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
             ))}
           </div>
         )}
-        <button className="icon-btn sm" title="Copy" onClick={() => navigator.clipboard?.writeText(draft)}><I.copy size={13} /></button>
+        <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
         <button className="icon-btn sm" data-active={saved} title="Save (⌘S)" onClick={save} disabled={!dirty && !saved}>
           {saved ? <I.check size={13} /> : "save"}
         </button>

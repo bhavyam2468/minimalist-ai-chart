@@ -3,6 +3,7 @@ import { Markdown } from "../md/Markdown";
 import { I } from "../ui/Icons";
 import { hostOf, webFetch } from "../lib/web";
 import { useApp } from "../lib/store";
+import { copyToClipboard } from "../lib/clipboard";
 
 /* ===========================================================================
    WebViewer — a source opened inside the canvas.
@@ -54,7 +55,7 @@ export function WebViewer({ url, title }: { url: string; title?: string }) {
           <button data-active={tab === "reader"} onClick={() => setTab("reader")}>reader</button>
           <button data-active={tab === "live"} onClick={() => setTab("live")}>live</button>
         </div>
-        <button className="icon-btn sm" title="Copy link" onClick={() => navigator.clipboard?.writeText(url)}><I.copy size={13} /></button>
+        <button className="icon-btn sm" title="Copy link" onClick={() => copyToClipboard(url)}><I.copy size={13} /></button>
         <a className="icon-btn sm" href={url} target="_blank" rel="noreferrer noopener" title="Open in a new tab">↗</a>
       </div>
 

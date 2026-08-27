@@ -3,6 +3,7 @@ import { Markdown } from "../md/Markdown";
 import { I } from "./Icons";
 import { siblings, threadPath, threadsFor, useApp } from "../lib/store";
 import { editUser, regenerate } from "../lib/agent";
+import { copyToClipboard } from "../lib/clipboard";
 import { VIEW_LABEL, viewOf } from "../canvas/view";
 import type { Chat, Node } from "../lib/types";
 import { Composer } from "./Composer";
@@ -13,11 +14,18 @@ function Act({ icon, label, onClick }: { icon: React.ReactNode; label: string; o
 
 function CopyBtn({ text }: { text: string }) {
   const [ok, setOk] = useState(false);
+  const handleCopy = async () => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      setOk(true);
+      setTimeout(() => setOk(false), 1400);
+    }
+  };
   return (
     <Act
       icon={ok ? <I.check size={13} /> : <I.copy size={13} />}
-      label="Copy"
-      onClick={() => { navigator.clipboard?.writeText(text); setOk(true); setTimeout(() => setOk(false), 1200); }}
+      label={ok ? "Copied" : "Copy"}
+      onClick={handleCopy}
     />
   );
 }
@@ -40,28 +48,172 @@ function Branches({ chat, node }: { chat: Chat; node: Node }) {
 }
 
 function ToolTrace({ node }: { node: Node }) {
-  const [open, setOpen] = useState<string | null>(null);
-  if (!node.toolCalls?.length) return null;
+  const calls = node.toolCalls;
+  if (!calls?.length) return null;
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+
+  const running = calls.find((t) => t.status === "running");
+  const hasError = calls.some((t) => t.status === "error");
+  const totalMs = calls.reduce((acc, t) => acc + (t.ms || 0), 0);
+  const statusMode = hasError ? "error" : running ? "running" : "done";
+
   return (
-    <div className="trace">
-      {node.toolCalls.map((t) => {
-        const arg = Object.values(t.args || {})[0];
-        const hint = typeof arg === "string" ? arg.slice(0, 68) : Array.isArray(arg) ? arg.join(", ").slice(0, 68) : "";
-        return (
-          <div key={t.id}>
-            <div className="trace-row" data-running={t.status === "running"} onClick={() => setOpen(open === t.id ? null : t.id)} style={{ cursor: "pointer" }}>
-              {t.name.startsWith("web") || t.name === "site_search" ? <I.globe size={13} /> :
-               t.name === "canvas" ? <I.canvas size={13} /> :
-               t.name.includes("skill") ? <I.spark size={13} /> :
-               t.name.includes("context") ? <I.compact size={13} /> : <I.file size={13} />}
-              <b>{t.name}</b>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hint}</span>
-              {t.ms != null && <span style={{ marginLeft: "auto", opacity: .6 }}>{t.ms}ms</span>}
-            </div>
-            {open === t.id && <div className="trace-out">{t.output || "…"}</div>}
-          </div>
-        );
-      })}
+    <div className="trace-dropdown" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 8 }}>
+      <button
+        type="button"
+        className="trace-summary"
+        data-running={!!running}
+        data-error={hasError}
+        data-status={statusMode}
+        onClick={() => setIsOpen((prev) => !prev)}
+        title="Toggle tool call details"
+        style={{
+          display: "inline-flex",
+          flexDirection: "row",
+          alignItems: "center",
+          flexWrap: "nowrap",
+          whiteSpace: "nowrap",
+          gap: 7,
+          height: 28,
+          padding: "0 10px",
+          cursor: "pointer",
+        }}
+      >
+        <span className="trace-summary-icon" style={{ display: "inline-flex", alignItems: "center" }}>
+          {running ? (
+            <span className="trace-spinner" />
+          ) : hasError ? (
+            <span style={{ color: "var(--err, #ef4444)", display: "inline-flex", alignItems: "center" }}>
+              <I.alert size={12} />
+            </span>
+          ) : (
+            <span style={{ color: "var(--ok, #22c55e)", display: "inline-flex", alignItems: "center" }}>
+              <I.check size={12} />
+            </span>
+          )}
+        </span>
+        <span
+          className="trace-summary-text"
+          style={{
+            display: "inline-flex",
+            flexDirection: "row",
+            alignItems: "center",
+            flexWrap: "nowrap",
+            whiteSpace: "nowrap",
+            gap: 6,
+          }}
+        >
+          {running ? (
+            <>
+              <b>{running.name}</b>
+              <span className="trace-hint" style={{ whiteSpace: "nowrap" }}>
+                {typeof Object.values(running.args || {})[0] === "string"
+                  ? String(Object.values(running.args || {})[0]).slice(0, 48)
+                  : "running..."}
+              </span>
+            </>
+          ) : (
+            <>
+              <span style={{ whiteSpace: "nowrap" }}>
+                {calls.length} {calls.length === 1 ? "tool call" : "tool calls"}
+              </span>
+              {totalMs > 0 && (
+                <span className="trace-time" style={{ whiteSpace: "nowrap" }}>
+                  · {totalMs > 1000 ? `${(totalMs / 1000).toFixed(1)}s` : `${totalMs}ms`}
+                </span>
+              )}
+              {hasError && (
+                <span className="trace-err-badge" style={{ color: "var(--err, #ef4444)", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap" }}>
+                  ({calls.filter((t) => t.status === "error").length} failed)
+                </span>
+              )}
+            </>
+          )}
+        </span>
+        <span className="trace-caret" style={{ display: "inline-flex", alignItems: "center", marginLeft: 4 }}>
+          {isOpen ? <I.up size={12} /> : <I.down size={12} />}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="trace-list" style={{ width: "100%", maxWidth: 640 }}>
+          {calls.map((t) => {
+            const arg = Object.values(t.args || {})[0];
+            const hint =
+              typeof arg === "string"
+                ? arg.slice(0, 80)
+                : Array.isArray(arg)
+                ? arg.join(", ").slice(0, 80)
+                : "";
+            const isItemOpen = expandedItem === t.id;
+            const isErr = t.status === "error";
+            const isDone = t.status === "done";
+            return (
+              <div key={t.id} className="trace-item">
+                <div
+                  className="trace-row"
+                  data-status={t.status}
+                  data-running={t.status === "running"}
+                  onClick={() => setExpandedItem(isItemOpen ? null : t.id)}
+                  style={{
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flexWrap: "nowrap",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span
+                    className="trace-row-status-icon"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      color: isErr ? "var(--err, #ef4444)" : isDone ? "var(--ok, #22c55e)" : "var(--text-faint)",
+                    }}
+                  >
+                    {t.status === "running" ? (
+                      <span className="trace-spinner sm" />
+                    ) : isErr ? (
+                      <I.alert size={12} />
+                    ) : (
+                      <I.check size={12} />
+                    )}
+                  </span>
+                  <b>{t.name}</b>
+                  <span className="trace-hint-row">{hint}</span>
+                  <span
+                    className={`trace-badge ${isErr ? "err" : isDone ? "ok" : ""}`}
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      color: isErr ? "var(--err, #ef4444)" : isDone ? "var(--ok, #22c55e)" : "inherit",
+                    }}
+                  >
+                    {isErr ? "failed" : isDone ? "ok" : "running"}
+                  </span>
+                  {t.ms != null && <span className="trace-duration">{t.ms}ms</span>}
+                  <span className="trace-row-toggle">{isItemOpen ? "−" : "+"}</span>
+                </div>
+                {isItemOpen && (
+                  <div className="trace-out" style={{ borderColor: isErr ? "rgba(239, 68, 68, 0.3)" : undefined }}>
+                    {t.argsRaw && t.argsRaw !== "{}" && (
+                      <div className="trace-args">
+                        <b>args:</b> {t.argsRaw}
+                      </div>
+                    )}
+                    <div className="trace-result" style={{ color: isErr ? "var(--err, #ef4444)" : undefined }}>
+                      {t.output || "…"}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

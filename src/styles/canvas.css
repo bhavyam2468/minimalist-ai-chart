@@ -81,6 +81,12 @@
   padding: 9px 0 5px; touch-action: none; cursor: ns-resize;
 }
 .cv-grab span { width: 36px; height: 4px; border-radius: 999px; background: var(--line); display: block; }
+.cv-corner-h {
+  position: absolute; top: 0; width: 44px; height: 26px;
+  touch-action: none; cursor: ns-resize; z-index: 10;
+}
+.cv-corner-h.left { left: 0; border-top-left-radius: var(--r); }
+.cv-corner-h.right { right: 0; border-top-right-radius: var(--r); }
 .cv-sheet .cv-bar { cursor: default; }
 
 /* ===========================================================================

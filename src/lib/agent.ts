@@ -42,6 +42,13 @@ conversation that holds files (with a real editor), web pages and artefacts.
 Use \`artifact\` when a chart, dashboard, tool or embed communicates better than prose.
 Keep context lean with add_context / remove_context / compact_context.
 
+## Search Efficiency & Anti-Looping
+Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter
+("music", "discussions", "tech", "academic") and \`site\` parameter to reach high-signal data.
+NEVER loop or execute repetitive search queries. Once you execute 1-2 searches, synthesize
+a rich, comprehensive, authoritative answer immediately combining the returned excerpts
+with your pre-trained knowledge base. Do not leave the user waiting on endless searches.
+
 ${always}
 
 ## Skill library (call read_skill to load a body)
@@ -225,6 +232,25 @@ export async function compactChat(chatId: string, focus = ""): Promise<string> {
   const j = await res.json();
   const summary: string = j?.choices?.[0]?.message?.content ?? "(compaction failed)";
 
+  // If an Aside section is present and non-empty, save it to notes/aside.md
+  const asideMatch = summary.match(/(?:^|\n)(?:8\.\s*Aside|Aside)[:\s]*([\s\S]*?)(?:\n\d\.|\n##|$)/i);
+  if (asideMatch && asideMatch[1]?.trim() && !/^(none|n\/a|nothing)\.?$/i.test(asideMatch[1].trim())) {
+    const asideText = `# Aside & Unrelated Context\n\n_Preserved during context compaction on ${new Date().toLocaleString()}_\n\n${asideMatch[1].trim()}\n`;
+    const prevAside = c.files["notes/aside.md"];
+    const newContent = prevAside ? prevAside.content + "\n\n---\n\n" + asideText : asideText;
+    S().putFile(chatId, {
+      path: "notes/aside.md",
+      content: newContent,
+      mime: "text/markdown",
+      size: newContent.length,
+      kind: "text",
+      state: "known",
+      origin: "agent",
+      createdAt: prevAside?.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
+
   S().patchChat(chatId, (ch) => {
     older.forEach((n, i) => {
       ch.nodes[n.id] = { ...ch.nodes[n.id], hidden: true, summary: i === 0 ? summary : undefined };
@@ -242,7 +268,33 @@ export interface GenOpts {
 }
 
 const controllers: Record<string, AbortController> = {};
-export const stopGeneration = (chatId: string) => controllers[chatId]?.abort();
+
+export const stopGeneration = (chatId: string) => {
+  const ctl = controllers[chatId];
+  if (ctl) {
+    try { ctl.abort(); } catch {}
+  }
+  delete controllers[chatId];
+
+  // Instantly release busy state and cancel any running tool calls in UI
+  const st = S();
+  const streamId = st.streamId;
+  if (streamId) {
+    const ch = st.chats[chatId];
+    const node = ch?.nodes[streamId];
+    if (node?.toolCalls?.some((t) => t.status === "running")) {
+      st.updateNode(chatId, streamId, (n) => ({
+        toolCalls: (n.toolCalls || []).map((t) =>
+          t.status === "running" ? { ...t, status: "error", output: "(stopped by user)" } : t
+        ),
+      }));
+    }
+  }
+  st.set_((s) => {
+    s.busy = { ...s.busy, [chatId]: false };
+    if (s.streamId === streamId) s.streamId = null;
+  });
+};
 
 export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) {
   const st = S();
@@ -258,8 +310,12 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
     if (now - lastFlush > flushEvery) { lastFlush = now; S().updateNode(chatId, id, { content: full }); }
   };
 
+  let searchCallsThisTurn = 0;
+
   try {
-    for (let hop = 0; hop < 10; hop++) {
+    for (let hop = 0; hop < 6; hop++) {
+      if (ctl.signal.aborted) break;
+
       const c = S().chats[chatId];
       const tools = [...baseToolDefs(), ...mcpToolDefs(S().settings.mcp)];
       const messages = buildMessages(c, threadId, id);
@@ -280,7 +336,7 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       const out = await streamChat(cleaned, tools, onDelta, ctl.signal);
       S().updateNode(chatId, id, { content: out.content });
 
-      if (!out.toolCalls.length) break;
+      if (ctl.signal.aborted || !out.toolCalls.length) break;
 
       const records: ToolCallRecord[] = out.toolCalls.map((t) => {
         let args: any = {};
@@ -290,24 +346,54 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       S().updateNode(chatId, id, (n) => ({ toolCalls: [...(n.toolCalls || []), ...records] }));
 
       for (const r of records) {
+        if (ctl.signal.aborted) break;
+
+        // Anti-loop rail: cap searches at 3 per turn to prevent runaway loops
+        if (r.name === "web_search" || r.name === "site_search") {
+          searchCallsThisTurn++;
+          if (searchCallsThisTurn > 3) {
+            const output = "Search quota reached for this turn (3 searches completed). Synthesize your comprehensive answer for the user immediately using the gathered search excerpts and your extensive knowledge base.";
+            const ms = 1;
+            S().updateNode(chatId, id, (n) => ({
+              toolCalls: (n.toolCalls || []).map((x) => (x.id === r.id ? { ...x, status: "done", output, ms } : x)),
+            }));
+            continue;
+          }
+        }
+
         const t0 = performance.now();
         let output = "";
         let status: ToolCallRecord["status"] = "done";
         try {
           output = await runTool(r.name, r.args, {
-            chatId, nodeId: id,
+            chatId,
+            nodeId: id,
+            signal: ctl.signal,
             summarize: (focus) => compactChat(chatId, focus),
           });
-        } catch (e: any) { output = `error: ${e.message}`; status = "error"; }
+        } catch (e: any) {
+          output = ctl.signal.aborted ? "(stopped)" : `error: ${e.message}`;
+          status = "error";
+        }
+
+        if (ctl.signal.aborted) {
+          S().updateNode(chatId, id, (n) => ({
+            toolCalls: (n.toolCalls || []).map((x) => (x.status === "running" ? { ...x, status: "error", output: "(stopped by user)" } : x)),
+          }));
+          break;
+        }
+
         const ms = Math.round(performance.now() - t0);
         S().updateNode(chatId, id, (n) => ({
           toolCalls: (n.toolCalls || []).map((x) => (x.id === r.id ? { ...x, status, output, ms } : x)),
         }));
       }
+
+      if (ctl.signal.aborted) break;
       // continue the loop so the model can use the results
     }
   } catch (e: any) {
-    if (e.name !== "AbortError") S().updateNode(chatId, id, { error: e.message?.slice(0, 300) || "request failed" });
+    if (e.name !== "AbortError" && !ctl.signal.aborted) S().updateNode(chatId, id, { error: e.message?.slice(0, 300) || "request failed" });
   } finally {
     delete controllers[chatId];
     S().set_((s) => { s.busy = { ...s.busy, [chatId]: false }; s.streamId = null; });
