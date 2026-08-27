@@ -25,17 +25,18 @@ export const SKILLS: Skill[] = [
 This app does NOT use bloated monolithic widgets or pre-baked slide templates. It uses a small set of fundamental, nestable building blocks inspired by Gamma, linked with a reactive programming engine.
 
 ## Core Design Principles
-1. **Radical Minimalism & Anti-Clutter**: Never stack redundant kickers, badges, and labels saying the same thing. If the metric is \`25:00\`, do NOT add a badge "FOCUS" and a kicker "POMODORO" and a label "Time Remaining". Let the number speak for itself. Use centered metrics with subtle contextual status.
-2. **Circular Widget & Border Progress**: For stopwatches, countdown timers, and pomodoros, use a circular card (\`"shape": "circle"\`, \`"centered": true\`) with an animated circular border progress dial (\`"borderProgress"\`). Text and buttons sit centered in the circle. For rectangular cards, progress renders as an integrated top border bar.
-3. **Cross-Component State Sharing**: Multiple \`<component>\` tags in the same message automatically share state! If you split UI across text or math sections, use \`<component id="timer">\` on the master card and \`<component link="timer">\` on a downstream button to let it control the timer.
-4. **Auto-Adaptive Layout**: Adjacent buttons are automatically grouped and balanced across the row. Odd items in grids auto-span to eliminate awkward holes. Long labels smoothly marquee on hover without breaking words.
+1. **Radical Minimalism & Zero Redundancy**: Be as non-redundant and minimal as possible. NEVER state the obvious. If a widget displays a primary value (such as a timecode, number, or reading), do NOT add a title naming what the widget is, and do NOT add redundant status labels or badges describing what is already clear from the value itself. Let the primary value speak for itself as the sole focal point.
+2. **Square Hover Icon Buttons & Dynamic Icon States**: Use compact square icon buttons (\`"shape": "square"\`, \`"icon": "..."\`, \`"hover": true\`) that reveal on hover instead of bulky labeled text buttons. Use dynamic icon states via reactive expressions: e.g. \`"icon": "\${active ? 'pause' : 'play'}"\`, \`"icon": "skip"\`, \`"icon": "refresh"\`.
+3. **Circular Widget & Border Progress**: For radial or cyclical visualizers, use a circular card (\`"shape": "circle"\`, \`"centered": true\`) with an animated circular border progress dial (\`"borderProgress"\`). Text and buttons sit centered inside the circle. For rectangular cards, progress renders as an integrated top border bar.
+4. **Cross-Component State Sharing**: Multiple \`<component>\` tags in the same message automatically share state! If you split UI across text or math sections, use \`<component id="master">\` on the primary card and \`<component link="master">\` on downstream buttons to let them control the master state.
+5. **Auto-Adaptive Layout**: Adjacent buttons are automatically grouped and balanced across the row. Odd items in grids auto-span to eliminate awkward holes. Long labels smoothly marquee on hover without breaking words.
 
 ## Fundamental Composable Blocks
 - **card**: Container with optional \`title\`, \`subtitle\`, \`badge\`, \`centered\` (boolean), \`borderProgress\` (0-100), \`progressColor\`, \`shape\` ("rect"|"circle"), \`state\`, \`tick\`, \`onTick\`, \`id\`, and nested \`blocks\`.
 - **grid**: Composable multi-column layout (\`cols\`: 1-6, \`gap\`, and child \`blocks\`). Automatically balances odd items.
 - **text**: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
 - **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`, \`centered\`).
-- **button**: Reactive action trigger (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`). Consecutive buttons automatically flow together into a balanced row.
+- **button**: Reactive action trigger (\`text\`, \`icon\`: "play"|"pause"|"skip"|"refresh"|"check"|"x"|"plus"|"minus"|"settings", \`shape\`: "square"|"rect", \`hover\`: boolean, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
 - **slider**: Precision expansion slider (hairline track expanding to 26px on drag with precision readout, \`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, and \`bind\`).
 - **input**: Text/number input (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
 - **dropdown**: Select menu (\`label\`, \`options\`, \`bind\`).
@@ -51,50 +52,51 @@ This app does NOT use bloated monolithic widgets or pre-baked slide templates. I
 
 ## Reactive State & Logic Engine
 Any \`card\` or UI document can declare reactive state and dynamic ticking:
-- \`state\`: Initial state object, e.g. \`{ "seconds": 0, "running": false, "users": 100, "price": 49 }\`.
+- \`state\`: Initial state object, e.g. \`{ "seconds": 0, "active": false, "users": 100, "price": 49 }\`.
 - \`tick\`: Interval in ms (e.g. \`1000\` for 1s ticks, \`100\` for 0.1s ticks).
-- \`onTick\`: JS script executed every tick (e.g. \`"if (running) seconds++"\`).
-- \`onClick\`: JS script executed on button click (e.g. \`"running = !running"\` or \`"seconds = 0; running = false"\`).
+- \`onTick\`: JS script executed every tick (e.g. \`"if (active) seconds++"\`).
+- \`onClick\`: JS script executed on button click (e.g. \`"active = !active"\` or \`"seconds = 0; active = false"\`).
 - \`bind\`: Two-way binding attribute on sliders, inputs, switches, dropdowns, and checkboxes linking directly to a key in \`state\`.
 - \`\${...}\` / \`{...}\`: Dynamic template interpolation in any label, value, text, badge, or chart. Built-in helpers: \`pad(n)\`, \`Math\`, \`Date\`.
 - \`submitToChat\`: On buttons, sends a message back to chat with interpolated state (e.g. \`"Forecast submitted: ARR=\${users * price * 12}"\`).
 
 ## Composable Recipes
 
-1. **Minimal Stopwatch (Circular Design with Border Progress)**:
+1. **Radically Minimal Dynamic Visualizer (Circular Design, Border Progress, Square Hover Buttons)**:
 \`\`\`json
 {
   "type": "card",
   "shape": "circle",
   "centered": true,
-  "title": "Stopwatch",
-  "borderProgress": "\${(seconds % 60) * (100 / 60)}",
-  "state": { "seconds": 0, "running": false },
+  "borderProgress": "\${((total - count) / total) * 100}",
+  "state": { "total": 100, "count": 100, "active": false },
   "tick": 1000,
-  "onTick": "if (running) seconds++",
+  "onTick": "if (active && count > 0) count--",
   "blocks": [
-    { "type": "metric", "centered": true, "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}", "sub": "\${running ? 'Active' : seconds > 0 ? 'Paused' : 'Ready'}" },
-    { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
-    { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
+    { "type": "metric", "centered": true, "value": "\${count}" },
+    {
+      "type": "button_group",
+      "blocks": [
+        { "type": "button", "shape": "square", "hover": true, "icon": "\${active ? 'pause' : 'play'}", "variant": "primary", "onClick": "active = !active" },
+        { "type": "button", "shape": "square", "hover": true, "icon": "skip", "variant": "secondary", "onClick": "count = 0; active = false" }
+      ]
+    }
   ]
 }
 \`\`\`
 
-2. **Cross-Component Linked UI (Split Across Chat / Math)**:
-Master Timer Card:
+2. **Cross-Component Linked Action Across Markdown**:
+Master Card:
 \`\`\`xml
-<component id="timer">
+<component id="tracker">
 {
   "type": "card",
   "shape": "circle",
   "centered": true,
-  "title": "Pomodoro",
-  "borderProgress": "\${((1500 - timeLeft) / 1500) * 100}",
-  "state": { "timeLeft": 1500, "running": false },
-  "tick": 1000,
-  "onTick": "if (running && timeLeft > 0) timeLeft--",
+  "borderProgress": "\${progress}",
+  "state": { "progress": 70, "active": false },
   "blocks": [
-    { "type": "metric", "centered": true, "value": "\${pad(Math.floor(timeLeft / 60))}:\${pad(timeLeft % 60)}", "sub": "\${running ? 'Focus' : 'Paused'}" }
+    { "type": "metric", "centered": true, "value": "\${progress}%" }
   ]
 }
 </component>
@@ -102,32 +104,54 @@ Master Timer Card:
 ... intermediate markdown text, formulas, or math ...
 Downstream Linked Action Button:
 \`\`\`xml
-<component link="timer">
+<component link="tracker">
 {
   "type": "button",
-  "text": "\${running ? 'Pause Timer' : 'Start Timer'}",
+  "shape": "square",
+  "hover": true,
+  "icon": "\${active ? 'pause' : 'play'}",
   "variant": "primary",
-  "onClick": "running = !running"
+  "onClick": "active = !active"
 }
 </component>
 \`\`\`
 
-3. **Minimal Pomodoro (Circular Design with Border Progress)**:
+3. **Interactive Scenario Calculator**:
 \`\`\`json
 {
   "type": "card",
-  "shape": "circle",
-  "centered": true,
-  "title": "Pomodoro",
-  "borderProgress": "\${mode === 'work' ? ((1500 - timeLeft) / 1500) * 100 : ((300 - timeLeft) / 300) * 100}",
-  "progressColor": "\${mode === 'work' ? 'var(--accent)' : 'var(--ok)'}",
-  "state": { "timeLeft": 1500, "running": false, "mode": "work" },
-  "tick": 1000,
-  "onTick": "if (running && timeLeft > 0) timeLeft--; else if (running && timeLeft === 0) { mode = (mode === 'work' ? 'break' : 'work'); timeLeft = (mode === 'work' ? 1500 : 300); }",
+  "state": { "quantity": 150, "unitPrice": 49 },
   "blocks": [
-    { "type": "metric", "centered": true, "value": "\${pad(Math.floor(timeLeft / 60))}:\${pad(timeLeft % 60)}", "sub": "\${mode === 'work' ? (running ? 'Focus' : 'Focus (Paused)') : (running ? 'Break' : 'Break (Paused)')}" },
-    { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
-    { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "timeLeft = 1500; running = false; mode = 'work'" }
+    { "type": "slider", "label": "Volume", "min": 10, "max": 1000, "step": 10, "bind": "quantity" },
+    { "type": "slider", "label": "Unit Price", "min": 10, "max": 200, "step": 5, "unit": "$", "bind": "unitPrice" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "metric", "label": "Subtotal", "value": "$\${quantity * unitPrice}" },
+        { "type": "metric", "label": "Annualized", "value": "$\${quantity * unitPrice * 12}" }
+      ]
+    },
+    { "type": "button", "text": "Submit Scenario", "submitToChat": "Submitted: \${quantity} units at $\${unitPrice} -> Total is $\${quantity * unitPrice * 12}" }
+  ]
+}
+\`\`\`
+
+4. **Composable Data Overview**:
+\`\`\`json
+{
+  "type": "card",
+  "blocks": [
+    { "type": "text", "text": "Performance Metrics", "variant": "title" },
+    {
+      "type": "grid",
+      "cols": 3,
+      "blocks": [
+        { "type": "metric", "label": "Median TTFT", "value": "24ms", "delta": "-8ms" },
+        { "type": "metric", "label": "Peak Concurrency", "value": "12,000", "delta": "+40%" },
+        { "type": "metric", "label": "Error Rate", "value": "0.01%", "sub": "p99.9" }
+      ]
+    }
   ]
 }
 \`\`\`

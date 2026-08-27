@@ -784,12 +784,14 @@ html.lenis, html.lenis body { height: auto; }
 }
 .comp-btn {
   user-select: none;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, filter 0.15s ease, opacity 0.2s ease;
 }
 .comp-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
+  transform: translateY(-1px);
 }
 .comp-btn:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.93) !important;
 }
 
 /* Button Group / FlowRow Auto-Adaptive Layout */
@@ -800,8 +802,60 @@ html.lenis, html.lenis body { height: auto; }
   width: 100%;
 }
 
-.comp-button-group .comp-btn {
+.comp-button-group .comp-btn:not(.comp-btn-square) {
   width: 100%;
+}
+
+/* Square & Icon-Only Buttons */
+.comp-btn-square {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--r-sm) !important;
+  flex-shrink: 0 !important;
+}
+
+.comp-btn-square.comp-btn-sm {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+}
+
+.comp-btn-square.comp-btn-lg {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+}
+
+.comp-btn-square.comp-btn-circle {
+  border-radius: 9999px !important;
+}
+
+/* Hover Reveal Controls */
+.comp-btn-hover-reveal {
+  opacity: 0.25;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, filter 0.15s ease;
+}
+
+.comp-btn-hover-reveal.comp-btn-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.block-card:hover .comp-btn-hover-reveal,
+.canvas-card:hover .comp-btn-hover-reveal,
+.comp-button-group:hover .comp-btn-hover-reveal,
+.comp-btn-hover-reveal:hover,
+.comp-btn-hover-reveal:focus-visible {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .block-card .block-metric {

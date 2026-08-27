@@ -2018,25 +2018,89 @@ export function AdaptiveText({
   );
 }
 
+export function renderButtonIcon(name: string, size: number = 14) {
+  if (!name || typeof name !== "string") return null;
+  const clean = name.toLowerCase().replace(/[-_]/g, "");
+  switch (clean) {
+    case "play":
+      return <I.play size={size} />;
+    case "pause":
+      return <I.pause size={size} />;
+    case "skip":
+    case "forward":
+    case "next":
+      return <I.forward size={size} />;
+    case "prev":
+    case "previous":
+    case "backward":
+    case "back":
+      return <I.backward size={size} />;
+    case "reset":
+    case "refresh":
+    case "reload":
+      return <I.refresh size={size} />;
+    case "restart":
+    case "rotateccw":
+      return <I.rotateCcw size={size} />;
+    case "stop":
+      return <I.stop size={size} />;
+    case "check":
+    case "done":
+    case "tick":
+      return <I.check size={size} />;
+    case "x":
+    case "close":
+    case "cancel":
+      return <I.x size={size} />;
+    case "plus":
+    case "add":
+      return <I.plus size={size} />;
+    case "minus":
+    case "remove":
+      return <I.minus size={size} />;
+    case "settings":
+    case "gear":
+      return <I.settings size={size} />;
+    case "copy":
+      return <I.copy size={size} />;
+    case "trash":
+    case "delete":
+      return <I.trash size={size} />;
+    case "clock":
+    case "time":
+      return <I.clock size={size} />;
+    default:
+      if ((I as any)[clean]) {
+        const IconComp = (I as any)[clean];
+        return <IconComp size={size} />;
+      }
+      return null;
+  }
+}
+
 export function ButtonGroupBlock({ blocks }: { blocks: any[] }) {
   if (!blocks || blocks.length === 0) return null;
-  const count = blocks.length;
+
+  const allSquare = blocks.every(
+    (b) => b.shape === "square" || b.square === true || (b.icon && !b.text && !b.label)
+  );
 
   return (
     <div
       className="comp-button-group a-blk"
       style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
-        gap: 8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: allSquare ? 10 : 8,
         width: "100%",
-        maxWidth: 260,
+        maxWidth: allSquare ? undefined : 260,
         margin: "6px auto 0",
       }}
     >
       {blocks.map((b, i) => (
-        <div key={i} style={{ minWidth: 0, width: "100%", display: "flex" }}>
-          <ButtonBlock b={{ ...b, style: { width: "100%", ...b.style } }} />
+        <div key={i} style={{ minWidth: 0, display: "flex", flex: allSquare ? "0 0 auto" : 1 }}>
+          <ButtonBlock b={{ ...b, style: { width: allSquare ? undefined : "100%", ...b.style } }} />
         </div>
       ))}
     </div>
@@ -2222,10 +2286,22 @@ export function SliderBlock({ b }: { b: any }) {
 
 export function ButtonBlock({ b }: { b: any }) {
   const { interpolate, runAction, state } = useReactive();
-  const text = interpolate(b.text || b.label || b.title || "Button");
+  const rawText = b.text != null ? b.text : b.label != null ? b.label : b.title;
+  const text = rawText ? interpolate(rawText) : "";
   const [clicked, setClicked] = useState(false);
   const variant = b.variant || "primary";
   const size = b.size || "md";
+
+  const rawIcon = b.icon ? String(interpolate(b.icon)).trim() : "";
+  const iconSize = size === "sm" ? 12 : size === "lg" ? 18 : 15;
+  const iconEl = renderButtonIcon(rawIcon, iconSize);
+
+  const isSquare = b.shape === "square" || b.square === true || (Boolean(iconEl) && !rawText);
+  const isCircle = b.shape === "circle" || b.circle === true;
+  const hoverOnly = b.hoverOnly === true || b.showOnHover === true || b.hover === true;
+  const isHiddenResting = b.hoverOnly === "hidden";
+
+  const tooltip = b.tooltip || b.title || (isSquare && text ? text : undefined) || (rawIcon ? rawIcon : undefined);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2277,27 +2353,28 @@ export function ButtonBlock({ b }: { b: any }) {
       type="button"
       onClick={handleClick}
       disabled={b.disabled}
-      className={`comp-btn comp-btn-${variant}`}
+      title={tooltip}
+      className={`comp-btn comp-btn-${variant} ${isSquare ? "comp-btn-square" : ""} ${isCircle ? "comp-btn-circle" : ""} ${hoverOnly ? "comp-btn-hover-reveal" : ""} ${isHiddenResting ? "comp-btn-hidden" : ""}`}
       style={{
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         gap: 6,
-        padding: size === "sm" ? "4px 10px" : size === "lg" ? "10px 18px" : "6px 14px",
-        borderRadius: "var(--r-sm)",
+        padding: isSquare ? 0 : size === "sm" ? "4px 10px" : size === "lg" ? "10px 18px" : "6px 14px",
+        borderRadius: isCircle ? "9999px" : "var(--r-sm)",
         background: bg,
         color,
         border: variant === "outline" ? "1px solid var(--line-strong)" : "1px solid transparent",
         fontSize: size === "sm" ? "11.5px" : "12.5px",
         fontWeight: 540,
         cursor: b.disabled ? "not-allowed" : "pointer",
-        opacity: b.disabled ? 0.6 : 1,
-        transform: clicked ? "scale(0.96)" : "scale(1)",
-        transition: "transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease",
+        opacity: b.disabled ? 0.6 : undefined,
+        transform: clicked ? "scale(0.93)" : undefined,
         ...b.style,
       }}
     >
-      <span>{text}</span>
+      {iconEl}
+      {!isSquare && text && <span>{text}</span>}
     </button>
   );
 }
@@ -2441,6 +2518,18 @@ export function DropdownBlock({ b }: { b: any }) {
 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handleClickOutside);
+    return () => document.removeEventListener("pointerdown", handleClickOutside);
+  }, [open]);
 
   const currentLabel = options.find((o: any) => o.value === currentVal)?.label || currentVal || b.placeholder || "Select...";
   const filtered = options.filter((o: any) => !search || String(o.label || o.value).toLowerCase().includes(search.toLowerCase()));
@@ -2453,7 +2542,15 @@ export function DropdownBlock({ b }: { b: any }) {
   };
 
   return (
-    <div style={{ margin: "4px 0", position: "relative" }} className="a-blk">
+    <div
+      ref={dropdownRef}
+      style={{
+        margin: "4px 0",
+        position: "relative",
+        zIndex: open ? 9999 : 1,
+      }}
+      className="comp-dropdown-wrap a-blk"
+    >
       {label && <div style={{ fontSize: "11px", fontWeight: 520, color: "var(--text-faint)", marginBottom: 4 }}>{label}</div>}
       <button
         type="button"
@@ -2486,11 +2583,11 @@ export function DropdownBlock({ b }: { b: any }) {
             top: "calc(100% + 4px)",
             left: 0,
             right: 0,
-            zIndex: 50,
+            zIndex: 99999,
             background: "var(--surface-2)",
             border: "1px solid var(--line-soft)",
             borderRadius: "var(--r-sm)",
-            boxShadow: "var(--sh-lg)",
+            boxShadow: "0 12px 28px -4px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.2)",
             padding: 4,
             maxHeight: 200,
             overflowY: "auto",
@@ -2691,7 +2788,7 @@ export function CardBlock({ b }: { b: any }) {
         maxWidth: isCircular ? 280 : undefined,
         width: "100%",
         margin: isCircular ? "12px auto" : undefined,
-        overflow: "hidden",
+        overflow: "visible",
       }}
     >
       {/* 1. Circular Card Progress Ring Dial */}
@@ -3273,7 +3370,6 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
             type: "card",
             shape: "circle",
             centered: true,
-            title: b.label || "Stopwatch",
             borderProgress: "${(seconds % 60) * (100 / 60)}",
             progressColor: "var(--accent)",
             state: { seconds: 0, running: false },
@@ -3284,13 +3380,12 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
                 type: "metric",
                 centered: true,
                 value: "${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}",
-                sub: "${running ? 'Active' : seconds > 0 ? 'Paused' : 'Ready'}",
               },
               {
                 type: "button_group",
                 blocks: [
-                  { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", text: "Reset", variant: "secondary", onClick: "seconds = 0; running = false" },
+                  { type: "button", shape: "square", hover: true, icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", shape: "square", hover: true, icon: "refresh", variant: "secondary", onClick: "seconds = 0; running = false" },
                 ],
               },
             ],
@@ -3306,7 +3401,6 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
             type: "card",
             shape: "circle",
             centered: true,
-            title: b.label || "Timer",
             borderProgress: "${((total - left) / total) * 100}",
             progressColor: "var(--accent)",
             state: { total: initialTimerSec, left: initialTimerSec, running: false },
@@ -3317,13 +3411,12 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
                 type: "metric",
                 centered: true,
                 value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
-                sub: "${running ? 'Counting down' : left === 0 ? 'Completed' : 'Paused'}",
               },
               {
                 type: "button_group",
                 blocks: [
-                  { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", text: "Reset", variant: "secondary", onClick: `left = total; running = false` },
+                  { type: "button", shape: "square", hover: true, icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", shape: "square", hover: true, icon: "refresh", variant: "secondary", onClick: `left = total; running = false` },
                 ],
               },
             ],
@@ -3341,7 +3434,6 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
             type: "card",
             shape: "circle",
             centered: true,
-            title: b.label || "Pomodoro",
             borderProgress: "${mode === 'work' ? ((work - left) / work) * 100 : ((brk - left) / brk) * 100}",
             progressColor: "${mode === 'work' ? 'var(--accent)' : 'var(--ok)'}",
             state: { work: workSec, brk: breakSec, left: workSec, running: false, mode: "work" },
@@ -3352,13 +3444,12 @@ function BlockRouter({ b }: { b: CanvasBlock }) {
                 type: "metric",
                 centered: true,
                 value: "${pad(Math.floor(left / 60))}:${pad(left % 60)}",
-                sub: "${mode === 'work' ? (running ? 'Focus' : 'Focus (Paused)') : (running ? 'Break' : 'Break (Paused)')}",
               },
               {
                 type: "button_group",
                 blocks: [
-                  { type: "button", text: "${running ? 'Pause' : 'Start'}", variant: "primary", onClick: "running = !running" },
-                  { type: "button", text: "Reset", variant: "secondary", onClick: `left = work; running = false; mode = 'work'` },
+                  { type: "button", shape: "square", hover: true, icon: "${running ? 'pause' : 'play'}", variant: "primary", onClick: "running = !running" },
+                  { type: "button", shape: "square", hover: true, icon: "skip", variant: "secondary", onClick: `mode = (mode === 'work' ? 'break' : 'work'); left = (mode === 'work' ? work : brk);` },
                 ],
               },
             ],
