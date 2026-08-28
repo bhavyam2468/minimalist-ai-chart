@@ -1,133 +1,28 @@
+/**
+Tool dispatch.
+
+One switch from tool name to result string. Every branch is a pure
+question-and-answer: it reads the workspace, calls out to the web or python,
+and returns text that goes straight back to the model as the tool result —
+errors included, since a readable failure is more useful to the model than a
+thrown exception.
+
+Names starting with mcp__ are passed through to the matching MCP server.
+ */
 import { useApp, uid } from "./store";
 import { findSkills, skillByName, SKILLS } from "./skills";
 import { hostOf, webCrawl, webFetch, webSearch } from "./web";
-import type { Artifact, WFile } from "./types";
-
-export interface ToolCtx {
-  chatId: string;
-  nodeId: string;
-  signal?: AbortSignal;
-  summarize?: (focus: string) => Promise<string>;
-  onSkillLoaded?: (name: string) => void;
-}
+import { ensurePyodide } from "./python";
+import { getFile, writeFile, autoArtifact } from "./workspace";
+import type { ToolCtx } from "./tool-defs";
+import type { Artifact } from "./types";
 
 const S = () => useApp.getState();
 const chatOf = (id: string) => S().chats[id];
 
-/* --------------------------------------------------------------- schemas */
-const P = (props: Record<string, any>, required: string[] = []) => ({ type: "object", properties: props, required, additionalProperties: false });
-const str = (description: string) => ({ type: "string", description });
-const num = (description: string) => ({ type: "number", description });
-
-export function baseToolDefs() {
-  return [
-    { name: "find_skills", description: "Search the installed skill library by intent. Returns name + description + when to use.", parameters: P({ query: str("intent phrase, e.g. 'edit a spreadsheet'") }, ["query"]) },
-    { name: "read_skill", description: "Load the full body of one skill (level 2 disclosure).", parameters: P({ name: str("skill name") }, ["name"]) },
-
-    { name: "list_files", description: "List every file in the workspace with its context state (local/known/context) and size.", parameters: P({}) },
-    { name: "read_file", description: "Read a workspace file with line numbers. 1-indexed offset, default limit 400 lines.", parameters: P({ path: str("workspace path"), offset: num("first line (1-indexed)"), limit: num("max lines") }, ["path"]) },
-    { name: "edit_file", description: "Write a workspace file. Creates it if missing. mode=rewrite (default) replaces the body, mode=append adds to the end.", parameters: P({ path: str("workspace path e.g. notes/plan.md"), content: str("file content"), mode: { type: "string", enum: ["rewrite", "append"] } }, ["path", "content"]) },
-    { name: "apply_diff", description: "Exact-match patch. old_str must appear once (include surrounding context) unless replace_all is true.", parameters: P({ path: str("workspace path"), old_str: str("exact text to find"), new_str: str("replacement text"), replace_all: { type: "boolean" } }, ["path", "old_str", "new_str"]) },
-
-    { name: "add_context", description: "Load known files fully into the working context.", parameters: P({ paths: { type: "array", items: { type: "string" } } }, ["paths"]) },
-    { name: "remove_context", description: "Detach files from the context. The path stays known and can be re-added later.", parameters: P({ paths: { type: "array", items: { type: "string" } } }, ["paths"]) },
-    { name: "compact_context", description: "Spawn a summariser sub-agent over the older turns and replace them with a structured summary.", parameters: P({ focus: str("what must survive compaction") }) },
-
-    {
-      name: "web_search",
-      description: "High-speed web search with niche filtering (music, reddit discussions, tech, academic) and domain targeting.",
-      parameters: P({
-        query: str("search query or keywords"),
-        site: str("optional domain or platform e.g. 'reddit.com', 'bandcamp.com', 'rateyourmusic.com', 'github.com', 'wikipedia.org'"),
-        niche: { type: "string", enum: ["music", "discussions", "tech", "academic", "general"], description: "optional category to optimize search results for underground music, reddit discussions, tech docs, or papers" },
-        limit: num("max results (default 6)"),
-      }, ["query"]),
-    },
-    {
-      name: "web_fetch",
-      description: "Fetch one URL and return clean readable markdown text.",
-      parameters: P({ url: str("absolute url") }, ["url"]),
-    },
-
-    { name: "run_python", description: "Execute python in a sandbox (numpy/pandas/matplotlib available). Workspace files are mounted at /work. Returns stdout.", parameters: P({ code: str("python source") }, ["code"]) },
-
-    { name: "open_canvas", description: "Show something in the user's canvas right now: a workspace file path, a folder, an artifact id, or an http(s) url. Creates nothing.", parameters: P({ target: str("file path, folder, artifact id, or url"), title: str("optional label") }, ["target"]) },
-    {
-      name: "artifact",
-      description: "Name a reference so the user can reopen it from the artifacts list: point at a workspace file/folder or a url. No content is stored — the target file stays the source of truth, and editing it updates the artifact. Files you write that are presentational get an artifact automatically, so only use this to label, annotate, or reference a url.",
-      parameters: P({
-        ref: str("workspace path (file or folder) or absolute url"),
-        title: str("short human label"),
-        note: str("one line: what this is / what to look at"),
-        open: { type: "boolean", description: "show it in the canvas immediately (default true)" },
-      }, ["ref"]),
-    },
-  ];
-}
-
-/* ------------------------------------------------------------- workspace */
-function getFile(chatId: string, path: string): WFile | undefined {
-  const c = chatOf(chatId);
-  return c.files[path] || Object.values(c.files).find((f) => f.path.endsWith(path) || f.path.split("/").pop() === path);
-}
-
-function writeFile(chatId: string, path: string, content: string, origin: WFile["origin"] = "agent") {
-  const prev = chatOf(chatId).files[path];
-  const f: WFile = {
-    path, content, mime: "text/plain", size: content.length,
-    kind: /\.(ts|tsx|js|jsx|py|css|html|json|sh|rs|go|java|c|cpp)$/i.test(path) ? "code" : /\.(csv|tsv)$/i.test(path) ? "data" : "text",
-    state: prev?.state === "known" ? "known" : "context",
-    origin: prev?.origin ?? origin, createdAt: prev?.createdAt ?? Date.now(),
-  };
-  S().putFile(chatId, f);
-  autoArtifact(chatId, path, !prev);
-  return f;
-}
-
-/** Anything presentational the agent writes becomes a reference automatically. */
-const REFERRABLE = /\.(html?|ui\.json|png|jpe?g|gif|webp|svg|mp4)$/i;
-const AUTO_OPEN = /\.(html?|ui\.json)$/i;
-function autoArtifact(chatId: string, path: string, isNew: boolean) {
-  if (!REFERRABLE.test(path)) return;
-  const c = chatOf(chatId);
-  if (Object.values(c.artifacts ?? {}).some((a) => a.ref === path)) return;
-  const id = uid("af");
-  S().putArtifact(chatId, {
-    id,
-    kind: "file",
-    ref: path,
-    title: path.split("/").length > 1 ? path.split("/").slice(-2).join("/") : path,
-    createdAt: Date.now(),
-  });
-  if (isNew && AUTO_OPEN.test(path)) S().openCanvas({ kind: "artifact", id });
-}
-
 const numbered = (text: string, from: number) =>
   text.split("\n").map((l, i) => `${String(from + i).padStart(5, " ")}  ${l}`).join("\n");
 
-/* ---------------------------------------------------------------- python */
-let pyodide: any = null;
-let pyLoading: Promise<any> | null = null;
-async function ensurePyodide() {
-  if (pyodide) return pyodide;
-  if (pyLoading) return pyLoading;
-  pyLoading = (async () => {
-    if (!(window as any).loadPyodide) {
-      await new Promise<void>((res, rej) => {
-        const s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js";
-        s.onload = () => res(); s.onerror = () => rej(new Error("pyodide load failed"));
-        document.head.appendChild(s);
-      });
-    }
-    pyodide = await (window as any).loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
-    await pyodide.loadPackage(["numpy", "pandas", "matplotlib", "micropip"]).catch(() => {});
-    return pyodide;
-  })();
-  return pyLoading;
-}
-
-/* ------------------------------------------------------------------ main */
 export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<string> {
   const { chatId } = ctx;
   const st = S();

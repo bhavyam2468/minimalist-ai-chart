@@ -8,7 +8,7 @@ request will cost, used to warn before it gets expensive.
  */
 import { mainPath, useApp } from "./store";
 import { SKILLS, skillIndex } from "./skills";
-import { baseToolDefs } from "./tools";
+import { baseToolDefs } from "./tool-defs";
 import { mcpToolDefs } from "./mcp";
 import type { Chat } from "./types";
 

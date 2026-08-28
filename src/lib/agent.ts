@@ -13,7 +13,8 @@ as stopped, so a cancel is immediate rather than waiting for the next hop.
 just appends a node and calls `generate`.
  */
 import { mainPath, threadPath, useApp } from "./store";
-import { baseToolDefs, runTool } from "./tools";
+import { baseToolDefs } from "./tool-defs";
+import { runTool } from "./run-tool";
 import { mcpToolDefs } from "./mcp";
 import { buildMessages, cleanContentForLlm } from "./messages";
 import { streamChat } from "./stream";
