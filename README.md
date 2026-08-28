@@ -1,165 +1,150 @@
-# Minimalist AI Chart Application
+# Atelier — agentic canvas
 
-A modern, AI-powered chart and document analysis application built with React, Vite, and Tailwind CSS. This application allows users to upload documents (PDF, DOCX, XLSX, etc.) and interact with them through an AI-powered interface that can extract information, generate insights, and create visualizations.
+A client-side agentic workspace. The agent answers directly in the page
+(no chat bubbles), works against a virtual filesystem held in the browser,
+and opens anything it makes — a page, a spreadsheet, a document, a URL — in a
+floating canvas beside the conversation.
 
-## Features
+Everything runs in the browser. There is no server; requests go straight from
+the client to an OpenAI-compatible endpoint.
 
-- **Document Upload & Processing**: Support for PDF, DOCX, XLSX, and other formats
-- **AI-Powered Analysis**: Extract text, tables, and insights from documents
-- **Interactive Chat Interface**: Ask questions about your documents in natural language
-- **Code & Chart Generation**: Generate visualizations and code snippets from document content
-- **Real-time Preview**: View documents and generated content side-by-side
-- **Modular Architecture**: Clean separation of concerns with React components
+## What it does
 
-## Tech Stack
+- **Document-shaped answers** — streaming markdown with tables, task lists,
+  footnotes, LaTeX, code highlighting, YouTube embeds and `<details>`
+- **A workspace, not a scratchpad** — the agent reads, writes and patches
+  files (PDF / DOCX / XLSX / images are ingested to text on upload), and every
+  presentational file becomes an artifact automatically
+- **A floating canvas** — renders a workspace file according to its type: a
+  running sandboxed page for an HTML project, an editor for code, a viewer for
+  images, sheets, documents and PDFs, or a live web page
+- **Tools** — web search and fetch, crawl, a Pyodide python sandbox, and
+  context management (attach / detach / compact)
+- **Skills** — a library of procedures the agent loads on demand; a few are
+  always pinned into the prompt
+- **Threads** — select any passage to quote it or fork a side conversation
+  anchored to that node
+- **MCP** — attach external MCP servers and their tools appear alongside the
+  built-in ones
 
-- **Frontend**: React 19 + Vite
-- **Styling**: Tailwind CSS 4
-- **State Management**: Zustand
-- **Document Processing**:
-  - PDF.js for PDF rendering and text extraction
-  - Mammoth for DOCX conversion
-  - SheetJS (xlsx) for spreadsheet processing
-  - JSZip for archive handling
-  - KaTeX for mathematical formula rendering
-- **Utilities**: clsx, tailwind-merge for conditional class joining
-- **TypeScript**: Full type safety
+## Setup
 
-## Project Structure
+```bash
+npm install
+npm run dev
+```
+
+`npm run build` produces a single self-contained `dist/index.html`
+(vite-plugin-singlefile).
+
+## Environment variables
+
+Read at **build time**:
+
+| Variable          | Required | Description                                                                                                     |
+| ----------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `VITE_OPENAI_KEY` | No       | Pre-fills Settings → API Key. If unset, paste a key into the app's Settings modal instead.                       |
+
+```bash
+cp .env.example .env.local   # then VITE_OPENAI_KEY=sk-...
+```
+
+`.env.local` is git-ignored. On Vercel, set the variable under
+Settings → Environment Variables and redeploy — build-time variables do not
+update without a new build.
+
+> ⚠️ Anything prefixed `VITE_` is embedded in the client bundle and readable by
+> anyone who loads the site. Use a key with strict limits for public
+> deployments, or proxy the calls.
+
+## Architecture
 
 ```
 src/
-├── App.tsx                 # Main application component
-├── main.tsx                # Entry point
-├── index.css               # Global styles
-├── lib/                    # Core logic and utilities
-│   ├── agent.ts            # AI agent integration
-│   ├── ingest.ts           # Document ingestion pipeline
-│   ├── mcp.ts              # Model Context Protocol implementation
-│   ├── skills.ts           # AI skills and capabilities
-│   ├── store.ts            # Zustand state management
-│   ├── tools.ts            # Utility functions
-│   ├── types.ts            # TypeScript interfaces
-│   ├── web.ts              # Web-specific utilities
-│   └── xml.ts              # XML processing utilities
-├── canvas/                 # Document viewing and interaction components
-│   ├── CanvasHost.tsx      # Main canvas container
-│   ├── FileEditor.tsx      # Document editor/viewer
-│   ├── ProjectView.tsx     # Project overview
-│   ├── Blocks.tsx          # Content blocks
-│   ├── WebViewer.tsx       # Web content viewer
-│   └── view.ts             # Canvas view utilities
-├── ui/                     # User interface components
-│   ├── Chrome.tsx          # Application shell/layout
-│   ├── Composer.tsx        # Chat input component
-│   ├── Message.tsx         # Chat message display
-│   ├── Modals.tsx          # Modal dialogs
-│   └── Icons.tsx           # Icon components
-├── md/                     # Markdown processing components
-│   ├── Markdown.tsx        # Markdown renderer
-│   ├── highlight.tsx       # Syntax highlighting
-│   └── parse.ts            # Markdown parser
-├── utils/                  # Utility functions
-│   └── cn.ts               # Class name utility
-└── styles/                 # CSS stylesheets
-    ├── app.css             # Application styles
-    ├── canvas.css          # Canvas-specific styles
-    ├── globals.css         # Global CSS variables
-    └── prose.css           # Typography styles
+├── App.tsx                  # entry: pick the active chat, hand it to the shell
+├── main.tsx
+│
+├── ui/                      # the chrome around the conversation
+│   ├── AppShell.tsx         #   three-column layout, breakpoint, ⌘\ / ⌘. shortcuts
+│   ├── Chrome.tsx           #   Sidebar, Rail, Panel
+│   ├── Composer.tsx         #   input, uploads, skills menu
+│   ├── Message.tsx          #   one turn: text, tool calls, sources, artifacts
+│   ├── SelectionPopup.tsx   #   the quote / thread-on-this tray
+│   ├── Modals.tsx           #   settings, skills, MCP
+│   ├── ErrorBoundary.tsx
+│   └── Icons.tsx
+│
+├── lib/                     # everything that is not a component
+│   ├── types.ts             #   the data model (Chat, Node, Thread, WFile, Artifact…)
+│   ├── store.ts             #   Zustand store, persistence, migrations
+│   ├── agent.ts             #   the turn loop: stream → run tools → stream again
+│   ├── prompt.ts            #   the system prompt, built from live state
+│   ├── messages.ts          #   chat tree → request messages, thread handling
+│   ├── stream.ts            #   SSE streaming, model fallback, tool-call recovery
+│   ├── compact.ts           #   context compaction sub-agent
+│   ├── tool-defs.ts         #   the tool schemas sent to the model
+│   ├── run-tool.ts          #   tool name → result string, MCP passthrough
+│   ├── workspace.ts         #   the virtual filesystem, artifact auto-registration
+│   ├── python.ts            #   lazy Pyodide bootstrap
+│   ├── skills.ts            #   the skill library
+│   ├── mcp.ts               #   MCP server listing and calls
+│   ├── web.ts               #   search, fetch, crawl, HTML → markdown
+│   ├── ingest.ts            #   uploaded files → text
+│   ├── xml.ts, clipboard.ts, useStickToBottom.ts
+│
+├── canvas/                  # the floating viewport
+│   ├── CanvasHost.tsx       #   window: drag, resize, bottom sheet on mobile
+│   ├── FileEditor.tsx       #   adapts to the file: code, sheet, image, ui.json
+│   ├── ProjectView.tsx      #   runs a folder of files as a sandboxed page
+│   ├── WebViewer.tsx        #   live web page
+│   ├── view.ts              #   extension → which viewer
+│   └── theme.ts             #   design tokens injected into rendered iframes
+│
+├── md/                      # the markdown pipeline
+│   ├── parse.ts             #   text → block/inline AST
+│   ├── Markdown.tsx         #   AST → streaming React
+│   └── highlight.tsx
+│
+├── styles/                  # app.css, canvas.css, globals.css, prose.css
+└── utils/cn.ts
 ```
 
-## Setup and Installation
+### How a turn works
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/bhavyam2468/minimalist-ai-chart.git
-   cd minimalist-ai-chart
-   ```
+`send` appends a user node and calls `generate`. `generate` builds messages
+from the node tree, streams a completion into the node, and if the model asked
+for tools it runs them and streams again — up to six hops. Tool calls are
+written to the node as they start so the UI shows them running, then patched
+with output and timing.
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+An artifact is only a **reference**: a title pointing at a workspace path or a
+URL. It owns no content, so editing the file updates the artifact.
 
-3. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
+### Currently unbuilt
 
-4. **Build for production**:
-   ```bash
-   npm run build
-   ```
+The block renderer (a JSON-driven component system) was removed wholesale and
+is waiting on a rebuild. Until it lands:
 
-5. **Preview production build**:
-   ```bash
-   npm run preview
-   ```
+- a `.ui.json` file's preview pane shows a placeholder — the file itself is
+  intact, switch to `code` to read or edit it
+- a `<component>` tag in a response renders its raw source instead of mounting
 
-## Available Scripts
+The `.ui.json` format and the `<component>` parse path are still in place, so
+old sessions and old transcripts remain readable.
 
-- `npm run dev` - Start development server with Vite
-- `npm run build` - Build production bundle
-- `npm run preview` - Preview production build locally
+## Tech
 
-## Environment Variables
+React 19 · Vite 7 · Tailwind CSS 4 · Zustand · Lenis · KaTeX
 
-The application runs entirely client-side and needs just one variable, which is read at **build time**:
+The heavy document parsers are **not** bundled. PDF.js, Mammoth and SheetJS
+are pulled from a CDN the first time a file of that type is ingested, and
+Pyodide the first time `run_python` is called, so the shipped bundle stays
+small and nothing is paid for until it is used.
 
-| Variable          | Required | Description                                                                                     |
-| ----------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| `VITE_OPENAI_KEY` | No       | OpenAI API key used to pre-fill Settings → API Key. If unset, leave it empty and paste a key in the app's Settings modal instead. |
-
-### Local development
-
-1. Copy the example file and fill in your key:
-   ```bash
-   cp .env.example .env.local
-   ```
-   ```dotenv
-   VITE_OPENAI_KEY=sk-...
-   ```
-2. Restart the dev server (`npm run dev`).
-
-`.env.local` is git-ignored (Vite's `*.local` convention), so your key never gets committed.
-
-### Deploying to Vercel
-
-Because Vite variables are baked in at build time, configure them in Vercel so builds pick them up:
-
-1. In the [Vercel dashboard](https://vercel.com/dashboard), open your project → **Settings → Environment Variables**.
-2. Add:
-   - **Key**: `VITE_OPENAI_KEY`
-   - **Value**: your OpenAI API key (`sk-...`)
-   - **Environments**: Production, Preview, and/or Development as needed
-3. **Redeploy** — environment variable changes only apply to new builds.
-
-> ⚠️ **Security note**: any variable prefixed with `VITE_` is embedded in the client bundle and visible to everyone who loads the site. For public deployments, prefer a key with strict usage limits, or route AI calls through a serverless proxy rather than shipping the key to browsers.
-
-## AI Capabilities
-
-The application integrates AI capabilities through:
-
-1. **Document Understanding**: Extract structured information from uploaded documents
-2. **Natural Language Querying**: Ask questions about document content
-3. **Content Generation**: Create summaries, insights, and visualizations
-4. **Code Assistance**: Generate code snippets based on document examples
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+`package.json` still lists `pdfjs-dist`, `mammoth`, `xlsx`, `gsap` and
+`smiles-drawer` — none of them are imported by any module (the first three are
+loaded from CDN instead). They are candidates for removal.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Built with [React](https://reactjs.org/)
-- Styled with [Tailwind CSS](https://tailwindcss.com/)
-- Bundled with [Vite](https://vitejs.dev/)
-- Document processing powered by [PDF.js](https://mozilla.github.io/pdf.js/) and [Mammoth](https://github.com/mwilliamson/mammoth.js)
+MIT
