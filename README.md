@@ -104,7 +104,37 @@ src/
 
 ## Environment Variables
 
-No environment variables are required for basic operation. The application runs entirely client-side.
+The application runs entirely client-side and needs just one variable, which is read at **build time**:
+
+| Variable          | Required | Description                                                                                     |
+| ----------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `VITE_OPENAI_KEY` | No       | OpenAI API key used to pre-fill Settings → API Key. If unset, leave it empty and paste a key in the app's Settings modal instead. |
+
+### Local development
+
+1. Copy the example file and fill in your key:
+   ```bash
+   cp .env.example .env.local
+   ```
+   ```dotenv
+   VITE_OPENAI_KEY=sk-...
+   ```
+2. Restart the dev server (`npm run dev`).
+
+`.env.local` is git-ignored (Vite's `*.local` convention), so your key never gets committed.
+
+### Deploying to Vercel
+
+Because Vite variables are baked in at build time, configure them in Vercel so builds pick them up:
+
+1. In the [Vercel dashboard](https://vercel.com/dashboard), open your project → **Settings → Environment Variables**.
+2. Add:
+   - **Key**: `VITE_OPENAI_KEY`
+   - **Value**: your OpenAI API key (`sk-...`)
+   - **Environments**: Production, Preview, and/or Development as needed
+3. **Redeploy** — environment variable changes only apply to new builds.
+
+> ⚠️ **Security note**: any variable prefixed with `VITE_` is embedded in the client bundle and visible to everyone who loads the site. For public deployments, prefer a key with strict usage limits, or route AI calls through a serverless proxy rather than shipping the key to browsers.
 
 ## AI Capabilities
 
