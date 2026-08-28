@@ -31,9 +31,9 @@
   --mark-bg:        #d7b28c26;
 
   /* ---- geometry --------------------------------------------------------- */
-  --r:              18px;   /* the radius. bubbles, input bar, panels, cards */
-  --r-sm:           10px;
-  --r-xs:           7px;
+  --r:              14px;   /* standard uniform radius: windows, cards, floating bars, bubbles, inputs */
+  --r-sm:           10px;   /* interactive elements: buttons, dropdown summaries, badges, segments */
+  --r-xs:           6px;    /* inner chips, small toggles, code tags */
   --r-full:         999px;
 
   --sp-1:           4px;
@@ -173,6 +173,33 @@ a { color: inherit; }
 @keyframes caret    { 0%,100% { opacity: 1; } 50% { opacity: .15; } }
 @keyframes draw     { to { stroke-dashoffset: 0; } }
 @keyframes grow-y   { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* Google-style fluid chart keyframe animations */
+@keyframes chart-draw {
+  from { stroke-dashoffset: 2400; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes chart-area-fade {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes chart-dot-pop {
+  0% { transform: scale(0); opacity: 0; }
+  65% { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes chart-bar-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes chart-hbar-wipe {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes chart-fade-switch {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .a-tok  { animation: tok-in 260ms var(--ease-out) both; }
 .a-blk  { animation: blk-in var(--t) var(--ease-out) both; }

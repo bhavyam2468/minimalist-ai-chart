@@ -7,7 +7,7 @@ import type { Chat, Node, ToolCallRecord } from "./types";
 const S = () => useApp.getState();
 
 /* ---------------------------------------------------------- system prompt */
-function systemPrompt(c: Chat): string {
+export function systemPrompt(c: Chat): string {
   const pinned = new Set(c.enabledSkills ?? []);
   const always = SKILLS.filter((s) => s.always || pinned.has(s.name)).map((s) => s.body).join("\n\n");
   const files = Object.values(c.files);
@@ -28,12 +28,11 @@ Direct, concrete, unhurried. No filler openers ("Great question!"), no restating
 headings, **bold**, *italic*, ~~strike~~, \`code\`, fenced code with a language,
 tables, ordered/unordered/task lists, > quotes, --- rules, footnotes [^1] with
 [^1]: definitions (they are revealed after the stream finishes, so use them freely),
-==highlight== for the one line that matters most (it animates in when the block
-completes — at most one or two per answer), LaTeX with $inline$ and $$display$$,
+==highlight== only for critical key findings (never wrap artifact names, status updates, or headings in highlights; at most one per answer), LaTeX with $inline$ and $$display$$,
 images ![alt](url), bare YouTube links (auto-embedded), and
 <details><summary>title</summary> … </details> for anything long or optional.
 
-## Tools
+## Tools & Generative UI (Gamma-Inspired Composable Blocks)
 Prefer doing over describing. Use \`find_skills\` before an unfamiliar workflow;
 skills carry the exact procedure. Search the web whenever freshness matters.
 Write artefacts to the workspace instead of dumping them in the reply, then
@@ -41,6 +40,66 @@ surface them with \`open_canvas\` — the canvas is a floating viewport beside t
 conversation that holds files (with a real editor), web pages and artefacts.
 Use \`artifact\` when a chart, dashboard, tool or embed communicates better than prose.
 Keep context lean with add_context / remove_context / compact_context.
+
+## Composable Generative UI Architecture
+This app is NOT a bloated widget toolkit with rigid monolithic templates. You build ANY UI (stopwatches, countdowns, pomodoro timers, weather cards, pricing simulators, slides, forms) dynamically using fundamental nestable building blocks and reactive state logic:
+- **Fundamental Blocks**:
+  - \`card\`: Universal liquid container (\`title\`, \`subtitle\`, \`badge\`, \`variant\`, \`state\`, \`tick\`, \`onTick\`, child \`blocks\`).
+  - \`grid\`: Multi-column layout (\`cols\`: 1-6, \`gap\`, child \`blocks\`).
+  - \`text\`: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
+  - \`metric\`: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`).
+  - \`button\`: Reactive button (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
+  - \`slider\`: Precision expansion slider with hairline track expanding to 26px on drag (\`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, \`bind\`).
+  - \`input\`: Clean field (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
+  - \`dropdown\`: Select menu (\`label\`, \`options\`, \`bind\`).
+  - \`switch\`: Toggle switch (\`label\`, \`description\`, \`bind\`).
+  - \`checkbox\`: Checkbox (\`label\`, \`description\`, \`bind\`).
+  - \`progress\`: Progress bar (\`value\`, \`max\`, \`label\`, \`unit\`).
+  - \`chart\`: Charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
+  - \`table\`: Data table (\`headers\`, \`rows\`).
+  - \`badge\`: Pill badge (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
+  - \`divider\`: Hairline rule.
+  - \`math\`: 2D interactive math visualizer (\`fn\`, \`xmin\`, \`xmax\`).
+  - \`chemistry\`: 2D molecular diagram from SMILES (\`smiles\` or \`molecule\`).
+
+- **Reactive State & Logic Engine**:
+  - Provide \`state: { ... }\` on the container card to create reactive state.
+  - Provide \`tick: 1000\` and \`onTick: "if (running) seconds++"\` for automated timer loops.
+  - Provide \`onClick: "running = !running"\` on buttons for state mutations.
+  - Use \`bind: "key"\` on sliders, inputs, switches, dropdowns for two-way state binding.
+  - Use \`\${...}\` or \`{...}\` interpolation in labels, metrics, text, and chart data points.
+  - Use \`submitToChat\` on buttons to serialize scenario state back into the chat.
+
+- **Syntax Rules**:
+  1. For single components: \`<component type="slider" label="Users: \${users}" bind="users" />\`
+  2. For nested cards & widgets:
+\`<component>
+{
+  "type": "card",
+  "state": { "seconds": 0, "running": false },
+  "tick": 1000,
+  "onTick": "if (running) seconds++",
+  "blocks": [
+    { "type": "badge", "text": "\${running ? 'RUNNING' : 'PAUSED'}", "color": "\${running ? 'ok' : 'faint'}" },
+    { "type": "metric", "label": "Time", "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
+        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
+      ]
+    }
+  ]
+}
+</component>\`
+
+## Search Efficiency & Anti-Looping
+Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter
+("music", "discussions", "tech", "academic") and \`site\` parameter to reach high-signal data.
+NEVER loop or execute repetitive search queries. Once you execute 1-2 searches, synthesize
+a rich, comprehensive, authoritative answer immediately combining the returned excerpts
+with your pre-trained knowledge base. Do not leave the user waiting on endless searches.
 
 ${always}
 
@@ -53,7 +112,31 @@ ${list}
 ${bodies ? `## Files currently in context\n${bodies}` : ""}`;
 }
 
+export function contextTokenCount(c: Chat): number {
+  try {
+    const sys = systemPrompt(c);
+    const mcpServers = S()?.settings?.mcp || [];
+    const tools = JSON.stringify([...baseToolDefs(), ...mcpToolDefs(mcpServers)]);
+    const msgsLen = mainPath(c)
+      .filter((n) => !n.hidden)
+      .reduce((a, n) => a + n.content.length + (n.toolCalls || []).reduce((x, t) => x + (t.output?.length || 0), 0), 0);
+    const filesLen = Object.values(c.files)
+      .filter((f) => f.state === "context")
+      .reduce((a, f) => a + f.content.length, 0);
+    return Math.max(1, Math.round((sys.length + tools.length + msgsLen + filesLen) / 4));
+  } catch {
+    return 1200;
+  }
+}
+
 /* -------------------------------------------------------------- messages */
+function cleanContentForLlm(text?: string | null): string {
+  return (text || "")
+    .replace(/<tool[-_]call[\s\S]*?<\/tool[-_]call>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function nodeToMessage(c: Chat, n: Node): any[] {
   if (n.hidden) return n.summary ? [{ role: "user", content: `<compacted-history>\n${n.summary}\n</compacted-history>` }] : [];
   if (n.role === "user") {
@@ -69,16 +152,16 @@ function nodeToMessage(c: Chat, n: Node): any[] {
   }
   const out: any[] = [];
   const calls = (n.toolCalls || []).filter((t) => t.status !== "running");
+  const cleanContent = cleanContentForLlm(n.content);
   if (calls.length) {
     out.push({
       role: "assistant",
-      content: n.content || null,
+      content: cleanContent || null,
       tool_calls: calls.map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.argsRaw || JSON.stringify(t.args ?? {}) } })),
     });
     for (const t of calls) out.push({ role: "tool", tool_call_id: t.id, content: (t.output ?? "").slice(0, 20000) });
-    if (n.content) out.push({ role: "assistant", content: n.content });
-  } else if (n.content) {
-    out.push({ role: "assistant", content: n.content });
+  } else if (cleanContent) {
+    out.push({ role: "assistant", content: cleanContent });
   }
   return out;
 }
@@ -105,6 +188,49 @@ function buildMessages(c: Chat, threadId?: string | null, excludeId?: string): a
 
 /* --------------------------------------------------------------- network */
 interface StreamOut { content: string; toolCalls: { id: string; name: string; args: string }[]; }
+
+function extractInlineToolCalls(text: string): { id: string; name: string; args: string }[] {
+  const calls: { id: string; name: string; args: string }[] = [];
+
+  // Pattern A: <tool_call> ... </tool_call>
+  const tagRegex = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = tagRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      const name = parsed.name || parsed.tool;
+      const rawArgs = parsed.arguments || parsed.args || {};
+      const args = typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs);
+      if (name) calls.push({ id: uid("call"), name, args });
+    } catch {}
+  }
+
+  // Pattern B: ```tool_call ... ``` or ```call:tool_name ... ```
+  const codeRegex = /```(?:tool_call|call|tool)(?::(\w+))?\s*([\s\S]*?)```/gi;
+  while ((match = codeRegex.exec(text)) !== null) {
+    try {
+      const langTool = match[1];
+      const parsed = JSON.parse(match[2].trim());
+      const name = langTool || parsed.name || parsed.tool;
+      const rawArgs = langTool ? parsed : (parsed.arguments || parsed.args || {});
+      const args = typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs);
+      if (name) calls.push({ id: uid("call"), name, args });
+    } catch {}
+  }
+
+  // Pattern C: <call:(\w+)> ... </call:\1>
+  const tagCallRegex = /<call:(\w+)>([\s\S]*?)<\/call:\1>/gi;
+  while ((match = tagCallRegex.exec(text)) !== null) {
+    try {
+      const name = match[1];
+      const parsed = JSON.parse(match[2].trim());
+      const args = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+      if (name) calls.push({ id: uid("call"), name, args });
+    } catch {}
+  }
+
+  return calls;
+}
 
 async function streamChat(
   messages: any[],
@@ -183,7 +309,16 @@ async function streamChat(
       }
     }
   }
-  return { content, toolCalls: Object.values(calls) };
+
+  const resultCalls = Object.values(calls);
+  if (!resultCalls.length && content) {
+    const inlineCalls = extractInlineToolCalls(content);
+    if (inlineCalls.length) {
+      return { content, toolCalls: inlineCalls };
+    }
+  }
+
+  return { content, toolCalls: resultCalls };
 }
 
 /* ------------------------------------------------------------ compaction */
@@ -225,6 +360,25 @@ export async function compactChat(chatId: string, focus = ""): Promise<string> {
   const j = await res.json();
   const summary: string = j?.choices?.[0]?.message?.content ?? "(compaction failed)";
 
+  // If an Aside section is present and non-empty, save it to notes/aside.md
+  const asideMatch = summary.match(/(?:^|\n)(?:8\.\s*Aside|Aside)[:\s]*([\s\S]*?)(?:\n\d\.|\n##|$)/i);
+  if (asideMatch && asideMatch[1]?.trim() && !/^(none|n\/a|nothing)\.?$/i.test(asideMatch[1].trim())) {
+    const asideText = `# Aside & Unrelated Context\n\n_Preserved during context compaction on ${new Date().toLocaleString()}_\n\n${asideMatch[1].trim()}\n`;
+    const prevAside = c.files["notes/aside.md"];
+    const newContent = prevAside ? prevAside.content + "\n\n---\n\n" + asideText : asideText;
+    S().putFile(chatId, {
+      path: "notes/aside.md",
+      content: newContent,
+      mime: "text/markdown",
+      size: newContent.length,
+      kind: "text",
+      state: "known",
+      origin: "agent",
+      createdAt: prevAside?.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
+
   S().patchChat(chatId, (ch) => {
     older.forEach((n, i) => {
       ch.nodes[n.id] = { ...ch.nodes[n.id], hidden: true, summary: i === 0 ? summary : undefined };
@@ -242,7 +396,33 @@ export interface GenOpts {
 }
 
 const controllers: Record<string, AbortController> = {};
-export const stopGeneration = (chatId: string) => controllers[chatId]?.abort();
+
+export const stopGeneration = (chatId: string) => {
+  const ctl = controllers[chatId];
+  if (ctl) {
+    try { ctl.abort(); } catch {}
+  }
+  delete controllers[chatId];
+
+  // Instantly release busy state and cancel any running tool calls in UI
+  const st = S();
+  const streamId = st.streamId;
+  if (streamId) {
+    const ch = st.chats[chatId];
+    const node = ch?.nodes[streamId];
+    if (node?.toolCalls?.some((t) => t.status === "running")) {
+      st.updateNode(chatId, streamId, (n) => ({
+        toolCalls: (n.toolCalls || []).map((t) =>
+          t.status === "running" ? { ...t, status: "error", output: "(stopped by user)" } : t
+        ),
+      }));
+    }
+  }
+  st.set_((s) => {
+    s.busy = { ...s.busy, [chatId]: false };
+    if (s.streamId === streamId) s.streamId = null;
+  });
+};
 
 export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) {
   const st = S();
@@ -253,13 +433,19 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
 
   const flushEvery = 32;
   let lastFlush = 0;
+  let accumulatedContent = (nodeId ? S().chats[chatId]?.nodes[nodeId]?.content : "") || "";
+
   const onDelta = (full: string) => {
     const now = performance.now();
     if (now - lastFlush > flushEvery) { lastFlush = now; S().updateNode(chatId, id, { content: full }); }
   };
 
+  let searchCallsThisTurn = 0;
+
   try {
-    for (let hop = 0; hop < 10; hop++) {
+    for (let hop = 0; hop < 6; hop++) {
+      if (ctl.signal.aborted) break;
+
       const c = S().chats[chatId];
       const tools = [...baseToolDefs(), ...mcpToolDefs(S().settings.mcp)];
       const messages = buildMessages(c, threadId, id);
@@ -271,16 +457,44 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       if (priorCalls.length) {
         cleaned.push({
           role: "assistant",
-          content: prior.content || null,
+          content: cleanContentForLlm(prior.content) || null,
           tool_calls: priorCalls.map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.argsRaw } })),
         });
         for (const t of priorCalls) cleaned.push({ role: "tool", tool_call_id: t.id, content: (t.output ?? "").slice(0, 20000) });
       }
 
-      const out = await streamChat(cleaned, tools, onDelta, ctl.signal);
-      S().updateNode(chatId, id, { content: out.content });
+      const hopBase = accumulatedContent;
+      const out = await streamChat(cleaned, tools, (delta) => {
+        onDelta(hopBase + delta);
+      }, ctl.signal);
 
-      if (!out.toolCalls.length) break;
+      accumulatedContent = hopBase + (out.content || "");
+      S().updateNode(chatId, id, { content: accumulatedContent });
+
+      if (ctl.signal.aborted) break;
+
+      if (!out.toolCalls.length) {
+        const content = out.content || "";
+        let syntaxError: string | null = null;
+
+        // Missing <component opening tag (e.g. starts with type="dropdown" ...)
+        if (/(?:^|\n)\s*type=["']?(?:card|grid|slider|dropdown|switch|checkbox|button|input|progress|chart|metric|badge|text)["']?\s/i.test(content)) {
+          syntaxError = "Your output contained an orphan 'type=\"...\"' attribute without the opening '<component ' tag. Every UI component MUST start with '<component type=\"...\" ... />' or '<component>{ ... }</component>'.";
+        } else if (/<component\b/i.test(content) && !/<component[\s\S]*?(?:\/>|<\/component>)/i.test(content)) {
+          syntaxError = "Unclosed '<component>' tag. Please close self-closing components with '/>' or container components with '</component>'.";
+        }
+
+        if (syntaxError && hop < 2 && !ctl.signal.aborted) {
+          accumulatedContent = hopBase;
+          cleaned.push({ role: "assistant", content });
+          cleaned.push({
+            role: "system",
+            content: `[UI SYNTAX ERROR]: ${syntaxError}\nRule: Build UI using fundamental composable blocks ('card', 'grid', 'text', 'metric', 'button', 'slider', 'input', 'dropdown', 'switch', 'progress', 'chart'). Be as non-redundant and minimal as possible: use compact rounded rectangle cards (never circular unless explicitly requested), omit titles and labels that merely name the widget, and use hoverControls on metric for square buttons that appear with a drop shadow right over the number on hover.\nExample:\n<component>\n{\n  "type": "card",\n  "borderProgress": "\${((100 - count) / 100) * 100}",\n  "state": { "count": 100, "active": false },\n  "tick": 1000,\n  "onTick": "if (active && count > 0) count--",\n  "blocks": [\n    {\n      "type": "metric",\n      "centered": true,\n      "value": "\${count}",\n      "hoverControls": [\n        { "type": "button", "shape": "square", "icon": "\${active ? 'pause' : 'play'}", "variant": "primary", "onClick": "active = !active" },\n        { "type": "button", "shape": "square", "icon": "skip", "variant": "secondary", "onClick": "count = 0; active = false" }\n      ]\n    }\n  ]\n}\n</component>\nPlease output the UI again with valid syntax.`,
+          });
+          continue;
+        }
+        break;
+      }
 
       const records: ToolCallRecord[] = out.toolCalls.map((t) => {
         let args: any = {};
@@ -289,25 +503,61 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       });
       S().updateNode(chatId, id, (n) => ({ toolCalls: [...(n.toolCalls || []), ...records] }));
 
+      // Append inline tool call markers into accumulatedContent so collapsible appears right after preceding text!
       for (const r of records) {
+        accumulatedContent += `\n\n<tool_call id="${r.id}" name="${r.name}">\n${r.argsRaw}\n</tool_call>\n\n`;
+      }
+      S().updateNode(chatId, id, { content: accumulatedContent });
+
+      for (const r of records) {
+        if (ctl.signal.aborted) break;
+
+        // Anti-loop rail: cap searches at 3 per turn to prevent runaway loops
+        if (r.name === "web_search" || r.name === "site_search") {
+          searchCallsThisTurn++;
+          if (searchCallsThisTurn > 3) {
+            const output = "Search quota reached for this turn (3 searches completed). Synthesize your comprehensive answer for the user immediately using the gathered search excerpts and your extensive knowledge base.";
+            const ms = 1;
+            S().updateNode(chatId, id, (n) => ({
+              toolCalls: (n.toolCalls || []).map((x) => (x.id === r.id ? { ...x, status: "done", output, ms } : x)),
+            }));
+            continue;
+          }
+        }
+
         const t0 = performance.now();
         let output = "";
         let status: ToolCallRecord["status"] = "done";
         try {
           output = await runTool(r.name, r.args, {
-            chatId, nodeId: id,
+            chatId,
+            nodeId: id,
+            signal: ctl.signal,
             summarize: (focus) => compactChat(chatId, focus),
           });
-        } catch (e: any) { output = `error: ${e.message}`; status = "error"; }
+        } catch (e: any) {
+          output = ctl.signal.aborted ? "(stopped)" : `error: ${e.message}`;
+          status = "error";
+        }
+
+        if (ctl.signal.aborted) {
+          S().updateNode(chatId, id, (n) => ({
+            toolCalls: (n.toolCalls || []).map((x) => (x.status === "running" ? { ...x, status: "error", output: "(stopped by user)" } : x)),
+          }));
+          break;
+        }
+
         const ms = Math.round(performance.now() - t0);
         S().updateNode(chatId, id, (n) => ({
           toolCalls: (n.toolCalls || []).map((x) => (x.id === r.id ? { ...x, status, output, ms } : x)),
         }));
       }
+
+      if (ctl.signal.aborted) break;
       // continue the loop so the model can use the results
     }
   } catch (e: any) {
-    if (e.name !== "AbortError") S().updateNode(chatId, id, { error: e.message?.slice(0, 300) || "request failed" });
+    if (e.name !== "AbortError" && !ctl.signal.aborted) S().updateNode(chatId, id, { error: e.message?.slice(0, 300) || "request failed" });
   } finally {
     delete controllers[chatId];
     S().set_((s) => { s.busy = { ...s.busy, [chatId]: false }; s.streamId = null; });

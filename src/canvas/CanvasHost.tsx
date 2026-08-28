@@ -176,6 +176,76 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     window.addEventListener("pointerup", () => window.removeEventListener("pointermove", move), { once: true });
   }, [sheetH]);
 
+  const isVid = isVideo(res?.url);
+  const [pinned, setPinned] = useState(() => {
+    try {
+      return localStorage.getItem("atelier_canvas_pinned") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const togglePin = () => {
+    setPinned((p) => {
+      const next = !p;
+      try { localStorage.setItem("atelier_canvas_pinned", String(next)); } catch {}
+      return next;
+    });
+  };
+
+  const [topHover, setTopHover] = useState(false);
+  const [bottomHover, setBottomHover] = useState(false);
+  const topTimer = useRef<any>(null);
+  const bottomTimer = useRef<any>(null);
+
+  const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const bottomY = rect.bottom - e.clientY;
+
+    if (y <= 50) {
+      if (topTimer.current) { clearTimeout(topTimer.current); topTimer.current = null; }
+      setTopHover(true);
+    } else {
+      if (!topTimer.current && !pinned) {
+        topTimer.current = setTimeout(() => {
+          setTopHover(false);
+          topTimer.current = null;
+        }, 1000);
+      }
+    }
+
+    if (bottomY <= 54) {
+      if (bottomTimer.current) { clearTimeout(bottomTimer.current); bottomTimer.current = null; }
+      setBottomHover(true);
+    } else {
+      if (!bottomTimer.current && !pinned) {
+        bottomTimer.current = setTimeout(() => {
+          setBottomHover(false);
+          bottomTimer.current = null;
+        }, 1000);
+      }
+    }
+  }, [pinned]);
+
+  const onCanvasPointerLeave = useCallback(() => {
+    if (!pinned) {
+      if (!topTimer.current) {
+        topTimer.current = setTimeout(() => {
+          setTopHover(false);
+          topTimer.current = null;
+        }, 1000);
+      }
+      if (!bottomTimer.current) {
+        bottomTimer.current = setTimeout(() => {
+          setBottomHover(false);
+          bottomTimer.current = null;
+        }, 1000);
+      }
+    }
+  }, [pinned]);
+
   const body = useMemo(() => {
     if (!target) return null;
     if (res?.url) return <WebViewer url={res.url} title={res.title} />;
@@ -196,11 +266,13 @@ export function CanvasHost({ chatId }: { chatId: string }) {
         <div className="cv-backdrop" onClick={closeCanvas} />
         <div className="cv-win cv-sheet" style={{ height: `${sheetH * 100}dvh` }}>
           <div className="cv-grab" onPointerDown={onSheetDrag}><span /></div>
+          <div className="cv-corner-h left" onPointerDown={onSheetDrag} title="Drag to resize" />
+          <div className="cv-corner-h right" onPointerDown={onSheetDrag} title="Drag to resize" />
           <div className="cv-bar">
             <span className="cv-title">{res.title}</span>
-            <span className="chip">{res.badge}</span>
+            <span className="chip sm">{res.badge}</span>
             <span style={{ flex: 1 }} />
-            <button className="icon-btn" onClick={closeCanvas}><I.x size={16} /></button>
+            <button className="icon-btn sm" onClick={closeCanvas}><I.x size={15} /></button>
           </div>
           <div className="cv-body">{body}</div>
         </div>
@@ -213,27 +285,86 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     ? { left: PAD, top: PAD, width: `calc(100vw - ${PAD * 2}px)`, height: `calc(100vh - ${PAD * 2}px)` }
     : rect
       ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h }
-      : { right: PAD, top: PAD, width: 880, height: 660 };
+      : isVid
+        ? { right: PAD, top: PAD, width: 780, height: 490 }
+        : { right: PAD, top: PAD, width: 880, height: 660 };
 
   const handles: Dir[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 
   return (
-    <div className="cv-win" style={style}>
-      <div className="cv-bar" onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest("button,a")) return;
-        onPointerDown(e, "move");
-      }}>
-        {res.url ? <I.globe size={14} /> : res.path && viewOf(res.path, file) === "project" ? <I.canvas size={14} /> : <I.file size={14} />}
-        <span className="cv-title">{res.title}</span>
-        <span className="chip">{res.badge}</span>
+    <div
+      className="cv-win"
+      style={style}
+      data-pinned={pinned ? "true" : "false"}
+      data-top-visible={pinned || topHover ? "true" : "false"}
+      data-bottom-visible={pinned || bottomHover ? "true" : "false"}
+      data-top-hover={topHover}
+      data-bottom-hover={bottomHover}
+      onPointerMove={onCanvasPointerMove}
+      onPointerLeave={onCanvasPointerLeave}
+    >
+      {/* Universal Top Window Header Bar */}
+      <div
+        className="cv-bar"
+        onMouseEnter={() => setTopHover(true)}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest("button, a, input")) return;
+          onPointerDown(e, "move");
+        }}
+      >
+        <div className="cv-bar-left">
+          {res.url ? (
+            isVid ? <I.video size={14} /> : <I.globe size={14} />
+          ) : res.path && viewOf(res.path, file) === "project" ? (
+            <I.canvas size={14} />
+          ) : (
+            <I.file size={14} />
+          )}
+          <span className="cv-title" title={res.title}>
+            {res.title}
+          </span>
+          {res.url && <span className="chip sm">{hostOf(res.url)}</span>}
+          {!res.url && res.path && res.path !== res.title && (
+            <span className="cv-meta">{res.path}</span>
+          )}
+        </div>
+
         <span style={{ flex: 1 }} />
-        <button className="icon-btn sm" title="Reload" onClick={() => setRect((r) => (r ? { ...r } : r))}><I.refresh size={13} /></button>
-        <button className="icon-btn sm" title={maximized ? "Restore" : "Maximise"} onClick={() => setUI({ canvasMax: !maximized })}>
-          {maximized ? "▫" : "▢"}
-        </button>
-        <button className="icon-btn sm" title="Close (Esc)" onClick={closeCanvas}><I.x size={15} /></button>
+
+        <div className="cv-win-ctrls">
+          <button
+            className={`cv-win-btn ${pinned ? "pinned" : ""}`}
+            data-active={pinned}
+            title={pinned ? "Bars are pinned (click to auto-hide)" : "Pin bars (keep always visible)"}
+            onClick={togglePin}
+          >
+            <I.pin size={12} />
+          </button>
+          <button
+            className="cv-win-btn"
+            title="Reload"
+            onClick={() => setRect((r) => (r ? { ...r } : r))}
+          >
+            <I.refresh size={13} />
+          </button>
+          <button
+            className="cv-win-btn"
+            title={maximized ? "Restore" : "Maximise"}
+            onClick={() => setUI({ canvasMax: !maximized })}
+          >
+            {maximized ? "▫" : "▢"}
+          </button>
+          <button
+            className="cv-win-btn close"
+            title="Close (Esc)"
+            onClick={closeCanvas}
+          >
+            <I.x size={14} />
+          </button>
+        </div>
       </div>
 
+      {/* Canvas Body */}
       <div className="cv-body">{body}</div>
 
       {!maximized && handles.map((d) => (

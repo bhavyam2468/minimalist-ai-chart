@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Lenis from "lenis";
 import { mainPath, useApp } from "./lib/store";
 import { Turn } from "./ui/Message";
 import { Composer } from "./ui/Composer";
@@ -32,15 +33,54 @@ function SelectionPopup({ chatId }: { chatId: string }) {
 
   if (!pos) return null;
   return (
-    <div className="sel-pop pop" style={{ left: Math.max(12, pos.x - 90), top: Math.max(12, pos.y) }}>
-      <button className="menu-item" onClick={() => { setUI({ composerQuote: { nodeId: pos.nodeId, text: pos.text } }); setPos(null); window.getSelection()?.removeAllRanges(); }}>
+    <div
+      className="sel-pop pop"
+      style={{
+        left: Math.max(12, pos.x - 90),
+        top: Math.max(12, pos.y),
+        display: "inline-flex",
+        flexDirection: "row",
+        alignItems: "center",
+        flexWrap: "nowrap",
+        whiteSpace: "nowrap",
+        gap: 4,
+        padding: "4px 6px",
+      }}
+    >
+      <button
+        className="menu-item"
+        style={{
+          display: "inline-flex",
+          flexDirection: "row",
+          alignItems: "center",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+          width: "auto",
+          gap: 6,
+          padding: "5px 9px",
+        }}
+        onClick={() => { setUI({ composerQuote: { nodeId: pos.nodeId, text: pos.text } }); setPos(null); window.getSelection()?.removeAllRanges(); }}
+      >
         <I.quote size={13} />quote
       </button>
-      <button className="menu-item" onClick={() => {
-        const tid = createThread(chatId, pos.nodeId, pos.text);
-        setUI({ composerQuote: { nodeId: pos.nodeId, text: pos.text, threadId: tid }, activeThreadId: tid });
-        setPos(null); window.getSelection()?.removeAllRanges();
-      }}>
+      <button
+        className="menu-item"
+        style={{
+          display: "inline-flex",
+          flexDirection: "row",
+          alignItems: "center",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+          width: "auto",
+          gap: 6,
+          padding: "5px 9px",
+        }}
+        onClick={() => {
+          const tid = createThread(chatId, pos.nodeId, pos.text);
+          setUI({ composerQuote: { nodeId: pos.nodeId, text: pos.text, threadId: tid }, activeThreadId: tid });
+          setPos(null); window.getSelection()?.removeAllRanges();
+        }}
+      >
         <I.thread size={13} />thread on this
       </button>
     </div>
@@ -77,7 +117,29 @@ export default function App() {
     if (!el) return;
     const onScroll = () => { stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160; };
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+
+    let lenis: Lenis | null = null;
+    let reqId = 0;
+    try {
+      lenis = new Lenis({
+        wrapper: el,
+        content: (el.firstElementChild as HTMLElement) || el,
+        smoothWheel: true,
+        lerp: 0.12,
+        syncTouch: false,
+      });
+      const raf = (time: number) => {
+        lenis?.raf(time);
+        reqId = requestAnimationFrame(raf);
+      };
+      reqId = requestAnimationFrame(raf);
+    } catch {}
+
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (reqId) cancelAnimationFrame(reqId);
+      lenis?.destroy();
+    };
   }, []);
 
   useEffect(() => {

@@ -63,7 +63,7 @@ export async function mcpCall(srv: McpServer, tool: string, args: any): Promise<
   }
 }
 
-export function mcpToolDefs(servers: McpServer[]) {
+export function mcpToolDefs(servers: McpServer[] = []) {
   const out: { name: string; description: string; parameters: any }[] = [];
   for (const s of servers) {
     if (!s.enabled || !s.tools) continue;

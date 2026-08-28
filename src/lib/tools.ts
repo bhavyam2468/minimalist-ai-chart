@@ -1,11 +1,13 @@
 import { useApp, uid } from "./store";
 import { findSkills, skillByName, SKILLS } from "./skills";
-import { hostOf, siteSearch, webCrawl, webFetch, webSearch } from "./web";
+import { searchComponents, getComponentDef } from "./ui-library";
+import { hostOf, webCrawl, webFetch, webSearch } from "./web";
 import type { Artifact, WFile } from "./types";
 
 export interface ToolCtx {
   chatId: string;
   nodeId: string;
+  signal?: AbortSignal;
   summarize?: (focus: string) => Promise<string>;
   onSkillLoaded?: (name: string) => void;
 }
@@ -32,14 +34,39 @@ export function baseToolDefs() {
     { name: "remove_context", description: "Detach files from the context. The path stays known and can be re-added later.", parameters: P({ paths: { type: "array", items: { type: "string" } } }, ["paths"]) },
     { name: "compact_context", description: "Spawn a summariser sub-agent over the older turns and replace them with a structured summary.", parameters: P({ focus: str("what must survive compaction") }) },
 
-    { name: "web_search", description: "Search the live web. Keyword queries, not questions.", parameters: P({ query: str("search query"), limit: num("max results, default 6") }, ["query"]) },
-    { name: "web_fetch", description: "Fetch one URL and return clean markdown.", parameters: P({ url: str("absolute url") }, ["url"]) },
-    { name: "web_crawl", description: "Map a site root and fetch the top pages under it.", parameters: P({ url: str("root url"), limit: num("pages, default 4") }, ["url"]) },
-    { name: "site_search", description: "Search a specific database or domain: github, pubmed, arxiv, hn, wikipedia, stackoverflow, or any domain.", parameters: P({ site: str("github|pubmed|arxiv|hn|wikipedia|<domain>"), query: str("query"), limit: num("max results") }, ["site", "query"]) },
+    {
+      name: "web_search",
+      description: "High-speed web search with niche filtering (music, reddit discussions, tech, academic) and domain targeting.",
+      parameters: P({
+        query: str("search query or keywords"),
+        site: str("optional domain or platform e.g. 'reddit.com', 'bandcamp.com', 'rateyourmusic.com', 'github.com', 'wikipedia.org'"),
+        niche: { type: "string", enum: ["music", "discussions", "tech", "academic", "general"], description: "optional category to optimize search results for underground music, reddit discussions, tech docs, or papers" },
+        limit: num("max results (default 6)"),
+      }, ["query"]),
+    },
+    {
+      name: "web_fetch",
+      description: "Fetch one URL and return clean readable markdown text.",
+      parameters: P({ url: str("absolute url") }, ["url"]),
+    },
 
     { name: "run_python", description: "Execute python in a sandbox (numpy/pandas/matplotlib available). Workspace files are mounted at /work. Returns stdout.", parameters: P({ code: str("python source") }, ["code"]) },
 
     { name: "open_canvas", description: "Show something in the user's canvas right now: a workspace file path, a folder, an artifact id, or an http(s) url. Creates nothing.", parameters: P({ target: str("file path, folder, artifact id, or url"), title: str("optional label") }, ["target"]) },
+    {
+      name: "search_components",
+      description: "Search the UI Component Library for pre-existing components (sliders, color-pickers, calendars, clocks, weather, search bars, forms, charts, visualizers, slides). Pass a keyword to search by name/tags/type, or leave empty to list all available components.",
+      parameters: P({
+        query: { type: "string", description: "optional search keyword (e.g. 'color', 'calendar', 'slider', 'form', 'weather', 'chart') or leave empty/pass 'all' to list all components" },
+      }),
+    },
+    {
+      name: "get_component_schema",
+      description: "Get the exact <component> code snippet and json example for a specific component type (e.g. 'color-picker', 'calendar', 'slider', 'form', 'reactive', 'dropdown', 'radio').",
+      parameters: P({
+        type: str("component type name"),
+      }, ["type"]),
+    },
     {
       name: "artifact",
       description: "Name a reference so the user can reopen it from the artifacts list: point at a workspace file/folder or a url. No content is stored — the target file stays the source of truth, and editing it updates the artifact. Files you write that are presentational get an artifact automatically, so only use this to label, annotate, or reference a url.",
@@ -109,7 +136,7 @@ async function ensurePyodide() {
       });
     }
     pyodide = await (window as any).loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
-    await pyodide.loadPackage(["numpy", "pandas", "micropip"]).catch(() => {});
+    await pyodide.loadPackage(["numpy", "pandas", "matplotlib", "micropip"]).catch(() => {});
     return pyodide;
   })();
   return pyLoading;
@@ -133,6 +160,46 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
       if (!s) return `No skill named ${args.name}. Available: ${SKILLS.map((x) => x.name).join(", ")}`;
       ctx.onSkillLoaded?.(s.name);
       return s.body;
+    }
+
+    /* ---- UI Component Library & Marketplace ---- */
+    case "search_components": {
+      const hits = searchComponents(args.query || "");
+      if (!hits.length) {
+        return `No components found for query "${args.query || ""}". Available types: slider, color-picker, calendar, clock, timer, stopwatch, weather, search-bar, tags-input, file-upload, button, button-group, checkbox, radio, switch, dropdown, input, stepper, rating, progress, todo, form, question, reactive, chart, math, chemistry, metrics, table, switcher, accordion, callout. Call search_components with no arguments or query="all" to see all.`;
+      }
+      return hits
+        .map(
+          (h) =>
+            `### ${h.name} (\`<component type="${h.type}" />\`)\n` +
+            `Type: \`${h.type}\` | Category: ${h.category}\n` +
+            `Description: ${h.description}\n` +
+            `Ready-to-use tag:\n\`\`\`html\n${h.snippet}\n\`\`\``
+        )
+        .join("\n\n---\n\n");
+    }
+    case "get_component_schema": {
+      const def = getComponentDef(args.type || args.query || "");
+      if (!def) {
+        return `Component type "${args.type || ""}" not found. Use search_components to explore available component types.`;
+      }
+      return (
+        `# Component: ${def.name} (\`<component type="${def.type}" />\`)\n` +
+        `Category: ${def.category}\n` +
+        `Description: ${def.description}\n\n` +
+        `## Ready-to-use HTML Tag:\n\`\`\`html\n${def.snippet}\n\`\`\`\n\n` +
+        `## JSON Format:\n\`\`\`json\n${def.jsonSnippet}\n\`\`\``
+      );
+    }
+
+    /* ---- common aliases ---- */
+    case "search": return await runTool("web_search", args, ctx);
+    case "fetch": return await runTool("web_fetch", args, ctx);
+    case "python": return await runTool("run_python", args, ctx);
+    case "component":
+    case "render_component":
+    case "create_chart": {
+      return `To render this component inline in chat, output <component>${JSON.stringify(args, null, 2)}</component> directly in your response.`;
     }
 
     /* ---- workspace ---- */
@@ -198,16 +265,22 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
 
     /* ---- web ---- */
     case "web_search": {
-      const hits = await webSearch(args.query, Math.min(args.limit || 6, 10), settings.firecrawlKey);
+      const hits = await webSearch(args.query, {
+        limit: Math.min(args.limit || 6, 10),
+        site: args.site,
+        niche: args.niche || args.category,
+        key: settings.firecrawlKey,
+        signal: ctx.signal,
+      });
       S().addSources(chatId, hits.filter((h) => h.url));
       if (hits.length === 0) return `no results for "${args.query}"`;
       const first = hits[0];
       if (first.status === "error") return `search failed. provider detail: ${first.detail || first.snippet || "unknown"}`;
-      return hits.map((h, i) => `[${i + 1}] ${h.title}\n${h.url}\n${(h.snippet || "").slice(0, 260)}`).join("\n\n");
+      return hits.map((h, i) => `[${i + 1}] ${h.title}\n${h.url}\n${(h.snippet || "").slice(0, 280)}`).join("\n\n");
     }
     case "web_fetch": {
       try {
-        const r = await webFetch(args.url, settings.firecrawlKey);
+        const r = await webFetch(args.url, { key: settings.firecrawlKey, signal: ctx.signal });
         if (!r.markdown.trim()) return `fetched ${args.url} but the body is empty`;
         S().addSources(chatId, [{ url: args.url, title: r.title, snippet: hostOf(args.url) }]);
         const body = r.markdown.slice(0, 18000);
@@ -218,7 +291,7 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
     }
     case "web_crawl": {
       try {
-        const pages = await webCrawl(args.url, Math.min(args.limit || 4, 8), settings.firecrawlKey);
+        const pages = await webCrawl(args.url, Math.min(args.limit || 4, 8), settings.firecrawlKey, ctx.signal);
         if (!pages || pages.length === 0) {
           return `crawl produced no readable pages for ${args.url}`;
         }
@@ -229,10 +302,15 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
       }
     }
     case "site_search": {
-      const hits = await siteSearch(args.site, args.query, Math.min(args.limit || 6, 10), settings.firecrawlKey);
+      const hits = await webSearch(args.query, {
+        limit: Math.min(args.limit || 6, 10),
+        site: args.site,
+        key: settings.firecrawlKey,
+        signal: ctx.signal,
+      });
       if (!hits.length) return "no results";
-      S().addSources(chatId, hits);
-      return hits.map((h, i) => `[${i + 1}] ${h.title}\n${h.url}\n${(h.snippet || "").slice(0, 240)}`).join("\n\n");
+      S().addSources(chatId, hits.filter((h) => h.url));
+      return hits.map((h, i) => `[${i + 1}] ${h.title}\n${h.url}\n${(h.snippet || "").slice(0, 260)}`).join("\n\n");
     }
 
     /* ---- python ---- */
@@ -253,7 +331,25 @@ for _d in ('charts','data','notes','artifacts','out','src','docs','uploads'):
     try: os.makedirs('/work/'+_d, exist_ok=True)
     except Exception: pass
 try:
-    import matplotlib; matplotlib.use('Agg')
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({
+        'figure.facecolor': '#0c0c0e',
+        'axes.facecolor': '#141417',
+        'axes.edgecolor': '#26262c',
+        'axes.linewidth': 0.8,
+        'grid.color': '#1c1c21',
+        'grid.linestyle': '--',
+        'grid.alpha': 0.7,
+        'text.color': '#ecebe8',
+        'axes.labelcolor': '#9d9d9a',
+        'xtick.color': '#66666a',
+        'ytick.color': '#66666a',
+        'figure.autolayout': True,
+        'font.size': 9,
+        'axes.prop_cycle': matplotlib.cycler(color=['#d7b28c', '#7fa6cc', '#7fb98a', '#d8b45c', '#d97e6f', '#c49c74'])
+    })
 except Exception: pass
 _o = io.StringIO(); _e = sys.stdout; sys.stdout = _o
 try:
@@ -334,6 +430,7 @@ _o.getvalue()
           const entry =
             cands.find((p) => /\/index\.html?$/i.test(p)) ||
             cands.find((p) => /\.ui\.json$/i.test(p)) ||
+            cands.find((p) => /\/app\.(tsx|jsx|js)$/i.test(p)) ||
             cands.find((p) => /\.html?$/i.test(p)) ||
             cands.find((p) => /readme\.md$/i.test(p)) ||
             cands.sort((a, b) => a.length - b.length)[0];
@@ -379,6 +476,7 @@ _o.getvalue()
       const cands = Object.keys(chatOf(chatId).files).filter((p) => p.startsWith(dirRef + "/"));
       if (cands.length) {
         const entry = cands.find((p) => /\/index\.html?$/i.test(p)) || cands.find((p) => /\.ui\.json$/i.test(p))
+          || cands.find((p) => /\/app\.(tsx|jsx|js)$/i.test(p))
           || cands.find((p) => /\.html?$/i.test(p)) || cands.find((p) => /readme\.md$/i.test(p))
           || cands.sort((a, b) => a.length - b.length)[0];
         S().openCanvas({ kind: "file", path: entry });
@@ -398,5 +496,5 @@ _o.getvalue()
     return await mcpCall(srv, tool, args);
   }
 
-  return `unknown tool ${name}`;
+  return `unknown tool "${name}". You can execute web searches, workspace file operations, or output inline <component> tags directly in your message.`;
 }

@@ -17,6 +17,188 @@ export interface Skill {
 
 export const SKILLS: Skill[] = [
   {
+    name: "generative-ui",
+    description:
+      "Compose rich inline UI (<component>) or .ui.json files using Gamma-inspired fundamental blocks (card, grid, text, metric, button, slider, input, dropdown, switch, progress, chart) and reactive state logic.",
+    always: true,
+    body: `# generative-ui
+This app does NOT use bloated monolithic widgets or pre-baked slide templates. It uses a small set of fundamental, nestable building blocks inspired by Gamma, linked with a reactive programming engine.
+
+## Core Design Principles
+1. **Radical Minimalism & Zero Redundancy**: Be as non-redundant and minimal as possible. NEVER state the obvious. If a widget displays a primary value (such as a timecode, number, or reading), do NOT add a title naming what the widget is, and do NOT add redundant status labels or badges describing what is already clear from the value itself. Let the primary value speak for itself as the sole focal point.
+2. **Hover Controls Over Numbers (Floating Actions with Drop Shadow)**: For numeric displays or visualizers, provide square action buttons inside \`hoverControls\` on the \`metric\` block. At rest, only the clean number is shown. When hovering over the number, the action buttons appear centered directly over the number with a drop shadow, and disappear when unhovered. Use dynamic icon states via reactive expressions: e.g. \`"icon": "\${active ? 'pause' : 'play'}"\`, \`"icon": "skip"\`, \`"icon": "refresh"\`.
+3. **Compact Rounded Rectangle Cards (Default)**: Always use clean, compact rounded rectangles (\`"shape": "rect"\` or default card) so the widget fits naturally and neatly in the chat UI. Circular shapes (\`"shape": "circle"\`) are only an optional availability if explicitly requested by the user—never use circles by default. For progress on cards, use \`borderProgress\` which renders as an elegant top perimeter bar.
+4. **Universal Corner Radii**: All elements adhere to the universal corner radii of the design system: cards use \`var(--r)\`, buttons use \`var(--r-sm)\`, badges/tags use \`var(--r-xs)\`.
+5. **Cross-Component State Sharing**: Multiple \`<component>\` tags in the same message automatically share state! If you split UI across text or math sections, use \`<component id="master">\` on the primary card and \`<component link="master">\` on downstream buttons to let them control the master state.
+6. **Auto-Adaptive Layout**: Adjacent buttons are automatically grouped and balanced across the row. Odd items in grids auto-span to eliminate awkward holes. Long labels smoothly marquee on hover without breaking words.
+
+## Fundamental Composable Blocks
+- **card**: Container with optional \`title\`, \`subtitle\`, \`badge\`, \`centered\` (boolean), \`borderProgress\` (0-100), \`progressColor\`, \`shape\` ("rect"|"circle"), \`state\`, \`tick\`, \`onTick\`, \`id\`, and nested \`blocks\`.
+- **grid**: Composable multi-column layout (\`cols\`: 1-6, \`gap\`, and child \`blocks\`). Automatically balances odd items.
+- **text**: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
+- **metric**: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`, \`centered\`, \`hoverControls\`: array of buttons).
+- **button**: Reactive action trigger (\`text\`, \`icon\`: "play"|"pause"|"skip"|"refresh"|"check"|"x"|"plus"|"minus"|"settings", \`shape\`: "square"|"rect", \`hover\`: boolean, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
+- **slider**: Precision expansion slider (hairline track expanding to 26px on drag with precision readout, \`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, and \`bind\`).
+- **input**: Text/number input (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
+- **dropdown**: Select menu (\`label\`, \`options\`, \`bind\`).
+- **switch**: Boolean toggle switch (\`label\`, \`description\`, \`bind\`).
+- **checkbox**: Boolean checkbox (\`label\`, \`description\`, \`bind\`).
+- **progress**: Clean progress meter (\`value\`, \`max\`, \`label\`, \`unit\`).
+- **chart**: Composable charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
+- **table**: Clean data table (\`headers\`, \`rows\`).
+- **badge**: Status badge with universal radius (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
+- **divider**: Hairline separator.
+- **math**: Interactive 2D function visualizer (\`fn\`, \`xmin\`, \`xmax\`).
+- **chemistry**: 2D molecule diagram (\`smiles\` or \`molecule\`).
+
+## Reactive State & Logic Engine
+Any \`card\` or UI document can declare reactive state and dynamic ticking:
+- \`state\`: Initial state object, e.g. \`{ "seconds": 0, "active": false, "users": 100, "price": 49 }\`.
+- \`tick\`: Interval in ms (e.g. \`1000\` for 1s ticks, \`100\` for 0.1s ticks).
+- \`onTick\`: JS script executed every tick (e.g. \`"if (active) seconds++"\`).
+- \`onClick\`: JS script executed on button click (e.g. \`"active = !active"\` or \`"seconds = 0; active = false"\`).
+- \`bind\`: Two-way binding attribute on sliders, inputs, switches, dropdowns, and checkboxes linking directly to a key in \`state\`.
+- \`\${...}\` / \`{...}\`: Dynamic template interpolation in any label, value, text, badge, or chart. Built-in helpers: \`pad(n)\`, \`Math\`, \`Date\`.
+- \`submitToChat\`: On buttons, sends a message back to chat with interpolated state (e.g. \`"Forecast submitted: ARR=\${users * price * 12}"\`).
+
+## Composable Recipes
+
+1. **Radically Minimal Dynamic Visualizer (Border Progress, Number with Hover Controls)**:
+\`\`\`json
+{
+  "type": "card",
+  "borderProgress": "\${((total - count) / total) * 100}",
+  "state": { "total": 100, "count": 100, "active": false },
+  "tick": 1000,
+  "onTick": "if (active && count > 0) count--",
+  "blocks": [
+    {
+      "type": "metric",
+      "centered": true,
+      "value": "\${count}",
+      "hoverControls": [
+        { "type": "button", "shape": "square", "icon": "\${active ? 'pause' : 'play'}", "variant": "primary", "onClick": "active = !active" },
+        { "type": "button", "shape": "square", "icon": "skip", "variant": "secondary", "onClick": "count = 0; active = false" }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+2. **Cross-Component Linked Action Across Markdown**:
+Master Card:
+\`\`\`xml
+<component id="tracker">
+{
+  "type": "card",
+  "borderProgress": "\${progress}",
+  "state": { "progress": 70, "active": false },
+  "blocks": [
+    { "type": "metric", "centered": true, "value": "\${progress}%" }
+  ]
+}
+</component>
+\`\`\`
+... intermediate markdown text, formulas, or math ...
+Downstream Linked Action Button:
+\`\`\`xml
+<component link="tracker">
+{
+  "type": "button",
+  "shape": "square",
+  "hover": true,
+  "icon": "\${active ? 'pause' : 'play'}",
+  "variant": "primary",
+  "onClick": "active = !active"
+}
+</component>
+\`\`\`
+
+3. **Interactive Scenario Calculator**:
+\`\`\`json
+{
+  "type": "card",
+  "state": { "quantity": 150, "unitPrice": 49 },
+  "blocks": [
+    { "type": "slider", "label": "Volume", "min": 10, "max": 1000, "step": 10, "bind": "quantity" },
+    { "type": "slider", "label": "Unit Price", "min": 10, "max": 200, "step": 5, "unit": "$", "bind": "unitPrice" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "metric", "label": "Subtotal", "value": "$\${quantity * unitPrice}" },
+        { "type": "metric", "label": "Annualized", "value": "$\${quantity * unitPrice * 12}" }
+      ]
+    },
+    { "type": "button", "text": "Submit Scenario", "submitToChat": "Submitted: \${quantity} units at $\${unitPrice} -> Total is $\${quantity * unitPrice * 12}" }
+  ]
+}
+\`\`\`
+
+4. **Composable Data Overview**:
+\`\`\`json
+{
+  "type": "card",
+  "blocks": [
+    { "type": "text", "text": "Performance Metrics", "variant": "title" },
+    {
+      "type": "grid",
+      "cols": 3,
+      "blocks": [
+        { "type": "metric", "label": "Median TTFT", "value": "24ms", "delta": "-8ms" },
+        { "type": "metric", "label": "Peak Concurrency", "value": "12,000", "delta": "+40%" },
+        { "type": "metric", "label": "Error Rate", "value": "0.01%", "sub": "p99.9" }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+4. **Interactive Scenario Calculator**:
+\`\`\`json
+{
+  "type": "card",
+  "title": "SaaS Scenario Calculator",
+  "state": { "users": 150, "price": 49 },
+  "blocks": [
+    { "type": "slider", "label": "Active Users", "min": 10, "max": 1000, "step": 10, "bind": "users" },
+    { "type": "slider", "label": "Price/Month", "min": 10, "max": 200, "step": 5, "unit": "$", "bind": "price" },
+    {
+      "type": "grid",
+      "cols": 2,
+      "blocks": [
+        { "type": "metric", "label": "Monthly Revenue (MRR)", "value": "$\${users * price}" },
+        { "type": "metric", "label": "Annual Run Rate (ARR)", "value": "$\${users * price * 12}" }
+      ]
+    },
+    { "type": "button", "text": "Submit Model to Chat", "submitToChat": "Model submitted: \${users} users at $\${price}/mo -> ARR is $\${users * price * 12}" }
+  ]
+}
+\`\`\`
+
+5. **Gamma-Style Presentation Card / Slide**:
+\`\`\`json
+{
+  "type": "card",
+  "blocks": [
+    { "type": "badge", "text": "Q3 2026 ROADMAP", "color": "accent" },
+    { "type": "text", "text": "Next-Generation Inference Engine", "variant": "title" },
+    { "type": "text", "text": "Transitioning from static widgets to composable reactive building blocks.", "variant": "sub" },
+    {
+      "type": "grid",
+      "cols": 3,
+      "blocks": [
+        { "type": "metric", "label": "Median TTFT", "value": "24ms", "delta": "-8ms" },
+        { "type": "metric", "label": "Peak Concurrency", "value": "12,000", "delta": "+40%" },
+        { "type": "metric", "label": "Error Rate", "value": "0.01%", "sub": "p99.9" }
+      ]
+    }
+  ]
+}
+\`\`\`
+`,
+  },
+  {
     name: "skill-finder",
     description:
       "Discover which skills exist and load them. Use at the start of any non-trivial task, or whenever the user mentions a file type, a workflow or a tool you are not sure how to drive.",
@@ -72,23 +254,33 @@ Conventions
   {
     name: "web-research",
     description:
-      "Search, scrape, crawl and site-restricted search (github, pubmed, arxiv, hn, docs). Use whenever the answer depends on current or external information.",
+      "High-speed web search and page fetcher with niche filtering mechanics (music, underground subcultures, reddit discussions, tech, academic). Use whenever information requires external or niche data.",
     body: `# web-research
-Tools: \`web_search\`, \`web_fetch\`, \`web_crawl\`, \`site_search\`.
+Tools: \`web_search\`, \`web_fetch\`.
 
-Method
-1. \`web_search(query, limit)\` — get candidates. Queries are keyword-shaped,
-   not questions. Run 2-4 varied queries in parallel for anything non-trivial.
-2. \`web_fetch(url)\` — full page as markdown. Fetch the 2-3 best hits only.
-3. \`site_search(site, query)\` — \`github\`, \`pubmed\`, \`arxiv\`, \`hn\`, \`stackoverflow\`,
-   \`wikipedia\`, or any bare domain (uses a site: filter).
-4. \`web_crawl(url, limit)\` — follow links from one root when you need a whole
-   docs section.
+## 1. Unified Search: \`web_search({ query, site?, niche?, limit? })\`
+- \`query\`: Specific keyword phrases (e.g. \`midwest emo underground bands revival\`), not conversational questions.
+- \`niche\` (or \`category\`):
+  - \`music\`: Activates MusicBrainz artist registries, Bandcamp metadata, indie music tags, discographies, and cult/underground scenes.
+  - \`discussions\`: Activates Reddit enthusiast threads, forum consensus, and user recommendation deep-dives.
+  - \`tech\`: Activates GitHub repositories, documentation, and HackerNews discussions.
+  - \`academic\`: Activates arXiv, PubMed, and scholarly databases.
+  - \`general\`: Multi-engine web search (fast SearXNG, DuckDuckGo, Wikipedia).
+- \`site\`: Directly target a specific platform (e.g. \`site: "reddit.com"\`, \`site: "bandcamp.com"\`, \`site: "rateyourmusic.com"\`, \`site: "github.com"\`).
 
-Rules
-- Cite inline with markdown links; every source you used appears in the panel.
-- Never state a number, price, version or date from memory when a fetch is cheap.
-- Save anything long to \`data/\` with \`edit_file\` instead of holding it in context.`,
+## 2. Niche & Underground Discovery Tactics
+When asked for niche, obscure, or underground recommendations:
+- **Use Niche Filtering**: Always set \`niche: "music"\` or \`niche: "discussions"\` to bypass generic encyclopedia overviews.
+- **High-Signal Keyword Modifiers**: Append qualifiers such as \`"underrated"\`, \`"obscure"\`, \`"hidden gems"\`, \`"revival"\`, \`"diy scene"\`, \`"lesser known"\`.
+- **Target Specialist Platforms**: Use \`site: "reddit.com"\` (e.g. \`site: "reddit.com/r/midwestemo"\`) or \`site: "bandcamp.com"\`.
+
+## 3. Page Reading: \`web_fetch({ url })\`
+- Fetches the URL and extracts clean readable markdown. Fetch only the top 1-2 most relevant URLs when deep detail is needed.
+
+## CRITICAL EFFICIENCY & ANTI-LOOPING RULES
+- **MAXIMUM 1 TO 2 SEARCHES**: Execute at most 1 or 2 targeted searches per user turn. DO NOT loop through dozens of searches or query multiple websites one by one.
+- **IMMEDIATE SYNTHESIS**: After 1-2 searches, synthesize a detailed, comprehensive, high-quality answer immediately, combining the search results with your extensive pre-trained knowledge base. The user expects instant, actionable recommendations, not endless scraping.
+- **Cite inline** with clean markdown links: e.g. \`[Mineral](https://musicbrainz.org/artist/...)\`.`,
   },
   {
     name: "canvas-design",
@@ -141,18 +333,23 @@ absolute paths, no CDNs you didn't verify.
   register quietly. A folder ref resolves to its index.html / *.ui.json /
   README.md.
 
-## The .ui.json block view
-Write it when you want a themed dashboard without writing HTML. Shape:
+## The .ui.json block view (C1 by Thesys style)
+Write it when you want a rich, interactive themed dashboard without writing manual HTML. Shape:
 \`{ "title": str, "ratio": "landscape|portrait|square|auto", "blocks": [ … ] }\`
 
 Block DSL
 { type:"heading", text, level? }
 { type:"text", text }                              markdown inline supported
-{ type:"metric", label, value, delta?, hint? }
+{ type:"metric", label, value, delta?, hint? }    delta tags show trends (+14.2% vs prev)
 { type:"metrics", items:[{label,value,delta?}] }
 { type:"chart", kind:"bar"|"line"|"area"|"pie"|"donut"|"scatter"|"hbar",
-  data:[{label, value}] | series:[{name, points:[{x,y}]}], caption? }
-{ type:"table", columns:[...], rows:[[...]] }
+  data:[{label, value}] | series:[{name, points:[{x,y}]}], title?, caption? }
+  -> Interactive hover tooltips, crosshairs, and multi-series toggle legends supported
+{ type:"table", columns:[...], rows:[[...]] }     sortable columns + search filter input
+{ type:"tabs", tabs:[{label, blocks:[...]}] }     multi-tab dashboard switching
+{ type:"slider", label, min, max, step, value, unit? }  interactive range slider
+{ type:"callout"|"alert", kind:"info"|"success"|"warn"|"err", title?, text }
+{ type:"accordion", items:[{title, content?, blocks?:[...]}] }
 { type:"list", items:[...], ordered? }
 { type:"kv", items:[{k,v}] }
 { type:"progress", label, value /*0-100*/ }
@@ -160,6 +357,9 @@ Block DSL
 { type:"button", label, action? }
 { type:"timer", label, seconds }
 { type:"stopwatch", label }
+{ type:"pomodoro", label, work?:1500, breakFor?:300 }
+{ type:"counter", label, value?, step? }
+{ type:"todo", label, items:[str] }
 { type:"image", src, caption? }
 { type:"video", youtube }
 { type:"code", language, content }
@@ -167,9 +367,12 @@ Block DSL
 { type:"divider" }
 { type:"grid", of:[block…] }
 { type:"columns", of:[[block…],[block…]] }
-{ type:"pomodoro", label, work?:1500, breakFor?:300 }
-{ type:"counter", label, value?, step? }
-{ type:"todo", label, items:[str] }
+
+## React apps in the canvas
+You can create full React applications in the workspace:
+1. Write an \`app/App.tsx\` or \`app/index.html\` with React & Tailwind CSS.
+2. The canvas automatically bundles and transpiles JSX/TSX with in-browser Babel and mounts into \`<div id="root"></div>\`.
+3. Sibling CSS and JS/TSX files are resolved and inlined seamlessly.
 
 Design law — everything you emit must look like it shipped with the app:
 solid background, one accent, generous whitespace, uppercase micro-labels,

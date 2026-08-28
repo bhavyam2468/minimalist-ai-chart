@@ -42,14 +42,19 @@
 /* ---- highlight: sweeps only once the enclosing block is complete -------- */
 .md-mark {
   color: var(--text);
-  background-image: linear-gradient(var(--mark-bg), var(--mark-bg));
-  background-repeat: no-repeat;
-  background-size: 0% 100%;
-  border-radius: 3px;
-  padding: .06em .18em;
-  margin: 0 -.06em;
+  background-color: var(--accent-soft);
+  border-bottom: 1.5px solid var(--accent-line);
+  border-radius: var(--r-xs);
+  padding: .1em .32em;
+  margin: 0 -.02em;
+  font-weight: 520;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+[data-theme="light"] .md-mark {
+  color: var(--text);
+  background-color: var(--accent-soft);
+  border-bottom-color: var(--accent-line);
 }
 .md-mark[data-complete="true"] { animation: sweep 620ms var(--ease-out) 140ms forwards; }
 

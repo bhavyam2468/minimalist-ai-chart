@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { I } from "./Icons";
 import { mainPath, useApp } from "../lib/store";
-import { compactChat } from "../lib/agent";
+import { compactChat, contextTokenCount } from "../lib/agent";
 import { hostOf } from "../lib/web";
 import { exportChatZip } from "../lib/xml";
 import { VIEW_LABEL, viewOf } from "../canvas/view";
@@ -27,8 +27,16 @@ export function Sidebar() {
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px 6px" }}>
         <button className="icon-btn" title="New chat" onClick={() => createChat()}><I.plus size={16} /></button>
         <span className="grow" style={{ flex: 1 }} />
-        <button className="icon-btn" title="Theme" onClick={() => setSettings({ theme: settings.theme === "dark" ? "light" : "dark" })}><I.spark size={15} /></button>
-        <button className="icon-btn" title="Settings" onClick={() => setUI({ modal: "settings" })}><I.settings size={15} /></button>
+        <button
+          className="icon-btn"
+          title={settings.theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={() => setSettings({ theme: settings.theme === "dark" ? "light" : "dark" })}
+        >
+          {settings.theme === "dark" ? <I.sun size={15} /> : <I.moon size={15} />}
+        </button>
+        <button className="icon-btn" title="Settings" onClick={() => setUI({ modal: "settings" })}>
+          <I.settings size={15} />
+        </button>
       </div>
       <div className="side-scroll">
         {order.filter((id) => chats[id]).map((id) => (
@@ -54,10 +62,7 @@ export function Panel({ chat }: { chat: Chat }) {
   const files = Object.values(chat.files);
   const artifacts = Object.values(chat.artifacts ?? {}).sort((a, b) => b.createdAt - a.createdAt);
   const sources = chat.sources.slice().reverse();
-  const approxTokens = Math.round(
-    (mainPath(chat).filter((n) => !n.hidden).reduce((a, n) => a + n.content.length + (n.toolCalls || []).reduce((x, t) => x + (t.output?.length || 0), 0), 0) +
-      files.filter((f) => f.state === "context").reduce((a, f) => a + f.content.length, 0)) / 4
-  );
+  const approxTokens = contextTokenCount(chat);
 
   return (
     <aside className="panel" data-collapsed={!ui.panel}>

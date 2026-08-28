@@ -19,6 +19,7 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   const [attached, setAttached] = useState<string[]>([]);
   const [menu, setMenu] = useState<null | "plus" | "tools" | "knowledge" | "mention">(null);
   const [mentionQ, setMentionQ] = useState("");
+  const [mentionIdx, setMentionIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -68,18 +69,38 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   };
 
   const onKey = (e: React.KeyboardEvent) => {
+    if (menu === "mention" && mentionHits.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIdx((i) => (i + 1) % mentionHits.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIdx((i) => (i - 1 + mentionHits.length) % mentionHits.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const pick = mentionHits[mentionIdx] || mentionHits[0];
+        if (pick) pickMention(pick);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey && menu !== "mention") { e.preventDefault(); submit(); return; }
     if (e.key === "Escape") { setMenu(null); setUI({ composerQuote: null }); }
-    if (menu === "mention" && e.key === "Enter" && mentionHits[0]) {
-      e.preventDefault();
-      pickMention(mentionHits[0]);
-    }
   };
 
   const onChange = (v: string) => {
     setText(v);
     const m = v.slice(0, ta.current?.selectionStart ?? v.length).match(/@([\w./-]*)$/);
-    if (m) { setMenu("mention"); setMentionQ(m[1]); } else if (menu === "mention") setMenu(null);
+    if (m) {
+      setMenu("mention");
+      setMentionQ(m[1]);
+      setMentionIdx(0);
+    } else if (menu === "mention") {
+      setMenu(null);
+    }
   };
 
   const pickMention = (hit: { kind: "file" | "skill"; label: string }) => {
@@ -162,7 +183,7 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         <button className="icon-btn" data-active={menu === "plus"} onClick={() => setMenu(menu === "plus" ? null : "plus")}><I.plus size={16} /></button>
         <button className="icon-btn" data-active={menu === "tools"} onClick={() => setMenu(menu === "tools" ? null : "tools")}><I.tools size={16} /></button>
         <span className="grow" />
-        <button className="icon-btn" data-active={menu === "knowledge"} onClick={() => setMenu(menu === "knowledge" ? null : "knowledge")}><I.knowledge size={16} /></button>
+        <button className="icon-btn" title="Skills" data-active={menu === "knowledge"} onClick={() => setMenu(menu === "knowledge" ? null : "knowledge")}><I.knowledge size={16} /></button>
         {busy ? (
           <button className="send" onClick={() => stopGeneration(chatId)}><I.stop size={14} /></button>
         ) : (
@@ -198,24 +219,48 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         )}
 
         {menu === "knowledge" && (
-          <div className="pop menu" style={menuStyle("right")}>
-            <div className="label" style={{ padding: "4px 10px 6px" }}>skills</div>
-            {SKILLS.map((s) => (
-              <button key={s.name} className="menu-item" onClick={() => toggleSkill(s.name)} title={s.description}>
-                <span className="dot" data-state={pinned.includes(s.name) || s.always ? "context" : "known"} />
-                {s.name}
-                <span className="dim">{s.always ? "always" : pinned.includes(s.name) ? "pinned" : ""}</span>
+          <div
+            className="pop menu"
+            style={{
+              ...menuStyle("right"),
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: 380,
+              paddingBottom: 4,
+            }}
+          >
+            <div className="label" style={{ padding: "6px 10px 4px", flexShrink: 0 }}>skills</div>
+            <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+              {SKILLS.map((s) => (
+                <button key={s.name} className="menu-item" onClick={() => toggleSkill(s.name)} title={s.description}>
+                  <span className="dot" data-state={pinned.includes(s.name) || s.always ? "context" : "known"} />
+                  {s.name}
+                  <span className="dim">{s.always ? "always" : pinned.includes(s.name) ? "pinned" : ""}</span>
+                </button>
+              ))}
+            </div>
+            {/* Pinned non-scrolling menu footer */}
+            <div style={{ borderTop: "1px solid var(--line-soft)", margin: "4px 0 0 0", paddingTop: 4, flexShrink: 0 }}>
+              <button className="menu-item" onClick={() => { setUI({ modal: "components" }); setMenu(null); }}>
+                <I.grid size={14} />UI Component Library
               </button>
-            ))}
-            <div style={{ borderTop: "1px solid var(--line-soft)", margin: "6px 0" }} />
-            <button className="menu-item" onClick={() => { setUI({ modal: "skills" }); setMenu(null); }}><I.book size={14} />Browse skill bodies</button>
+              <button className="menu-item" onClick={() => { setUI({ modal: "skills" }); setMenu(null); }}>
+                <I.book size={14} />Browse skill bodies
+              </button>
+            </div>
           </div>
         )}
 
         {menu === "mention" && mentionHits.length > 0 && (
           <div className="pop menu" style={menuStyle("left")}>
             {mentionHits.map((h, i) => (
-              <button key={h.kind + h.label} className="menu-item" data-active={i === 0} onClick={() => pickMention(h)}>
+              <button
+                key={h.kind + h.label}
+                className="menu-item"
+                data-active={i === mentionIdx}
+                onMouseEnter={() => setMentionIdx(i)}
+                onClick={() => pickMention(h)}
+              >
                 <span className="dot" data-state={h.state ?? "known"} />{h.label}<span className="dim">{h.meta}</span>
               </button>
             ))}
