@@ -15,7 +15,7 @@ const TOKENS = [
   "--bg", "--surface", "--surface-2", "--surface-3", "--line", "--line-soft",
   "--text", "--text-dim", "--text-faint", "--accent", "--accent-soft", "--accent-line",
   "--ok", "--warn", "--err", "--info", "--r", "--r-sm", "--r-xs", "--sp-2", "--sp-3",
-  "--sp-4", "--sp-5", "--font", "--mono", "--fs", "--fs-sm", "--fs-xs", "--fs-lg", "--fs-xl", "--shadow",
+  "--sp-4", "--sp-5", "--font", "--font-prose", "--mono", "--fs", "--fs-sm", "--fs-xs", "--fs-lg", "--fs-xl", "--lh", "--lh-prose", "--shadow",
 ];
 
 export function themeCss(): string {

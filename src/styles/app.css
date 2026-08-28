@@ -32,8 +32,10 @@ html.lenis, html.lenis body { height: auto; }
 .scroll { flex: 1; overflow-y: auto; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 .fe-preview { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 /* 180px at the bottom is the clearance for the floating composer — content
-   still scrolls under it, it just never comes to rest behind it. */
-.col { max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
+   still scrolls under it, it just never comes to rest behind it.
+   The column carries the reading size so the ch-based measure resolves
+   against it. */
+.col { font-size: var(--fs-md); max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
 
 /* ------------------------------- messages ------------------------------- */
 .turn { display: flex; flex-direction: column; gap: 8px; position: relative; }

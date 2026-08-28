@@ -49,22 +49,28 @@
   --bar-pad:        10px;
   --rail-w:         2px;
 
-  --measure:        840px;  /* reading column */
+  --measure:        72ch;   /* reading column — the 45-75ch window, resolved
+                               against the reading size set on .col */
   --composer-active:  700px;  /* input bar expanded: focused or being typed in */
   --composer-idle:    560px;  /* input bar at rest */
   --side-w:         232px;  /* left chat rail */
   --panel-w:        290px;  /* right workspace panel */
 
   /* ---- type ------------------------------------------------------------- */
-  --font: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* UI face: crisp neutral sans. Reading face: a screen-first serif with a
+     full system fallback chain (Charter / Cambria / Georgia) so prose still
+     reads well where the webfont cannot load. */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-prose: "Source Serif 4", "Source Serif", Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  --fs-xs:          11px;
-  --fs-sm:          12.5px;
-  --fs:             14.5px;
-  --fs-md:          16px;
-  --fs-lg:          19px;
-  --fs-xl:          24px;
-  --lh:             1.68;
+  --fs-xs:          11.5px;
+  --fs-sm:          13px;
+  --fs:             15px;
+  --fs-md:          17px;   /* reading size */
+  --fs-lg:          21px;
+  --fs-xl:          28px;
+  --lh:             1.55;
+  --lh-prose:       1.7;
 
   /* ---- motion ----------------------------------------------------------- */
   --ease:           cubic-bezier(.22,.61,.36,1);
