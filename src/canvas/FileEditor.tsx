@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { highlight, langOf } from "../md/highlight";
 import { Markdown } from "../md/Markdown";
-import { BlocksView } from "./Blocks";
 import { I } from "../ui/Icons";
 import { useApp } from "../lib/store";
 import { copyToClipboard } from "../lib/clipboard";
@@ -235,6 +234,28 @@ function CodeArea({
 }
 
 /* ================================================================== main */
+
+/**
+ * The block renderer is being rebuilt from scratch. Until the new one lands,
+ * a `.ui.json` file's preview pane shows this instead of a live render.
+ * The file itself is untouched — switch to `code` to read or edit it.
+ */
+export function UiNotBuiltYet({ lines }: { lines: number }) {
+  return (
+    <div
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 6, height: "100%", minHeight: 160, textAlign: "center", color: "var(--text-faint)",
+      }}
+    >
+      <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>block renderer not built yet</span>
+      <span style={{ fontSize: "var(--fs-xs)" }}>
+        {lines} lines of UI JSON — switch to <b style={{ color: "var(--text-dim)" }}>code</b> to read it
+      </span>
+    </div>
+  );
+}
+
 export function FileEditor({ chatId, path, view }: { chatId: string; path: string; view?: "ui" }) {
   const file = useApp((s) => s.chats[chatId]?.files[path]);
   const putFile = useApp((s) => s.putFile);
@@ -293,7 +314,7 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
              onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
           {uiMode === "edit"
             ? <CodeArea value={draft} onChange={change} lang="json" wrap={wrap} />
-            : <div style={{ height: "100%", overflow: "auto" }}><BlocksView content={draft} /></div>}
+            : <div style={{ height: "100%", overflow: "auto", padding: 14 }}><UiNotBuiltYet lines={draft.split("\n").length} /></div>}
         </div>
       </div>
     );

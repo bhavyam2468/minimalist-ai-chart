@@ -25,7 +25,6 @@ function TeX({ expr, display, open }: { expr: string; display?: boolean; open?: 
 import { highlight } from "./highlight";
 import { copyToClipboard } from "../lib/clipboard";
 import { useApp } from "../lib/store";
-import { BlocksView, ComponentBlock } from "../canvas/Blocks";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 
 /* ---------------------------------------------------------------- helpers */
@@ -132,7 +131,9 @@ function renderInline(nodes: Inline[], ctx: Ctx, keyPrefix = ""): React.ReactNod
 
 /* ------------------------------------------------------------------ blocks */
 function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open: boolean }) {
-  const [mode, setMode] = useState<"preview" | "code">("preview");
+  // The block renderer is being rebuilt from scratch, so `code` is the only
+  // working pane for now. `preview` stays wired up and shows a placeholder.
+  const [mode, setMode] = useState<"preview" | "code">("code");
   const [copied, setCopied] = useState(false);
 
   const title = useMemo(() => {
@@ -283,8 +284,17 @@ function InlineUIBlock({ lang, code, open }: { lang: string; code: string; open:
         </div>
       </div>
       {mode === "preview" ? (
-        <div className="inline-ui-wrap" style={{ padding: "10px 12px", overflowX: "auto" }}>
-          <BlocksView content={code} />
+        <div className="inline-ui-wrap" style={{ padding: "12px 14px", overflowX: "auto" }}>
+          <div
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              minHeight: 72, justifyContent: "center", textAlign: "center",
+              color: "var(--text-faint)",
+            }}
+          >
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>block renderer not built yet</span>
+            <span style={{ fontSize: "var(--fs-xs)" }}>switch to code to read the UI JSON</span>
+          </div>
         </div>
       ) : (
         <div className="md-pre" style={{ margin: 0, border: "none", borderRadius: 0 }}>
@@ -601,12 +611,39 @@ const BlockView = memo(function BlockView({ b, ctx }: { b: Block; ctx: Ctx }) {
           <InlineToolBlock id={b.id} name={b.name} argsRaw={b.argsRaw} openBlock={b.open} />
         </ErrorBoundary>
       );
-    case "component":
+    case "component": {
+      // Block renderer is being rebuilt — surface the raw source instead of mounting it.
+      const raw = (b.raw || "").trim();
       return (
         <ErrorBoundary name="Component">
-          <ComponentBlock raw={b.raw} attrs={b.attrs} open={b.open} />
+          <div
+            className="a-blk"
+            style={{
+              margin: "12px 0", border: "1px dashed var(--line)", borderRadius: "var(--r-sm)",
+              background: "var(--surface)", overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
+                borderBottom: "1px solid var(--line-soft)", background: "var(--surface-2)",
+                fontSize: "var(--fs-xs)", color: "var(--text-faint)",
+              }}
+            >
+              <span style={{ fontFamily: "var(--mono)" }}>&lt;component&gt;</span>
+              <span style={{ marginLeft: "auto" }}>renderer not built yet</span>
+            </div>
+            <pre
+              style={{
+                margin: 0, padding: "8px 10px", maxHeight: 280, overflow: "auto",
+                fontFamily: "var(--mono)", fontSize: "11px", lineHeight: 1.5,
+                color: "var(--text-dim)", whiteSpace: "pre-wrap", wordBreak: "break-word",
+              }}
+            >{raw || (b.attrs || "").trim() || "(empty component)"}</pre>
+          </div>
         </ErrorBoundary>
       );
+    }
     default: return null;
   }
 });

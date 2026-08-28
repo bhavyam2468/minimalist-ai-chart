@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../lib/store";
-import { themeCss } from "./Blocks";
+import { themeCss } from "./theme";
 import { I } from "../ui/Icons";
 import type { WFile } from "../lib/types";
 

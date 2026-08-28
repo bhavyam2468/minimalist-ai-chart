@@ -5,8 +5,6 @@ import { SKILLS } from "../lib/skills";
 import { mcpList } from "../lib/mcp";
 import { Markdown } from "../md/Markdown";
 import { copyToClipboard as copy } from "../lib/clipboard";
-import { BlockR } from "../canvas/Blocks";
-import { ErrorBoundary } from "./ErrorBoundary";
 import { searchComponents, type UIComponentDef } from "../lib/ui-library";
 import type { McpServer } from "../lib/types";
 
@@ -146,11 +144,17 @@ function ComponentsModal() {
                 </span>
               </div>
 
-              {/* Clean live interactive preview */}
+              {/* Renderer is being rebuilt — show the JSON shape instead of a live preview */}
               <div style={{ padding: "2px 0" }}>
-                <ErrorBoundary name={comp.name}>
-                  <BlockR b={{ type: comp.type, ...comp.defaultProps }} />
-                </ErrorBoundary>
+                <pre
+                  style={{
+                    margin: 0, padding: "6px 8px", maxHeight: 96, overflow: "auto",
+                    fontFamily: "var(--mono)", fontSize: "10.5px", lineHeight: 1.5,
+                    color: "var(--text-dim)", background: "rgba(255,255,255,0.03)",
+                    border: "1px solid var(--line-soft)", borderRadius: "var(--r-xs)",
+                    whiteSpace: "pre",
+                  }}
+                >{comp.jsonSnippet}</pre>
               </div>
 
               {/* Hover-revealed tray: description, actions, and tags */}
