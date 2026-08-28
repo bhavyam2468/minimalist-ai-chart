@@ -4,11 +4,13 @@ import type { Artifact, CanvasTarget, Chat, Node, Settings, Source, Thread, WFil
 export const uid = (p = "n") => p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
 const ROOT = "__root__";
 
-const DEFAULT_KEY =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENAI_KEY) ||
-  (typeof atob === "function"
-    ? atob("c2stcHJvai0yMlNfTmY3QUU3WUdMS00wQWpPVmhvRHIwdWxvQ1dOTlNoM3NycHFESGdoU2VoRldjNjlBTlNwd3ZmenVxRnFxQ2dZQnpLNnpaTFQzQmxia0ZKaGhBLTlGUm9vbVktWjRPSS0xaGVNWlJqTzZnZVVyT0lZSkJwYUQtcmJjNS13VW9ZLW45RHpFLVozTnROUW5lUV9FNDdGUk9Ha0E=")
-    : "");
+/**
+ * Optional build-time default. Set VITE_OPENAI_KEY in your environment
+ * (.env.local locally, or Vercel → Settings → Environment Variables) to
+ * pre-fill Settings → API Key. Users can always override it in the app.
+ */
+const DEFAULT_KEY: string =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENAI_KEY) || "";
 
 const defaultSettings = (): Settings => ({
   apiKey: DEFAULT_KEY,
