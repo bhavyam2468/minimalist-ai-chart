@@ -1,6 +1,5 @@
 import { useApp, uid } from "./store";
 import { findSkills, skillByName, SKILLS } from "./skills";
-import { searchComponents, getComponentDef } from "./ui-library";
 import { hostOf, webCrawl, webFetch, webSearch } from "./web";
 import type { Artifact, WFile } from "./types";
 
@@ -53,20 +52,6 @@ export function baseToolDefs() {
     { name: "run_python", description: "Execute python in a sandbox (numpy/pandas/matplotlib available). Workspace files are mounted at /work. Returns stdout.", parameters: P({ code: str("python source") }, ["code"]) },
 
     { name: "open_canvas", description: "Show something in the user's canvas right now: a workspace file path, a folder, an artifact id, or an http(s) url. Creates nothing.", parameters: P({ target: str("file path, folder, artifact id, or url"), title: str("optional label") }, ["target"]) },
-    {
-      name: "search_components",
-      description: "Search the UI Component Library for pre-existing components (sliders, color-pickers, calendars, clocks, weather, search bars, forms, charts, visualizers, slides). Pass a keyword to search by name/tags/type, or leave empty to list all available components.",
-      parameters: P({
-        query: { type: "string", description: "optional search keyword (e.g. 'color', 'calendar', 'slider', 'form', 'weather', 'chart') or leave empty/pass 'all' to list all components" },
-      }),
-    },
-    {
-      name: "get_component_schema",
-      description: "Get the exact <component> code snippet and json example for a specific component type (e.g. 'color-picker', 'calendar', 'slider', 'form', 'reactive', 'dropdown', 'radio').",
-      parameters: P({
-        type: str("component type name"),
-      }, ["type"]),
-    },
     {
       name: "artifact",
       description: "Name a reference so the user can reopen it from the artifacts list: point at a workspace file/folder or a url. No content is stored — the target file stays the source of truth, and editing it updates the artifact. Files you write that are presentational get an artifact automatically, so only use this to label, annotate, or reference a url.",
@@ -162,45 +147,10 @@ export async function runTool(name: string, args: any, ctx: ToolCtx): Promise<st
       return s.body;
     }
 
-    /* ---- UI Component Library & Marketplace ---- */
-    case "search_components": {
-      const hits = searchComponents(args.query || "");
-      if (!hits.length) {
-        return `No components found for query "${args.query || ""}". Available types: slider, color-picker, calendar, clock, timer, stopwatch, weather, search-bar, tags-input, file-upload, button, button-group, checkbox, radio, switch, dropdown, input, stepper, rating, progress, todo, form, question, reactive, chart, math, chemistry, metrics, table, switcher, accordion, callout. Call search_components with no arguments or query="all" to see all.`;
-      }
-      return hits
-        .map(
-          (h) =>
-            `### ${h.name} (\`<component type="${h.type}" />\`)\n` +
-            `Type: \`${h.type}\` | Category: ${h.category}\n` +
-            `Description: ${h.description}\n` +
-            `Ready-to-use tag:\n\`\`\`html\n${h.snippet}\n\`\`\``
-        )
-        .join("\n\n---\n\n");
-    }
-    case "get_component_schema": {
-      const def = getComponentDef(args.type || args.query || "");
-      if (!def) {
-        return `Component type "${args.type || ""}" not found. Use search_components to explore available component types.`;
-      }
-      return (
-        `# Component: ${def.name} (\`<component type="${def.type}" />\`)\n` +
-        `Category: ${def.category}\n` +
-        `Description: ${def.description}\n\n` +
-        `## Ready-to-use HTML Tag:\n\`\`\`html\n${def.snippet}\n\`\`\`\n\n` +
-        `## JSON Format:\n\`\`\`json\n${def.jsonSnippet}\n\`\`\``
-      );
-    }
-
     /* ---- common aliases ---- */
     case "search": return await runTool("web_search", args, ctx);
     case "fetch": return await runTool("web_fetch", args, ctx);
     case "python": return await runTool("run_python", args, ctx);
-    case "component":
-    case "render_component":
-    case "create_chart": {
-      return `To render this component inline in chat, output <component>${JSON.stringify(args, null, 2)}</component> directly in your response.`;
-    }
 
     /* ---- workspace ---- */
     case "list_files": {
@@ -496,5 +446,5 @@ _o.getvalue()
     return await mcpCall(srv, tool, args);
   }
 
-  return `unknown tool "${name}". You can execute web searches, workspace file operations, or output inline <component> tags directly in your message.`;
+  return `unknown tool "${name}". Available: web search and fetch, workspace file operations, python, and the canvas.`;
 }

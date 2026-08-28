@@ -1,11 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { I } from "./Icons";
 import { useApp, uid } from "../lib/store";
 import { SKILLS } from "../lib/skills";
 import { mcpList } from "../lib/mcp";
 import { Markdown } from "../md/Markdown";
-import { copyToClipboard as copy } from "../lib/clipboard";
-import { searchComponents, type UIComponentDef } from "../lib/ui-library";
 import type { McpServer } from "../lib/types";
 
 function Shell({ title, children, style }: { title: string; children: React.ReactNode; style?: React.CSSProperties }) {
@@ -24,194 +22,6 @@ function Shell({ title, children, style }: { title: string; children: React.Reac
   );
 }
 
-function ComponentsModal() {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string>("all");
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const setUI = useApp((s) => s.setUI);
-
-  const categories = [
-    { id: "all", label: "all" },
-    { id: "interactive", label: "interactive" },
-    { id: "chart", label: "charts" },
-    { id: "slides", label: "slides" },
-    { id: "visualizer", label: "visualizers" },
-    { id: "data", label: "data" },
-    { id: "layout", label: "layout" },
-  ];
-
-  const filtered = useMemo(() => {
-    return searchComponents(query, {
-      category: category === "all" ? undefined : category,
-      tag: selectedTag || undefined,
-      limit: 120,
-    });
-  }, [query, category, selectedTag]);
-
-  const onCopy = async (id: string, text: string) => {
-    const ok = await copy(text);
-    if (ok) {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 1400);
-    }
-  };
-
-  const onOpenInCanvas = (comp: UIComponentDef) => {
-    const state = useApp.getState();
-    const chatId = state.activeId;
-    if (!chatId) return;
-    const path = `artifacts/${comp.id}-demo.ui.json`;
-    state.putFile(chatId, {
-      path,
-      content: comp.jsonSnippet,
-      size: comp.jsonSnippet.length,
-      mime: "application/json",
-      kind: "data",
-      state: "local",
-      origin: "agent",
-      createdAt: Date.now(),
-    });
-    state.openCanvas({ kind: "file", path });
-    setUI({ modal: null });
-  };
-
-  return (
-    <Shell title="component library" style={{ width: "min(860px, 96vw)", maxHeight: "90vh" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* Search Bar & Category Segment */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="text"
-            placeholder="Search components or tags (slider, button, chart, slides, math)..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={{
-              flex: 1,
-              padding: "7px 12px",
-              borderRadius: "var(--r-sm)",
-              background: "var(--surface-2)",
-              border: "1px solid var(--line-soft)",
-              color: "var(--text)",
-              fontSize: "12px",
-              outline: "none",
-            }}
-          />
-          {selectedTag && (
-            <button
-              className="chip"
-              data-on="true"
-              onClick={() => setSelectedTag(null)}
-              title="Clear tag filter"
-              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-            >
-              #{selectedTag} <I.x size={11} />
-            </button>
-          )}
-        </div>
-
-        {/* Categories Bar */}
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", paddingBottom: 6, borderBottom: "1px solid var(--line-soft)" }}>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => { setCategory(cat.id); setSelectedTag(null); }}
-              className="chip"
-              data-on={category === cat.id}
-              style={{
-                fontSize: "11px",
-                padding: "3px 9px",
-                cursor: "pointer",
-                borderRadius: "var(--r-xs)",
-              }}
-            >
-              {cat.label}
-            </button>
-          ))}
-          <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-faint)", alignSelf: "center" }}>
-            {filtered.length} components
-          </span>
-        </div>
-
-        {/* Minimal Grid with Hover-Revealed Metadata */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 10, maxHeight: "68vh", overflowY: "auto", paddingRight: 4 }}>
-          {filtered.map((comp) => (
-            <div key={comp.id} className="comp-card a-blk">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 550, color: "var(--text)" }}>{comp.name}</span>
-                <span style={{ fontSize: "10px", fontFamily: "var(--mono)", color: "var(--text-faint)", background: "rgba(255,255,255,0.04)", padding: "1px 5px", borderRadius: "var(--r-xs)" }}>
-                  {comp.type}
-                </span>
-              </div>
-
-              {/* Renderer is being rebuilt — show the JSON shape instead of a live preview */}
-              <div style={{ padding: "2px 0" }}>
-                <pre
-                  style={{
-                    margin: 0, padding: "6px 8px", maxHeight: 96, overflow: "auto",
-                    fontFamily: "var(--mono)", fontSize: "10.5px", lineHeight: 1.5,
-                    color: "var(--text-dim)", background: "rgba(255,255,255,0.03)",
-                    border: "1px solid var(--line-soft)", borderRadius: "var(--r-xs)",
-                    whiteSpace: "pre",
-                  }}
-                >{comp.jsonSnippet}</pre>
-              </div>
-
-              {/* Hover-revealed tray: description, actions, and tags */}
-              <div className="comp-card-hover-tray">
-                <div style={{ fontSize: "11px", color: "var(--text-dim)", lineHeight: 1.35 }}>
-                  {comp.description}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {comp.tags.slice(0, 3).map((t) => (
-                      <span key={t} style={{ fontSize: "9.5px", color: "var(--text-faint)", background: "rgba(255,255,255,0.04)", padding: "1px 4px", borderRadius: 3 }}>
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                  <div style={{ display: "inline-flex", gap: 4, flexShrink: 0 }}>
-                    <button
-                      className="btn sm"
-                      onClick={() => onCopy(comp.id + "-tag", comp.snippet)}
-                      title="Copy <component> tag"
-                      style={{ fontSize: "10.5px", padding: "2px 6px" }}
-                    >
-                      {copiedId === comp.id + "-tag" ? "copied!" : "tag"}
-                    </button>
-                    <button
-                      className="btn sm"
-                      onClick={() => onCopy(comp.id + "-json", comp.jsonSnippet)}
-                      title="Copy JSON snippet"
-                      style={{ fontSize: "10.5px", padding: "2px 6px" }}
-                    >
-                      {copiedId === comp.id + "-json" ? "copied!" : "json"}
-                    </button>
-                    <button
-                      className="btn sm primary"
-                      onClick={() => onOpenInCanvas(comp)}
-                      title="Open in Canvas"
-                      style={{ fontSize: "10.5px", padding: "2px 6px" }}
-                    >
-                      canvas
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {!filtered.length && (
-            <div className="empty-hint" style={{ padding: "30px 0", gridColumn: "1 / -1" }}>
-              No components match query "{query}".
-            </div>
-          )}
-        </div>
-      </div>
-    </Shell>
-  );
-}
-
 export function Modals() {
   const modal = useApp((s) => s.ui.modal);
   const settings = useApp((s) => s.settings);
@@ -221,8 +31,6 @@ export function Modals() {
   const [busy, setBusy] = useState(false);
 
   if (!modal) return null;
-
-  if (modal === "components") return <ComponentsModal />;
 
   if (modal === "settings")
     return (

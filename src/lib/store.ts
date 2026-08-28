@@ -42,7 +42,7 @@ interface UI {
   canvasRect: CanvasRect | null;
   canvasMax: boolean;
   composerQuote: { nodeId: string; text: string; threadId?: string } | null;
-  modal: null | "settings" | "skills" | "mcp" | "components";
+  modal: null | "settings" | "skills" | "mcp";
   activeThreadId: string | null;
 }
 

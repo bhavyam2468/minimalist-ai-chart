@@ -32,7 +32,7 @@ tables, ordered/unordered/task lists, > quotes, --- rules, footnotes [^1] with
 images ![alt](url), bare YouTube links (auto-embedded), and
 <details><summary>title</summary> … </details> for anything long or optional.
 
-## Tools & Generative UI (Gamma-Inspired Composable Blocks)
+## Tools & Canvas
 Prefer doing over describing. Use \`find_skills\` before an unfamiliar workflow;
 skills carry the exact procedure. Search the web whenever freshness matters.
 Write artefacts to the workspace instead of dumping them in the reply, then
@@ -40,59 +40,6 @@ surface them with \`open_canvas\` — the canvas is a floating viewport beside t
 conversation that holds files (with a real editor), web pages and artefacts.
 Use \`artifact\` when a chart, dashboard, tool or embed communicates better than prose.
 Keep context lean with add_context / remove_context / compact_context.
-
-## Composable Generative UI Architecture
-This app is NOT a bloated widget toolkit with rigid monolithic templates. You build ANY UI (stopwatches, countdowns, pomodoro timers, weather cards, pricing simulators, slides, forms) dynamically using fundamental nestable building blocks and reactive state logic:
-- **Fundamental Blocks**:
-  - \`card\`: Universal liquid container (\`title\`, \`subtitle\`, \`badge\`, \`variant\`, \`state\`, \`tick\`, \`onTick\`, child \`blocks\`).
-  - \`grid\`: Multi-column layout (\`cols\`: 1-6, \`gap\`, child \`blocks\`).
-  - \`text\`: Composable typography (\`text\`, \`variant\`: "title"|"sub"|"kicker"|"code"|"body", \`align\`).
-  - \`metric\`: KPI stat block (\`label\`, \`value\`, \`delta\`, \`sub\`).
-  - \`button\`: Reactive button (\`text\`, \`variant\`: "primary"|"secondary"|"outline"|"ghost"|"danger", \`onClick\` script, \`submitToChat\`).
-  - \`slider\`: Precision expansion slider with hairline track expanding to 26px on drag (\`label\`, \`min\`, \`max\`, \`step\`, \`unit\`, \`bind\`).
-  - \`input\`: Clean field (\`label\`, \`placeholder\`, \`type\`, \`bind\`).
-  - \`dropdown\`: Select menu (\`label\`, \`options\`, \`bind\`).
-  - \`switch\`: Toggle switch (\`label\`, \`description\`, \`bind\`).
-  - \`checkbox\`: Checkbox (\`label\`, \`description\`, \`bind\`).
-  - \`progress\`: Progress bar (\`value\`, \`max\`, \`label\`, \`unit\`).
-  - \`chart\`: Charts (\`kind\`: "line"|"area"|"bar"|"hbar"|"donut"|"pie"|"radar"|"gauge"|"candlestick", \`title\`, \`data\`).
-  - \`table\`: Data table (\`headers\`, \`rows\`).
-  - \`badge\`: Pill badge (\`text\`, \`color\`: "default"|"accent"|"ok"|"warn"|"danger"|"faint").
-  - \`divider\`: Hairline rule.
-  - \`math\`: 2D interactive math visualizer (\`fn\`, \`xmin\`, \`xmax\`).
-  - \`chemistry\`: 2D molecular diagram from SMILES (\`smiles\` or \`molecule\`).
-
-- **Reactive State & Logic Engine**:
-  - Provide \`state: { ... }\` on the container card to create reactive state.
-  - Provide \`tick: 1000\` and \`onTick: "if (running) seconds++"\` for automated timer loops.
-  - Provide \`onClick: "running = !running"\` on buttons for state mutations.
-  - Use \`bind: "key"\` on sliders, inputs, switches, dropdowns for two-way state binding.
-  - Use \`\${...}\` or \`{...}\` interpolation in labels, metrics, text, and chart data points.
-  - Use \`submitToChat\` on buttons to serialize scenario state back into the chat.
-
-- **Syntax Rules**:
-  1. For single components: \`<component type="slider" label="Users: \${users}" bind="users" />\`
-  2. For nested cards & widgets:
-\`<component>
-{
-  "type": "card",
-  "state": { "seconds": 0, "running": false },
-  "tick": 1000,
-  "onTick": "if (running) seconds++",
-  "blocks": [
-    { "type": "badge", "text": "\${running ? 'RUNNING' : 'PAUSED'}", "color": "\${running ? 'ok' : 'faint'}" },
-    { "type": "metric", "label": "Time", "value": "\${pad(Math.floor(seconds / 60))}:\${pad(seconds % 60)}" },
-    {
-      "type": "grid",
-      "cols": 2,
-      "blocks": [
-        { "type": "button", "text": "\${running ? 'Pause' : 'Start'}", "variant": "primary", "onClick": "running = !running" },
-        { "type": "button", "text": "Reset", "variant": "secondary", "onClick": "seconds = 0; running = false" }
-      ]
-    }
-  ]
-}
-</component>\`
 
 ## Search Efficiency & Anti-Looping
 Execute at most 1 to 2 targeted \`web_search\` calls per turn. Use the \`niche\` parameter
@@ -473,28 +420,7 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
 
       if (ctl.signal.aborted) break;
 
-      if (!out.toolCalls.length) {
-        const content = out.content || "";
-        let syntaxError: string | null = null;
-
-        // Missing <component opening tag (e.g. starts with type="dropdown" ...)
-        if (/(?:^|\n)\s*type=["']?(?:card|grid|slider|dropdown|switch|checkbox|button|input|progress|chart|metric|badge|text)["']?\s/i.test(content)) {
-          syntaxError = "Your output contained an orphan 'type=\"...\"' attribute without the opening '<component ' tag. Every UI component MUST start with '<component type=\"...\" ... />' or '<component>{ ... }</component>'.";
-        } else if (/<component\b/i.test(content) && !/<component[\s\S]*?(?:\/>|<\/component>)/i.test(content)) {
-          syntaxError = "Unclosed '<component>' tag. Please close self-closing components with '/>' or container components with '</component>'.";
-        }
-
-        if (syntaxError && hop < 2 && !ctl.signal.aborted) {
-          accumulatedContent = hopBase;
-          cleaned.push({ role: "assistant", content });
-          cleaned.push({
-            role: "system",
-            content: `[UI SYNTAX ERROR]: ${syntaxError}\nRule: Build UI using fundamental composable blocks ('card', 'grid', 'text', 'metric', 'button', 'slider', 'input', 'dropdown', 'switch', 'progress', 'chart'). Be as non-redundant and minimal as possible: use compact rounded rectangle cards (never circular unless explicitly requested), omit titles and labels that merely name the widget, and use hoverControls on metric for square buttons that appear with a drop shadow right over the number on hover.\nExample:\n<component>\n{\n  "type": "card",\n  "borderProgress": "\${((100 - count) / 100) * 100}",\n  "state": { "count": 100, "active": false },\n  "tick": 1000,\n  "onTick": "if (active && count > 0) count--",\n  "blocks": [\n    {\n      "type": "metric",\n      "centered": true,\n      "value": "\${count}",\n      "hoverControls": [\n        { "type": "button", "shape": "square", "icon": "\${active ? 'pause' : 'play'}", "variant": "primary", "onClick": "active = !active" },\n        { "type": "button", "shape": "square", "icon": "skip", "variant": "secondary", "onClick": "count = 0; active = false" }\n      ]\n    }\n  ]\n}\n</component>\nPlease output the UI again with valid syntax.`,
-          });
-          continue;
-        }
-        break;
-      }
+      if (!out.toolCalls.length) break;
 
       const records: ToolCallRecord[] = out.toolCalls.map((t) => {
         let args: any = {};

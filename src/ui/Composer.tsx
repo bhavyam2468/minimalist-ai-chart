@@ -241,9 +241,6 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
             </div>
             {/* Pinned non-scrolling menu footer */}
             <div style={{ borderTop: "1px solid var(--line-soft)", margin: "4px 0 0 0", paddingTop: 4, flexShrink: 0 }}>
-              <button className="menu-item" onClick={() => { setUI({ modal: "components" }); setMenu(null); }}>
-                <I.grid size={14} />UI Component Library
-              </button>
               <button className="menu-item" onClick={() => { setUI({ modal: "skills" }); setMenu(null); }}>
                 <I.book size={14} />Browse skill bodies
               </button>
