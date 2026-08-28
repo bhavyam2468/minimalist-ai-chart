@@ -90,29 +90,6 @@ function load(): Partial<S> | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    // migrate old shapes: canvases -> artifacts, spec-style artifacts -> files + refs
-    for (const c of Object.values<any>(d.chats ?? {})) {
-      if (c.canvases && !c.artifacts) { c.artifacts = c.canvases; delete c.canvases; }
-      if (!c.artifacts) c.artifacts = {};
-      if (!c.files) c.files = {};
-      for (const [id, a] of Object.entries<any>(c.artifacts)) {
-        if (a.kind && a.ref) continue;                       // already a reference
-        if (a.mode === "iframe" && a.url) { c.artifacts[id] = { id, kind: "url", ref: a.url, title: a.title, createdAt: a.createdAt }; continue; }
-        const slug = (a.title || "artifact").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "artifact";
-        let path = `artifacts/${slug}.ui.json`, content = "";
-        if (a.mode === "html") { path = `artifacts/${slug}/index.html`; content = a.html || ""; }
-        else if (a.mode === "markdown") { path = `artifacts/${slug}.md`; content = a.content || ""; }
-        else if (a.mode === "code") { path = `artifacts/${slug}.${a.language || "txt"}`; content = a.content || ""; }
-        else content = JSON.stringify({ title: a.title, ratio: a.ratio, blocks: a.blocks || [] }, null, 2);
-        if (!c.files[path]) {
-          c.files[path] = { path, content, mime: "text/plain", size: content.length, kind: /\.html?$/i.test(path) ? "code" : "text", state: "context", origin: "agent", createdAt: a.createdAt || Date.now() };
-        }
-        c.artifacts[id] = { id, kind: "file", ref: path, title: a.title, createdAt: a.createdAt };
-      }
-      for (const n of Object.values<any>(c.nodes ?? {})) {
-        if (n.canvasIds && !n.artifactIds) { n.artifactIds = n.canvasIds; delete n.canvasIds; }
-      }
-    }
     return {
       chats: d.chats,
       order: d.order,

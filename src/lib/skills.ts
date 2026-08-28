@@ -103,7 +103,7 @@ When asked for niche, obscure, or underground recommendations:
   {
     name: "canvas-design",
     description:
-      "Everything the user looks at that is not prose: build files in the workspace and let the canvas render them — HTML projects, .ui.json view files, images, sheets, documents. Also covers opening a file or url and naming references.",
+      "Everything the user looks at that is not prose: build files in the workspace and let the canvas render them — HTML projects, images, sheets, documents. Also covers opening a file or url and naming references.",
     body: `# canvas-design
 There is one rule: **you never store UI in a special place — you write files.**
 The canvas is a floating viewport that renders whatever file you point it at,
@@ -116,7 +116,6 @@ updates the moment the file changes.
 |----------------------------------|----------------------------------------------------|
 | \`x/index.html\` (+ styles.css,    | a running sandboxed page, with run/code tabs and    |
 | script.js, any siblings)         | every sibling file reachable as a tab              |
-| \`x.ui.json\`                      | the block view below, live, with a view/code toggle |
 | \`*.png / *.jpg / *.gif\`          | image viewer with zoom                              |
 | \`*.csv / *.tsv\`                  | grid with sticky headers, raw toggle                |
 | \`*.md\`                           | editor / split / preview                            |
@@ -148,43 +147,7 @@ absolute paths, no CDNs you didn't verify.
 - \`artifact({ ref, title, note })\` — a saved reference in the artifacts list.
   Presentational files you write get one automatically, so use this only to
   give a nicer label, add a note, or reference a url. Pass \`open:false\` to
-  register quietly. A folder ref resolves to its index.html / *.ui.json /
-  README.md.
-
-## The .ui.json block view (C1 by Thesys style)
-Write it when you want a rich, interactive themed dashboard without writing manual HTML. Shape:
-\`{ "title": str, "ratio": "landscape|portrait|square|auto", "blocks": [ … ] }\`
-
-Block DSL
-{ type:"heading", text, level? }
-{ type:"text", text }                              markdown inline supported
-{ type:"metric", label, value, delta?, hint? }    delta tags show trends (+14.2% vs prev)
-{ type:"metrics", items:[{label,value,delta?}] }
-{ type:"chart", kind:"bar"|"line"|"area"|"pie"|"donut"|"scatter"|"hbar",
-  data:[{label, value}] | series:[{name, points:[{x,y}]}], title?, caption? }
-  -> Interactive hover tooltips, crosshairs, and multi-series toggle legends supported
-{ type:"table", columns:[...], rows:[[...]] }     sortable columns + search filter input
-{ type:"tabs", tabs:[{label, blocks:[...]}] }     multi-tab dashboard switching
-{ type:"slider", label, min, max, step, value, unit? }  interactive range slider
-{ type:"callout"|"alert", kind:"info"|"success"|"warn"|"err", title?, text }
-{ type:"accordion", items:[{title, content?, blocks?:[...]}] }
-{ type:"list", items:[...], ordered? }
-{ type:"kv", items:[{k,v}] }
-{ type:"progress", label, value /*0-100*/ }
-{ type:"input", label, placeholder?, kind?:"text"|"number"|"date" }
-{ type:"button", label, action? }
-{ type:"timer", label, seconds }
-{ type:"stopwatch", label }
-{ type:"pomodoro", label, work?:1500, breakFor?:300 }
-{ type:"counter", label, value?, step? }
-{ type:"todo", label, items:[str] }
-{ type:"image", src, caption? }
-{ type:"video", youtube }
-{ type:"code", language, content }
-{ type:"markdown", content }
-{ type:"divider" }
-{ type:"grid", of:[block…] }
-{ type:"columns", of:[[block…],[block…]] }
+  register quietly. A folder ref resolves to its index.html / README.md.
 
 ## React apps in the canvas
 You can create full React applications in the workspace:
@@ -213,7 +176,8 @@ and never a literal color.`,
 Pattern
 1. read/prepare with pandas
 2. print a compact result table
-3. hand the numbers to \`canvas\` chart blocks (do not screenshot matplotlib)`,
+3. for a visual, save a matplotlib png under /work and reference the path —
+   it syncs back into the workspace and opens in the canvas`,
   },
   {
     name: "spreadsheets",
@@ -225,7 +189,7 @@ Uploaded workbooks are converted to markdown tables per sheet at
 \`data/<name>.md\` and the raw grid stays available as csv.
 1. \`read_file\` the sheet you need — never load every sheet.
 2. Reshape with \`run_python\` + pandas for anything over ~200 rows.
-3. Emit results as \`canvas\` table/chart blocks, or write a new csv with
+3. Emit results as a markdown table in your reply, or write a new csv with
    \`edit_file\` and tell the user the path.
 Watch for: merged headers, thousands separators, dates as serial numbers.`,
   },

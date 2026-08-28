@@ -94,7 +94,7 @@ src/
 │
 ├── canvas/                  # the floating viewport
 │   ├── CanvasHost.tsx       #   window: drag, resize, bottom sheet on mobile
-│   ├── FileEditor.tsx       #   adapts to the file: code, sheet, image, ui.json
+│   ├── FileEditor.tsx       #   adapts to the file: code, sheet, image, markdown
 │   ├── ProjectView.tsx      #   runs a folder of files as a sandboxed page
 │   ├── WebViewer.tsx        #   live web page
 │   ├── view.ts              #   extension → which viewer
@@ -119,18 +119,6 @@ with output and timing.
 
 An artifact is only a **reference**: a title pointing at a workspace path or a
 URL. It owns no content, so editing the file updates the artifact.
-
-### Currently unbuilt
-
-The block renderer (a JSON-driven component system) was removed wholesale and
-is waiting on a rebuild. Until it lands:
-
-- a `.ui.json` file's preview pane shows a placeholder — the file itself is
-  intact, switch to `code` to read or edit it
-- a `<component>` tag in a response renders its raw source instead of mounting
-
-The `.ui.json` format and the `<component>` parse path are still in place, so
-old sessions and old transcripts remain readable.
 
 ## Tech
 

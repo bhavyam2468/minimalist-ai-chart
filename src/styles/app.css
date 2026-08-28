@@ -30,7 +30,7 @@ html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .scroll { flex: 1; overflow-y: auto; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
-.canvas-inner, .fe-preview { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+.fe-preview { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 .col { max-width: var(--measure); margin: 0 auto; padding: var(--sp-7) var(--sp-5) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
 
 /* ------------------------------- messages ------------------------------- */
@@ -288,32 +288,6 @@ html.lenis, html.lenis body { height: auto; }
 .src-host { font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* ------------------------------- canvas --------------------------------- */
-.canvas-shell {
-  position: absolute; inset: 0; z-index: 30; background: var(--bg);
-  display: flex; flex-direction: column; animation: fade-in var(--t) var(--ease) both;
-}
-.canvas-bar { display: flex; align-items: center; gap: 8px; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line-soft); }
-.canvas-body { flex: 1; overflow: auto; padding: var(--sp-5); display: grid; place-items: start center; }
-.canvas-stage {
-  width: 100%; background: var(--surface); border: 1px solid var(--line-soft);
-  border-radius: var(--r); overflow: hidden; animation: pop-in var(--t) var(--ease-out) both;
-}
-.canvas-stage[data-ratio="landscape"] { max-width: 980px; aspect-ratio: 16/10; }
-.canvas-stage[data-ratio="portrait"]  { max-width: 520px; aspect-ratio: 3/4; }
-.canvas-stage[data-ratio="square"]    { max-width: 660px; aspect-ratio: 1/1; }
-.canvas-stage[data-ratio="auto"]      { max-width: 980px; }
-.canvas-inner { width: 100%; height: 100%; overflow: auto; padding: 10px 14px; }
-.canvas-card {
-  display: flex; flex-direction: column; gap: 4px;
-  background: var(--surface-2); border: 1px solid var(--line-soft);
-  border-radius: var(--r); padding: 10px 12px;
-}
-.canvas-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.canvas-inner > .md-h,
-.canvas-card > .md-h {
-  margin-top: 2px !important;
-  margin-bottom: 4px !important;
-}
 .canvas-thumb {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
   border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
@@ -321,50 +295,6 @@ html.lenis, html.lenis body { height: auto; }
   transition: border-color var(--t-fast), color var(--t-fast);
 }
 .canvas-thumb:hover { border-color: var(--accent-line); color: var(--text); }
-
-/* inline generative UI in chat */
-.inline-ui-block { width: 100%; max-width: 100%; margin: 8px 0; box-sizing: border-box; }
-.inline-ui-wrap { width: 100%; box-sizing: border-box; }
-.inline-ui-wrap .canvas-inner { padding: 0 !important; overflow: visible !important; height: auto !important; min-height: auto !important; }
-.inline-ui-wrap .canvas-stage { max-width: 100% !important; padding: 0 !important; background: transparent !important; border: none !important; box-shadow: none !important; }
-
-.comp-streaming-in {
-  position: relative;
-  animation: comp-stream-reveal 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes comp-stream-reveal {
-  from {
-    opacity: 0.85;
-    filter: blur(1.5px);
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    filter: blur(0px);
-    transform: translateY(0);
-  }
-}
-
-.comp-streaming-in::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1.5px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  border-radius: var(--r) var(--r) 0 0;
-  animation: comp-stream-shimmer 1.8s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 2;
-}
-
-@keyframes comp-stream-shimmer {
-  0% { transform: translateX(-100%); opacity: 0.2; }
-  50% { opacity: 0.8; }
-  100% { transform: translateX(100%); opacity: 0.2; }
-}
 
 .comp-card {
   position: relative;

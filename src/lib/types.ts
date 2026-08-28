@@ -32,11 +32,6 @@ export interface Source {
   snippet?: string;
 }
 
-export interface CanvasBlock {
-  type: string;
-  [k: string]: any;
-}
-
 /**
  * An artefact is *only a reference*. It owns no content.
  * It points at a workspace file (or folder entry) or an external url, and
@@ -52,7 +47,7 @@ export interface Artifact {
 }
 
 /** How the canvas should present a workspace path. Derived, never stored. */
-export type CanvasView = "project" | "ui" | "image" | "sheet" | "markdown" | "code" | "text" | "pdf";
+export type CanvasView = "project" | "image" | "sheet" | "markdown" | "code" | "text" | "pdf";
 
 /**
  * The canvas is a universal floating viewport. Anything that is not chat
@@ -63,12 +58,6 @@ export type CanvasTarget =
   | { kind: "file"; path: string }
   | { kind: "source"; url: string; title?: string }
   | { kind: "embed"; url: string; title?: string };
-
-/** legacy shape kept only so old sessions can be migrated */
-export interface LegacyArtifact {
-  id: string; title: string; ratio: string; mode: string;
-  blocks?: CanvasBlock[]; html?: string; url?: string; content?: string; language?: string; createdAt: number;
-}
 
 export interface Node {
   id: string;

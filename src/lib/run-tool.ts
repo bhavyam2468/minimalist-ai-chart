@@ -247,20 +247,11 @@ _o.getvalue()
       let ref = String(args.ref || args.path || args.url || "").trim();
       const title = String(args.title || "").trim();
 
-      // convenience: no ref but content given → write real files, then reference them
-      if (!ref && (args.blocks || args.html || args.content)) {
+      // convenience: no ref but content given → write a real file, then reference it
+      if (!ref && (args.html || args.content)) {
         const slug = (title || "untitled").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled";
-        let path: string, content: string;
-        if (args.blocks) {
-          path = `artifacts/${slug}.ui.json`;
-          content = JSON.stringify({ title, ratio: args.ratio, blocks: args.blocks }, null, 2);
-        } else if (args.html) {
-          path = `artifacts/${slug}/index.html`;
-          content = String(args.html);
-        } else {
-          path = `artifacts/${slug}.md`;
-          content = String(args.content);
-        }
+        const path = args.html ? `artifacts/${slug}/index.html` : `artifacts/${slug}.md`;
+        const content = args.html ? String(args.html) : String(args.content);
         writeFile(chatId, path, content);
         ref = path;
       }

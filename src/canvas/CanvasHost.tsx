@@ -253,7 +253,6 @@ export function CanvasHost({ chatId }: { chatId: string }) {
     if (!path) return <div className="empty-hint" style={{ padding: 20 }}>nothing to show</div>;
     const v = viewOf(path, file);
     if (v === "project") return <ProjectView chatId={chatId} path={path} />;
-    if (v === "ui") return <FileEditor chatId={chatId} path={path} view="ui" />;
     return <FileEditor chatId={chatId} path={path} />;
   }, [target, res, file, chatId]);
 

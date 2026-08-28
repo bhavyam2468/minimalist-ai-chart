@@ -4,8 +4,8 @@ The chat's virtual filesystem.
 Files live in the store, not on disk — a path maps to a record with content,
 mime type and a context state (local / known / context). Writing a file that
 looks presentational also registers an artifact for it automatically, and
-auto-opens html and .ui.json in the canvas, so anything the agent builds is
-one click away without it having to say so.
+auto-opens html in the canvas, so anything the agent builds is one click away
+without it having to say so.
  */
 import { useApp, uid } from "./store";
 import type { WFile } from "./types";
@@ -32,8 +32,8 @@ export function writeFile(chatId: string, path: string, content: string, origin:
 }
 
 /** Anything presentational the agent writes becomes a reference automatically. */
-const REFERRABLE = /\.(html?|ui\.json|png|jpe?g|gif|webp|svg|mp4)$/i;
-const AUTO_OPEN = /\.(html?|ui\.json)$/i;
+const REFERRABLE = /\.(html?|png|jpe?g|gif|webp|svg|mp4)$/i;
+const AUTO_OPEN = /\.html?$/i;
 export function autoArtifact(chatId: string, path: string, isNew: boolean) {
   if (!REFERRABLE.test(path)) return;
   const c = chatOf(chatId);

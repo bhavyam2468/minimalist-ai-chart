@@ -235,32 +235,11 @@ function CodeArea({
 
 /* ================================================================== main */
 
-/**
- * The block renderer is being rebuilt from scratch. Until the new one lands,
- * a `.ui.json` file's preview pane shows this instead of a live render.
- * The file itself is untouched — switch to `code` to read or edit it.
- */
-export function UiNotBuiltYet({ lines }: { lines: number }) {
-  return (
-    <div
-      style={{
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        gap: 6, height: "100%", minHeight: 160, textAlign: "center", color: "var(--text-faint)",
-      }}
-    >
-      <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>block renderer not built yet</span>
-      <span style={{ fontSize: "var(--fs-xs)" }}>
-        {lines} lines of UI JSON — switch to <b style={{ color: "var(--text-dim)" }}>code</b> to read it
-      </span>
-    </div>
-  );
-}
-
-export function FileEditor({ chatId, path, view }: { chatId: string; path: string; view?: "ui" }) {
+export function FileEditor({ chatId, path }: { chatId: string; path: string }) {
   const file = useApp((s) => s.chats[chatId]?.files[path]);
   const putFile = useApp((s) => s.putFile);
   const [draft, setDraft] = useState(file?.content ?? "");
-  const [mode, setMode] = useState<Mode>(view === "ui" ? "preview" : "preview");
+  const [mode, setMode] = useState<Mode>("preview");
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [wrap, setWrap] = useState(true);
@@ -280,45 +259,6 @@ export function FileEditor({ chatId, path, view }: { chatId: string; path: strin
 
   if (kind === "image") return <ImageView f={file} />;
   if (kind === "sheet") return <SheetView text={file.content} path={file.path} />;
-
-  /* ---- view format: *.ui.json — live blocks, still just a file ---- */
-  if (view === "ui") {
-    const uiMode: "preview" | "edit" = mode === "edit" ? "edit" : "preview";
-    return (
-      <div className="fe">
-        <div className="fe-bar">
-          <span className="fe-tag">ui.json</span>
-          <span className="fe-tag">{draft.split("\n").length} lines</span>
-          {dirty && <span className="fe-tag" style={{ color: "var(--warn)" }}>unsaved</span>}
-          <span className="grow" />
-          <div className="fe-seg">
-            <button data-active={uiMode === "preview"} onClick={() => setMode("preview")}>view</button>
-            <button data-active={uiMode === "edit"} onClick={() => setMode("edit")}>code</button>
-          </div>
-          {uiMode === "edit" && (
-            <button
-              className="icon-btn sm"
-              data-active={wrap}
-              title={wrap ? "Word wrap enabled (click to disable)" : "Word wrap disabled (click to enable)"}
-              onClick={() => setWrap((w) => !w)}
-            >
-              <I.wrap size={13} />
-            </button>
-          )}
-          <button className="icon-btn sm" title="Copy" onClick={() => copyToClipboard(draft)}><I.copy size={13} /></button>
-          <button className="icon-btn sm" title="Save (⌘S)" data-active={saved} onClick={save} disabled={!dirty}>
-            {saved ? <I.check size={13} /> : <I.save size={13} />}
-          </button>
-        </div>
-        <div className="fe-body" style={{ padding: 0 }}
-             onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
-          {uiMode === "edit"
-            ? <CodeArea value={draft} onChange={change} lang="json" wrap={wrap} />
-            : <div style={{ height: "100%", overflow: "auto", padding: 14 }}><UiNotBuiltYet lines={draft.split("\n").length} /></div>}
-        </div>
-      </div>
-    );
-  }
 
   const isMd = kind === "markdown";
 

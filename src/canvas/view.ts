@@ -8,7 +8,6 @@ const CODE = ["ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "go", "java", 
 
 export function viewOf(path: string, file?: WFile): CanvasView {
   const p = path.toLowerCase();
-  if (p.endsWith(".ui.json") || p.endsWith(".blocks.json")) return "ui";
   if (p.endsWith(".html") || p.endsWith(".htm") || p.endsWith("/app.tsx") || p.endsWith("/app.jsx") || p === "app.tsx" || p === "app.jsx") return "project";
   const e = p.split(".").pop() || "";
   if (IMAGE.includes(e) || file?.kind === "image" || file?.dataUrl) return "image";
@@ -21,7 +20,7 @@ export function viewOf(path: string, file?: WFile): CanvasView {
 }
 
 export const VIEW_LABEL: Record<CanvasView, string> = {
-  project: "site", ui: "view", image: "image", sheet: "sheet",
+  project: "site", image: "image", sheet: "sheet",
   markdown: "doc", code: "code", text: "text", pdf: "pdf",
 };
 
@@ -29,7 +28,6 @@ export const VIEW_LABEL: Record<CanvasView, string> = {
 export function viewSize(v: CanvasView): { w: number; h: number } {
   switch (v) {
     case "project": return { w: 900, h: 680 };
-    case "ui": return { w: 880, h: 620 };
     case "image": return { w: 760, h: 600 };
     case "sheet": return { w: 1000, h: 620 };
     case "markdown": return { w: 820, h: 720 };
