@@ -85,6 +85,8 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
     const body = text.trim();
     if (!body || busy) return;
     setText("");
+    setActive(false);
+    ta.current?.blur();
     const atts = attached;
     setAttached([]);
     setUI({ composerQuote: null });
@@ -92,6 +94,12 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   };
 
   const onKey = (e: React.KeyboardEvent) => {
+    /* Backspace on an empty bar dismisses it back to rest. */
+    if (e.key === "Backspace" && !text.trim()) {
+      setActive(false);
+      ta.current?.blur();
+      return;
+    }
     if (menu === "mention" && mentionHits.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
