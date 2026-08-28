@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { I } from "./Icons";
 import { mainPath, useApp } from "../lib/store";
-import { compactChat, contextTokenCount } from "../lib/agent";
+import { compactChat } from "../lib/compact";
+import { contextTokenCount } from "../lib/prompt";
 import { hostOf } from "../lib/web";
 import { exportChatZip } from "../lib/xml";
 import { VIEW_LABEL, viewOf } from "../canvas/view";
