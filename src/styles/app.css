@@ -31,7 +31,9 @@ html.lenis, html.lenis body { height: auto; }
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .scroll { flex: 1; overflow-y: auto; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 .fe-preview { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
-.col { max-width: var(--measure); margin: 0 auto; padding: var(--sp-7) var(--sp-5) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
+/* 180px at the bottom is the clearance for the floating composer — content
+   still scrolls under it, it just never comes to rest behind it. */
+.col { max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
 
 /* ------------------------------- messages ------------------------------- */
 .turn { display: flex; flex-direction: column; gap: 8px; position: relative; }
@@ -216,19 +218,27 @@ html.lenis, html.lenis body { height: auto; }
 }
 
 /* ------------------------------- composer ------------------------------- */
+/* The bar floats over the transcript rather than docking below it: no scrim,
+   no border with the page — the message column scrolls underneath and the
+   bar frosts whatever is behind it. `pointer-events: none` on the wrapper
+   keeps the gutters beside the bar clickable, so only the bar itself
+   captures input. Sizing is untouched: same max-width, same padding, and the
+   textarea still caps at 220px. */
 .composer-wrap {
   position: absolute; left: 0; right: 0; bottom: 0;
-  padding: var(--sp-4) var(--sp-5) var(--sp-5);
-  background: linear-gradient(to top, var(--bg) 62%, transparent);
+  padding: var(--sp-4) var(--sp-4) var(--sp-5);
   pointer-events: none;
 }
 .composer {
   pointer-events: auto;
   max-width: var(--measure); margin: 0 auto;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid var(--line);
   border-radius: var(--r);
   padding: var(--bar-pad);
+  box-shadow: 0 1px 2px #0005, 0 18px 44px -22px #000c;
   display: flex; flex-direction: column; gap: var(--sp-2);
   transition: border-color var(--t) var(--ease);
 }

@@ -70,10 +70,10 @@
   .thread { padding-left: 10px; }
 
   /* ---- composer: dvh + safe-area ----------------------------------- */
+  /* No scrim here either — the bar floats and frosts on mobile too. */
   .composer-wrap {
     padding: 8px 10px;
     padding-bottom: max(10px, env(safe-area-inset-bottom));
-    background: linear-gradient(to top, var(--bg) 72%, transparent);
   }
   .composer {
     padding: 6px;
@@ -120,11 +120,11 @@
   }
 
   /* ---- column / layout helpers ------------------------------------ */
-  .col { padding: 64px 16px 220px; }
+  .col { padding: var(--sp-6) var(--sp-4) 220px; }
 }
 
 @media (max-width: 520px) {
-  .col { padding: 56px 10px 220px; }
+  .col { padding: var(--sp-5) var(--sp-3) 220px; }
   .composer-wrap { padding: 6px 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
   .md-table { min-width: 360px; }
 }
