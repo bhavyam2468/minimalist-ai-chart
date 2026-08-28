@@ -49,7 +49,9 @@
   --bar-pad:        10px;
   --rail-w:         2px;
 
-  --measure:        740px;  /* reading column */
+  --measure:        840px;  /* reading column */
+  --composer-active:  700px;  /* input bar expanded: focused or being typed in */
+  --composer-idle:    560px;  /* input bar at rest */
   --side-w:         232px;  /* left chat rail */
   --panel-w:        290px;  /* right workspace panel */
 

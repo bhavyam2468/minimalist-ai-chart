@@ -20,9 +20,32 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   const [menu, setMenu] = useState<null | "plus" | "tools" | "knowledge" | "mention">(null);
   const [mentionQ, setMentionQ] = useState("");
   const [mentionIdx, setMentionIdx] = useState(0);
+  const [active, setActive] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
+
+  /* The bar rests narrow and thin, and grows with an ease-out when the user
+     actually engages: a tap, or a keystroke that is not a modifier/shortcut
+     (ctrl/meta/alt presses alone do not count). Blurring with empty text
+     lets it settle again. */
+  const wake = (e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean }) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key.length === 1 || e.key === "Enter") setActive(true);
+  };
+
+  useEffect(() => {
+    if (inline) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      if (e.key.length !== 1) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      ta.current?.focus();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [inline]);
 
   const quote = ui.composerQuote && (!threadId || ui.composerQuote.threadId === threadId) ? ui.composerQuote : null;
 
@@ -158,8 +181,14 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
     return base;
   };
 
+  /* A send that empties the box while focus sits on the button should let
+     the bar settle again instead of waiting for a click elsewhere. */
+  useEffect(() => {
+    if (!text.trim() && document.activeElement !== ta.current) setActive(false);
+  }, [text]);
+
   const body = (
-    <div className="composer" ref={wrap} style={inline ? { boxShadow: "none" } : undefined}>
+    <div className="composer" ref={wrap} data-active={active} style={inline ? { boxShadow: "none" } : undefined}>
       {(quote || attached.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "2px 4px" }}>
           {quote && (
@@ -177,7 +206,14 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         </div>
       )}
 
-      <textarea ref={ta} value={text} rows={1} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} spellCheck={false} autoFocus={!inline} />
+      <textarea
+        ref={ta} value={text} rows={1}
+        onChange={(e) => { setActive(true); onChange(e.target.value); }}
+        onKeyDown={(e) => { wake(e); onKey(e); }}
+        onFocus={() => setActive(true)}
+        onBlur={() => setActive(text.trim().length > 0)}
+        spellCheck={false}
+      />
 
       <div className="composer-row" style={{ position: "relative" }}>
         <button className="icon-btn" data-active={menu === "plus"} onClick={() => setMenu(menu === "plus" ? null : "plus")}><I.plus size={16} /></button>
