@@ -48,6 +48,10 @@ html.lenis, html.lenis body { height: auto; }
   border-radius: var(--r);              /* identical on all four corners */
   padding: 10px var(--sp-4);
   white-space: pre-wrap;
+  /* same reading face, size and leading as the AI's prose — one voice */
+  font-family: var(--font-prose);
+  font-size: var(--fs-md);
+  line-height: var(--lh-prose);
   animation: pop-in var(--t) var(--ease-out) both;
 }
 .bubble.editing { width: 78%; max-width: 78%; }

@@ -14,19 +14,22 @@
   text-wrap: pretty;               /* no orphans/widows where supported */
   hanging-punctuation: first last; /* optical margin alignment, Safari */
 }
-/* Vertical rhythm in em so it scales with the reading size. */
-.prose > * + * { margin-top: .9em; }
+/* Vertical rhythm in em so it scales with the reading size.
+   Paragraph breaks must read clearly wider than the 1.7 line-height,
+   so sibling gap sits at 1.25em (~21px) vs ~12px between lines. */
+.prose > * + * { margin-top: 1.25em; }
 .prose > .md-h + * { margin-top: .5em; }
 
 .md-p { margin: 0; }
 
-/* Headings stay in the UI face: crisp contrast against the serif body. */
+/* One reading face for human and AI alike; headings differ from body by
+   size and weight, not by family. */
 .md-h {
-  margin: 0; font-family: var(--font); font-weight: 600;
-  letter-spacing: -.018em; line-height: 1.22; color: var(--text);
+  margin: 0; font-family: var(--font-prose); font-weight: 700;
+  letter-spacing: -.01em; line-height: 1.25; color: var(--text);
   text-wrap: balance;
 }
-.prose > .md-h { margin-top: 1.6em; }
+.prose > .md-h { margin-top: 1.7em; }
 .prose > *:first-child { margin-top: 0; }
 .md-h1 { font-size: 1.75em; }
 .md-h2 { font-size: 1.35em; }
@@ -40,9 +43,9 @@
 .md-sup { vertical-align: .4em; font-size: .8em; }
 
 .md-code {
-  font-family: var(--mono); font-size: .86em;
+  font-family: var(--mono); font-size: .84em;
   background: var(--surface-2); border: 1px solid var(--line-soft);
-  border-radius: var(--r-xs); padding: .1em .34em;
+  border-radius: 5px; padding: .12em .38em;
   color: var(--text);
 }
 
@@ -69,7 +72,7 @@
 .md-mark[data-complete="true"] { animation: sweep 620ms var(--ease-out) 140ms forwards; }
 
 /* ---- lists ------------------------------------------------------------- */
-.md-list { margin: 0; padding-left: 1.35em; display: flex; flex-direction: column; gap: .4em; }
+.md-list { margin: 0; padding-left: 1.35em; display: flex; flex-direction: column; gap: .5em; }
 .md-list.tight { gap: .15em; }
 .md-li { margin: 0; }
 .md-list ul, .md-list ol { margin-top: .4em; }
@@ -102,11 +105,14 @@
 .md-hr { height: 1px; background: var(--line); border: 0; margin: 1.5em 0; transform-origin: left; animation: rule-in 420ms var(--ease-out) both; }
 
 /* ---- code block -------------------------------------------------------- */
+/* Tucked in a hair from the left so the panel reads as part of the flow
+   instead of breaking the measure; rhythm gap supplies the breathing. */
 .md-pre {
   background: var(--surface);
   border: 1px solid var(--line-soft);
   border-radius: var(--r);
   overflow: hidden;
+  margin-left: .75em;
 }
 .md-pre-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -116,7 +122,7 @@
 }
 .md-pre code {
   display: block; padding: var(--sp-4);
-  font-family: var(--mono); font-size: 13px; line-height: 1.62;
+  font-family: var(--mono); font-size: .8em; line-height: 1.65;
   white-space: pre; overflow-x: auto; color: var(--text);
 }
 .tk-key { color: #c8a2e0; } .tk-str { color: #a8c98f; } .tk-num { color: #d7b28c; }
@@ -124,7 +130,7 @@
 .tk-op  { color: var(--text-dim); } .tk-tag { color: #d98f8f; } .tk-atr { color: #d7b28c; }
 
 /* ---- table ------------------------------------------------------------- */
-.md-table-wrap { border: 1px solid var(--line-soft); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.md-table-wrap { border: 1px solid var(--line-soft); border-radius: var(--r); overflow: hidden; background: var(--surface); margin-left: .75em; }
 .md-table { width: 100%; border-collapse: collapse; font-size: var(--fs); }
 .md-table th, .md-table td { padding: 9px 14px; text-align: left; vertical-align: top; }
 .md-table thead th {
