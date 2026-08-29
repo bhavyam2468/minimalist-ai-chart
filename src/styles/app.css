@@ -376,3 +376,13 @@ html.lenis, html.lenis body { height: auto; }
   padding: 0 4px;
 }
 .composer.inline .chip { max-width: 132px; }
+
+/* provider segmented control (settings) */
+.seg { display: flex; gap: 4px; }
+.seg button {
+  flex: 1; padding: 6px 8px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); background: transparent;
+  color: var(--text-faint); font-size: var(--fs-sm); cursor: pointer;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.seg button[data-on="true"] { background: var(--surface); color: var(--text); border-color: var(--accent-line); }

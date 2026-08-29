@@ -113,10 +113,18 @@ export interface McpServer {
   error?: string;
 }
 
-export interface Settings {
+export type Provider = "openai" | "gemini" | "custom";
+
+export interface ProviderConn {
   apiKey: string;
   model: string;
-  baseUrl: string;
+  /** used by the custom provider only */
+  baseUrl?: string;
+}
+
+export interface Settings {
+  provider: Provider;
+  providers: Record<Provider, ProviderConn>;
   theme: "dark" | "light";
   firecrawlKey: string;
   temperature: number;

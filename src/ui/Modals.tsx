@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { I } from "./Icons";
-import { useApp, uid } from "../lib/store";
+import { connOf, PROVIDERS, useApp, uid } from "../lib/store";
 import { SKILLS } from "../lib/skills";
 import { mcpList } from "../lib/mcp";
 import { Markdown } from "../md/Markdown";
-import type { McpServer } from "../lib/types";
+import type { McpServer, Provider, ProviderConn } from "../lib/types";
 
 function Shell({ title, children, style }: { title: string; children: React.ReactNode; style?: React.CSSProperties }) {
   const setUI = useApp((s) => s.setUI);
@@ -32,22 +32,44 @@ export function Modals() {
 
   if (!modal) return null;
 
-  if (modal === "settings")
+  if (modal === "settings") {
+    const conn = connOf(settings);
+    const meta = PROVIDERS[settings.provider];
+    const cur = settings.providers[settings.provider];
+    const patchConn = (patch: Partial<ProviderConn>) =>
+      setSettings({ providers: { ...settings.providers, [settings.provider]: { ...cur, ...patch } } });
     return (
       <Shell title="settings">
         <div className="field">
-          <span className="label">openai api key</span>
-          <input type="password" value={settings.apiKey} onChange={(e) => setSettings({ apiKey: e.target.value })} />
+          <span className="label">provider</span>
+          <div className="seg">
+            {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
+              <button key={p} data-on={settings.provider === p} onClick={() => setSettings({ provider: p })}>
+                {PROVIDERS[p].label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <span className="label">{meta.label} api key</span>
+          <input type="password" placeholder={meta.keyHint} value={cur.apiKey} onChange={(e) => patchConn({ apiKey: e.target.value })} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-4)" }}>
           <div className="field">
             <span className="label">model</span>
-            <input value={settings.model} onChange={(e) => setSettings({ model: e.target.value })} />
+            <input placeholder={meta.defaultModel || "model name"} value={cur.model} onChange={(e) => patchConn({ model: e.target.value })} />
           </div>
-          <div className="field">
-            <span className="label">base url</span>
-            <input value={settings.baseUrl} onChange={(e) => setSettings({ baseUrl: e.target.value })} />
-          </div>
+          {settings.provider === "custom" ? (
+            <div className="field">
+              <span className="label">base url</span>
+              <input placeholder="http://localhost:11434/v1" value={cur.baseUrl ?? ""} onChange={(e) => patchConn({ baseUrl: e.target.value })} />
+            </div>
+          ) : (
+            <div className="field">
+              <span className="label">endpoint</span>
+              <input readOnly value={meta.baseUrl} style={{ opacity: 0.55 }} />
+            </div>
+          )}
           <div className="field">
             <span className="label">firecrawl key (optional)</span>
             <input type="password" value={settings.firecrawlKey} onChange={(e) => setSettings({ firecrawlKey: e.target.value })} />
@@ -58,10 +80,15 @@ export function Modals() {
           </div>
         </div>
         <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-faint)" }}>
-          Requests go straight from this browser to {settings.baseUrl}. If the model name is unavailable the client falls back to gpt-4.1, then gpt-4o.
+          Requests go straight from this browser to {conn.baseUrl || "…"}.{" "}
+          {conn.fallbacks.length
+            ? `Unavailable models fall back to ${conn.fallbacks.join(", ")}.`
+            : "No model fallbacks — the name must exist on your server."}{" "}
+          {settings.provider === "custom" ? "Any OpenAI-compatible endpoint works (Ollama, OpenRouter, LM Studio…); the key is optional." : ""}
         </div>
       </Shell>
     );
+  }
 
   if (modal === "skills")
     return (

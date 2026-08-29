@@ -4,8 +4,9 @@ The streaming HTTP layer.
 One SSE round-trip against an OpenAI-compatible /chat/completions endpoint,
 with two pieces of resilience baked in:
 
-  * a model fallback chain (configured model -> gpt-4.1 -> gpt-4o), retried
-    without `temperature` if the provider rejects it
+  * a per-provider model fallback chain (configured model, then the
+    provider's defaults), retried without `temperature` if the provider
+    rejects it
   * inline tool-call recovery — models that emit <tool_call>, ```tool_call```
     or <call:name> blocks in prose instead of using the tool_calls field still
     get their calls executed
@@ -13,7 +14,7 @@ with two pieces of resilience baked in:
 Content deltas are pushed to onDelta as the accumulated string so far, so the
 caller only ever has to render what it is given.
  */
-import { useApp, uid } from "./store";
+import { useApp, uid, connOf } from "./store";
 
 const S = () => useApp.getState();
 
@@ -68,8 +69,11 @@ export async function streamChat(
   onDelta: (t: string) => void,
   signal?: AbortSignal
 ): Promise<StreamOut> {
-  const { apiKey, baseUrl, model, temperature } = S().settings;
-  if (!apiKey) throw new Error("Add an API key in settings.");
+  const conn = connOf(S().settings);
+  const { temperature } = S().settings;
+  if (conn.requireKey && !conn.apiKey) throw new Error("Add an API key in settings.");
+  if (!conn.baseUrl) throw new Error("Set a base URL in settings.");
+  if (!conn.model) throw new Error("Set a model in settings.");
 
   const attempt = async (m: string, withTemp: boolean) => {
     const body: any = {
@@ -79,9 +83,12 @@ export async function streamChat(
       ...(tools.length ? { tools: tools.map((t) => ({ type: "function", function: t })), tool_choice: "auto", parallel_tool_calls: true } : {}),
     };
     if (withTemp) body.temperature = temperature;
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetch(`${conn.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: {
+        "Content-Type": "application/json",
+        ...(conn.apiKey ? { Authorization: `Bearer ${conn.apiKey}` } : {}),
+      },
       body: JSON.stringify(body),
       signal,
     });
@@ -94,7 +101,7 @@ export async function streamChat(
     return res;
   };
 
-  const chain = [S().settings.model, "gpt-4.1", "gpt-4o"].filter((v, i, a) => a.indexOf(v) === i);
+  const chain = [conn.model, ...conn.fallbacks].filter((v, i, a) => v && a.indexOf(v) === i);
   let res: Response | null = null;
   let lastErr: any = null;
   for (const m of chain) {
@@ -106,7 +113,6 @@ export async function streamChat(
     }
   }
   if (!res) throw lastErr ?? new Error("request failed");
-  if (model !== chain[0]) { /* noop */ }
 
   const reader = res.body!.getReader();
   const dec = new TextDecoder();

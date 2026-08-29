@@ -9,7 +9,7 @@ summary. Nothing is deleted — the originals stay in the tree with
 Section 8 of the handover is deliberately an "Aside": tangents and jokes get
 appended to notes/aside.md rather than cluttering the working summary.
  */
-import { mainPath, useApp } from "./store";
+import { connOf, mainPath, useApp } from "./store";
 
 const S = () => useApp.getState();
 
@@ -36,12 +36,16 @@ export async function compactChat(chatId: string, focus = ""): Promise<string> {
     .map((n) => `<${n.role}>\n${n.content.slice(0, 6000)}\n${(n.toolCalls || []).map((t) => `[tool ${t.name}] ${(t.output || "").slice(0, 600)}`).join("\n")}\n</${n.role}>`)
     .join("\n\n");
 
-  const { apiKey, baseUrl, model } = S().settings;
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const conn = connOf(S().settings);
+  if (conn.requireKey && !conn.apiKey) throw new Error("Add an API key in settings.");
+  const res = await fetch(`${conn.baseUrl}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: {
+      "Content-Type": "application/json",
+      ...(conn.apiKey ? { Authorization: `Bearer ${conn.apiKey}` } : {}),
+    },
     body: JSON.stringify({
-      model,
+      model: conn.model,
       messages: [
         { role: "system", content: COMPACT_PROMPT + (focus ? `\n\nThe user especially wants preserved: ${focus}` : "") },
         { role: "user", content: transcript },

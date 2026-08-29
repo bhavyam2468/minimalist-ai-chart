@@ -12,7 +12,7 @@ as stopped, so a cancel is immediate rather than waiting for the next hop.
 `send`, `regenerate` and `editUser` are the three ways a turn begins; each one
 just appends a node and calls `generate`.
  */
-import { mainPath, threadPath, useApp } from "./store";
+import { connOf, mainPath, threadPath, useApp } from "./store";
 import { baseToolDefs } from "./tool-defs";
 import { runTool } from "./run-tool";
 import { mcpToolDefs } from "./mcp";
@@ -61,7 +61,7 @@ export const stopGeneration = (chatId: string) => {
 
 export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) {
   const st = S();
-  const id = nodeId ?? st.addNode(chatId, { role: "assistant", parentId, threadId: threadId ?? null, content: "", model: st.settings.model });
+  const id = nodeId ?? st.addNode(chatId, { role: "assistant", parentId, threadId: threadId ?? null, content: "", model: connOf(st.settings).model });
   const ctl = new AbortController();
   controllers[chatId] = ctl;
   st.set_((s) => { s.busy = { ...s.busy, [chatId]: true }; s.streamId = id; });

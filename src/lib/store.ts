@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Artifact, CanvasTarget, Chat, Node, Settings, Source, Thread, WFile } from "./types";
+import type { Artifact, CanvasTarget, Chat, Node, Provider, Settings, Source, Thread, WFile } from "./types";
 
 export const uid = (p = "n") => p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
 const ROOT = "__root__";
@@ -13,15 +13,67 @@ const DEFAULT_KEY: string =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENAI_KEY) || "";
 
 const defaultSettings = (): Settings => ({
-  apiKey: DEFAULT_KEY,
-  model: "gpt-5.4",
-  baseUrl: "https://api.openai.com/v1",
+  provider: "openai",
+  providers: {
+    openai: { apiKey: DEFAULT_KEY, model: "gpt-5.4" },
+    gemini: { apiKey: "", model: "gemini-2.5-flash" },
+    custom: { apiKey: "", model: "", baseUrl: "" },
+  },
   theme: "dark",
   firecrawlKey: "",
   temperature: 0.7,
   autoCompactAt: 60000,
   mcp: [],
 });
+
+/* ------------------------------------------------------- BYOK providers */
+
+export const PROVIDERS: Record<
+  Provider,
+  { label: string; baseUrl: string; defaultModel: string; fallbacks: string[]; keyHint: string }
+> = {
+  openai: {
+    label: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-5.4",
+    fallbacks: ["gpt-4.1", "gpt-4o"],
+    keyHint: "sk-…",
+  },
+  gemini: {
+    label: "gemini",
+    /* Google's OpenAI-compatible endpoint, so the same client speaks both. */
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-2.5-flash",
+    fallbacks: ["gemini-2.0-flash"],
+    keyHint: "AIza…",
+  },
+  custom: {
+    label: "custom",
+    baseUrl: "",
+    defaultModel: "",
+    fallbacks: [],
+    keyHint: "optional for local servers",
+  },
+};
+
+/** Resolve the active connection for the chosen provider. */
+export function connOf(s: Settings): {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  fallbacks: string[];
+  requireKey: boolean;
+} {
+  const meta = PROVIDERS[s.provider] ?? PROVIDERS.openai;
+  const p = s.providers?.[s.provider] ?? { apiKey: "", model: "" };
+  return {
+    apiKey: p.apiKey ?? "",
+    baseUrl: (s.provider === "custom" ? (p.baseUrl ?? "") : meta.baseUrl).replace(/\/+$/, ""),
+    model: p.model || meta.defaultModel,
+    fallbacks: meta.fallbacks,
+    requireKey: s.provider !== "custom",
+  };
+}
 
 export function newChat(): Chat {
   const id = uid("c");
@@ -95,12 +147,8 @@ function load(): Partial<S> | null {
       chats: d.chats,
       order: d.order,
       activeId: d.activeId,
-      settings: {
-        ...defaultSettings(),
-        ...d.settings,
-        apiKey: d.settings?.apiKey || DEFAULT_KEY,
-        model: d.settings?.model || "gpt-5.4",
-      },
+      /* Old flat settings (pre-BYOK) are intentionally not migrated. */
+      settings: d.settings?.providers ? { ...defaultSettings(), ...d.settings } : defaultSettings(),
     };
   } catch { return null; }
 }
