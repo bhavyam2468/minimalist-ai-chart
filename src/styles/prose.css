@@ -22,6 +22,11 @@
 
 .md-p { margin: 0; }
 
+/* Soft word-wrap stays at the tight reading leading; an explicit \n
+   (rendered <br>) becomes an empty block with real height, so hard
+   breaks read clearly airier than wrapped lines. */
+.prose br { content: ""; display: block; height: .5em; }
+
 /* One reading face for human and AI alike; headings differ from body by
    size and weight, not by family. */
 .md-h {

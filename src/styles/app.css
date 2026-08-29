@@ -46,7 +46,7 @@ html.lenis, html.lenis body { height: auto; }
   background: var(--surface-2);
   border: 1px solid var(--line-soft);
   border-radius: var(--r);              /* identical on all four corners */
-  padding: 10px var(--sp-4);
+  padding: 4px var(--sp-4);
   white-space: pre-wrap;
   /* same reading face, size and leading as the AI's prose — one voice */
   font-family: var(--global-font);
