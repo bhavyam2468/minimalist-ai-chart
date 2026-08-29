@@ -120,6 +120,8 @@ export interface ProviderConn {
   model: string;
   /** used by the custom provider only */
   baseUrl?: string;
+  /** display label for custom connections */
+  name?: string;
 }
 
 export interface Settings {

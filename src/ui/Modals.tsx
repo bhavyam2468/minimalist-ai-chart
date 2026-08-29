@@ -45,11 +45,17 @@ export function Modals() {
           <div className="seg">
             {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
               <button key={p} data-on={settings.provider === p} onClick={() => setSettings({ provider: p })}>
-                {PROVIDERS[p].label}
+                {p === "custom" ? settings.providers.custom.name?.trim() || "custom" : PROVIDERS[p].label}
               </button>
             ))}
           </div>
         </div>
+        {settings.provider === "custom" && (
+          <div className="field">
+            <span className="label">connection name</span>
+            <input placeholder="ollama · home server · work gateway" value={cur.name ?? ""} onChange={(e) => patchConn({ name: e.target.value })} />
+          </div>
+        )}
         <div className="field">
           <span className="label">{meta.label} api key</span>
           <input type="password" placeholder={meta.keyHint} value={cur.apiKey} onChange={(e) => patchConn({ apiKey: e.target.value })} />
