@@ -35,10 +35,10 @@ html.lenis, html.lenis body { height: auto; }
    still scrolls under it, it just never comes to rest behind it.
    The column carries the reading size so the ch-based measure resolves
    against it. */
-.col { font-size: var(--fs-md); max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
+.col { font-size: var(--fs-md); max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-5); }
 
 /* ------------------------------- messages ------------------------------- */
-.turn { display: flex; flex-direction: column; gap: 8px; position: relative; }
+.turn { display: flex; flex-direction: column; gap: 6px; position: relative; }
 .turn.user { align-items: flex-end; }
 
 .bubble {
@@ -46,7 +46,7 @@ html.lenis, html.lenis body { height: auto; }
   background: var(--surface-2);
   border: 1px solid var(--line-soft);
   border-radius: var(--r);              /* identical on all four corners */
-  padding: 4px var(--sp-4);
+  padding: 7px var(--sp-4);
   white-space: pre-wrap;
   /* same reading face, size and leading as the AI's prose — one voice */
   font-family: var(--global-font);
@@ -57,7 +57,9 @@ html.lenis, html.lenis body { height: auto; }
 .bubble.editing { width: 78%; max-width: 78%; }
 .bubble textarea { width: 100%; resize: none; display: block; }
 
-.acts { display: flex; gap: 2px; align-items: center; opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+/* Hover actions float in the gap between turns instead of adding a
+   phantom row to every message — they used to inflate each gap by ~24px. */
+.acts { display: flex; gap: 2px; align-items: center; opacity: 0; transition: opacity var(--t-fast) var(--ease); position: absolute; right: 0; top: 100%; margin-top: 1px; z-index: 3; }
 .turn:hover .acts, .acts[data-force="true"] { opacity: 1; }
 .turn.user .acts { justify-content: flex-end; }
 

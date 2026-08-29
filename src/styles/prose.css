@@ -14,11 +14,8 @@
   text-wrap: pretty;               /* no orphans/widows where supported */
   hanging-punctuation: first last; /* optical margin alignment, Safari */
 }
-/* Vertical rhythm in em so it scales with the reading size.
-   Paragraph breaks must read clearly wider than the 1.7 line-height,
-   so sibling gap sits at 1.25em (~21px) vs ~12px between lines. */
-.prose > * + * { margin-top: 1.25em; }
-.prose > .md-h + * { margin-top: .5em; }
+/* Rhythm lives at the END of this file so it wins the cascade over the
+   per-element `margin: 0` resets below. */
 
 .md-p { margin: 0; }
 
@@ -34,7 +31,6 @@
   letter-spacing: -.01em; line-height: 1.25; color: var(--text);
   text-wrap: balance;
 }
-.prose > .md-h { margin-top: 1.7em; }
 .prose > *:first-child { margin-top: 0; }
 .md-h1 { font-size: 1.75em; }
 .md-h2 { font-size: 1.35em; }
@@ -185,3 +181,21 @@
 
 /* ---- inline stream token ----------------------------------------------- */
 .tok { animation: tok-in 240ms var(--ease-out) both; }
+
+/* ---- vertical rhythm ----------------------------------------------------
+   Declared LAST so these win over the per-element margin resets above
+   (.md-p/.md-list/.md-quote all zero their margins, which used to cancel
+   the sibling gap entirely).
+
+   The hierarchy, tightest to widest:
+     wrapped lines   1.6 leading            (~10px between lines)
+     hard \n (<br>)  +.5em empty block      (~14px)
+     siblings        1.1em                  (~19px: paragraph, list, quote,
+                                             code block, table)
+     below heading   .6em · above heading 1.6em
+     rule            1.1em above, next sibling supplies 1.1em below
+   ---------------------------------------------------------------------- */
+.prose > * + * { margin-top: 1.1em; }
+.prose > .md-h { margin-top: 1.6em; }
+.prose > .md-h + * { margin-top: .6em; }
+.prose > .md-hr { margin: 1.1em 0 0; }
