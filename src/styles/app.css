@@ -263,7 +263,9 @@ html.lenis, html.lenis body { height: auto; }
 .composer:focus-within { border-color: var(--accent-line); }
 .composer textarea {
   width: 100%; resize: none; max-height: 220px; overflow-y: auto;
-  padding: 4px 6px; font-size: var(--fs-md); line-height: 1.55;
+  padding: 4px 6px; font-size: var(--fs-md); line-height: var(--lh-prose);
+  /* what you type reads like what you sent — same face as the bubbles */
+  font-family: var(--font-prose);
 }
 .composer-row { display: flex; align-items: center; gap: 4px; }
 .composer-row .grow { flex: 1; }
@@ -374,8 +376,8 @@ html.lenis, html.lenis body { height: auto; }
 .composer.inline .composer-row { gap: 2px; }
 .composer.inline textarea {
   flex: 1; min-width: 0;
-  height: calc(var(--fs-md) * 1.55);
-  max-height: calc(var(--fs-md) * 1.55);
+  height: calc(var(--fs-md) * var(--lh-prose));
+  max-height: calc(var(--fs-md) * var(--lh-prose));
   overflow-y: auto;
   padding: 0 4px;
 }

@@ -16,7 +16,7 @@ const defaultSettings = (): Settings => ({
   provider: "openai",
   providers: {
     openai: { apiKey: DEFAULT_KEY, model: "gpt-5.4" },
-    gemini: { apiKey: "", model: "gemini-2.5-flash" },
+    gemini: { apiKey: "", model: "gemini-flash-latest" },
     custom: { apiKey: "", model: "", baseUrl: "" },
   },
   theme: "dark",
@@ -43,8 +43,8 @@ export const PROVIDERS: Record<
     label: "gemini",
     /* Google's OpenAI-compatible endpoint, so the same client speaks both. */
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    defaultModel: "gemini-2.5-flash",
-    fallbacks: ["gemini-2.0-flash"],
+    defaultModel: "gemini-flash-latest",
+    fallbacks: ["gemini-3.6-flash"],
     keyHint: "AIza…",
   },
   custom: {
@@ -55,6 +55,13 @@ export const PROVIDERS: Record<
     keyHint: "optional for local servers",
   },
 };
+
+/* Gemini retires model names; saved settings pointing at a dead one would
+   404 forever. Swap them for the live alias at load time. */
+const DEAD_GEMINI = new Set([
+  "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-pro",
+  "gemini-1.5-flash", "gemini-1.5-pro",
+]);
 
 /** Resolve the active connection for the chosen provider. */
 export function connOf(s: Settings): {
@@ -143,13 +150,11 @@ function load(): Partial<S> | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    return {
-      chats: d.chats,
-      order: d.order,
-      activeId: d.activeId,
-      /* Old flat settings (pre-BYOK) are intentionally not migrated. */
-      settings: d.settings?.providers ? { ...defaultSettings(), ...d.settings } : defaultSettings(),
-    };
+    /* Old flat settings (pre-BYOK) are intentionally not migrated. */
+    const settings: Settings = d.settings?.providers ? { ...defaultSettings(), ...d.settings } : defaultSettings();
+    if (DEAD_GEMINI.has(settings.providers.gemini.model))
+      settings.providers.gemini = { ...settings.providers.gemini, model: PROVIDERS.gemini.defaultModel };
+    return { chats: d.chats, order: d.order, activeId: d.activeId, settings };
   } catch { return null; }
 }
 let saveT: any;
