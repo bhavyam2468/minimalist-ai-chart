@@ -50,6 +50,7 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
   const quote = ui.composerQuote && (!threadId || ui.composerQuote.threadId === threadId) ? ui.composerQuote : null;
 
   useEffect(() => {
+    if (inline) return; /* thread bar stays single-line */
     const el = ta.current; if (!el) return;
     el.style.height = "0px";
     el.style.height = Math.min(el.scrollHeight, 220) + "px";
@@ -195,8 +196,77 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
     if (!text.trim() && document.activeElement !== ta.current) setActive(false);
   }, [text]);
 
-  const body = (
-    <div className="composer" ref={wrap} data-active={active} style={inline ? { boxShadow: "none" } : undefined}>
+  /* Shared parts — the inline thread bar reuses only plus / input / send. */
+  const taEl = (
+    <textarea
+      ref={ta} value={text} rows={1}
+      onChange={(e) => { setActive(true); onChange(e.target.value); }}
+      onKeyDown={(e) => { wake(e); onKey(e); }}
+      onFocus={() => setActive(true)}
+      onBlur={() => setActive(text.trim().length > 0)}
+      spellCheck={false}
+      placeholder={inline ? "reply in thread" : undefined}
+    />
+  );
+  const plusBtn = (
+    <button className="icon-btn" data-active={menu === "plus"} onClick={() => setMenu(menu === "plus" ? null : "plus")}><I.plus size={16} /></button>
+  );
+  const sendBtn = busy ? (
+    <button className="send" onClick={() => stopGeneration(chatId)}><I.stop size={14} /></button>
+  ) : (
+    <button className="send" data-idle={!text.trim()} onClick={submit}><I.send size={16} /></button>
+  );
+  const attachedChips = attached.map((p) => (
+    <span className="chip" key={p}>
+      <I.file size={11} />{p.split("/").pop()}
+      <button className="icon-btn sm" onClick={() => setAttached((a) => a.filter((x) => x !== p))}><I.x size={10} /></button>
+    </span>
+  ));
+  const fileInput = <input ref={fileIn} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />;
+  const plusMenu = menu === "plus" && (
+    <div className="pop menu" style={menuStyle("left")}>
+      <button className="menu-item" onClick={() => fileIn.current?.click()}><I.file size={14} />Upload a file<span className="dim">image · pdf · docx · xlsx · code</span></button>
+      <button className="menu-item" onClick={() => { setText((t) => t + "@"); setMenu("mention"); setMentionQ(""); ta.current?.focus(); }}>
+        <I.spark size={14} />Mention a workspace file<span className="dim">@</span>
+      </button>
+      <div style={{ borderTop: "1px solid var(--line-soft)", margin: "6px 0" }} />
+      {files.slice(0, 6).map((f) => (
+        <button key={f.path} className="menu-item" onClick={() => { setAttached((a) => [...new Set([...a, f.path])]); setFileState(chatId, f.path, "context"); setMenu(null); }}>
+          <span className="dot" data-state={f.state} /> {f.path}
+        </button>
+      ))}
+    </div>
+  );
+  const mentionMenu = menu === "mention" && mentionHits.length > 0 && (
+    <div className="pop menu" style={menuStyle("left")}>
+      {mentionHits.map((h, i) => (
+        <button
+          key={h.kind + h.label}
+          className="menu-item"
+          data-active={i === mentionIdx}
+          onMouseEnter={() => setMentionIdx(i)}
+          onClick={() => pickMention(h)}
+        >
+          <span className="dot" data-state={h.state ?? "known"} />{h.label}<span className="dim">{h.meta}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  const body = inline ? (
+    <div className="composer inline" ref={wrap} data-active={active}>
+      <div className="composer-row" style={{ position: "relative" }}>
+        {plusBtn}
+        {attachedChips}
+        {taEl}
+        {sendBtn}
+        {plusMenu}
+        {mentionMenu}
+      </div>
+      {fileInput}
+    </div>
+  ) : (
+    <div className="composer" ref={wrap} data-active={active}>
       {(quote || attached.length > 0) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "2px 4px" }}>
           {quote && (
@@ -205,49 +275,20 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
               <button className="icon-btn sm" onClick={() => setUI({ composerQuote: null })}><I.x size={10} /></button>
             </span>
           )}
-          {attached.map((p) => (
-            <span className="chip" key={p}>
-              <I.file size={11} />{p.split("/").pop()}
-              <button className="icon-btn sm" onClick={() => setAttached((a) => a.filter((x) => x !== p))}><I.x size={10} /></button>
-            </span>
-          ))}
+          {attachedChips}
         </div>
       )}
 
-      <textarea
-        ref={ta} value={text} rows={1}
-        onChange={(e) => { setActive(true); onChange(e.target.value); }}
-        onKeyDown={(e) => { wake(e); onKey(e); }}
-        onFocus={() => setActive(true)}
-        onBlur={() => setActive(text.trim().length > 0)}
-        spellCheck={false}
-      />
+      {taEl}
 
       <div className="composer-row" style={{ position: "relative" }}>
-        <button className="icon-btn" data-active={menu === "plus"} onClick={() => setMenu(menu === "plus" ? null : "plus")}><I.plus size={16} /></button>
+        {plusBtn}
         <button className="icon-btn" data-active={menu === "tools"} onClick={() => setMenu(menu === "tools" ? null : "tools")}><I.tools size={16} /></button>
         <span className="grow" />
         <button className="icon-btn" title="Skills" data-active={menu === "knowledge"} onClick={() => setMenu(menu === "knowledge" ? null : "knowledge")}><I.knowledge size={16} /></button>
-        {busy ? (
-          <button className="send" onClick={() => stopGeneration(chatId)}><I.stop size={14} /></button>
-        ) : (
-          <button className="send" data-idle={!text.trim()} onClick={submit}><I.send size={16} /></button>
-        )}
+        {sendBtn}
 
-        {menu === "plus" && (
-          <div className="pop menu" style={menuStyle("left")}>
-            <button className="menu-item" onClick={() => fileIn.current?.click()}><I.file size={14} />Upload a file<span className="dim">image · pdf · docx · xlsx · code</span></button>
-            <button className="menu-item" onClick={() => { setText((t) => t + "@"); setMenu("mention"); setMentionQ(""); ta.current?.focus(); }}>
-              <I.spark size={14} />Mention a workspace file<span className="dim">@</span>
-            </button>
-            <div style={{ borderTop: "1px solid var(--line-soft)", margin: "6px 0" }} />
-            {files.slice(0, 6).map((f) => (
-              <button key={f.path} className="menu-item" onClick={() => { setAttached((a) => [...new Set([...a, f.path])]); setFileState(chatId, f.path, "context"); setMenu(null); }}>
-                <span className="dot" data-state={f.state} /> {f.path}
-              </button>
-            ))}
-          </div>
-        )}
+        {plusMenu}
 
         {menu === "tools" && (
           <div className="pop menu" style={menuStyle("left")}>
@@ -292,24 +333,10 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
           </div>
         )}
 
-        {menu === "mention" && mentionHits.length > 0 && (
-          <div className="pop menu" style={menuStyle("left")}>
-            {mentionHits.map((h, i) => (
-              <button
-                key={h.kind + h.label}
-                className="menu-item"
-                data-active={i === mentionIdx}
-                onMouseEnter={() => setMentionIdx(i)}
-                onClick={() => pickMention(h)}
-              >
-                <span className="dot" data-state={h.state ?? "known"} />{h.label}<span className="dim">{h.meta}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {mentionMenu}
       </div>
 
-      <input ref={fileIn} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
+      {fileInput}
     </div>
   );
 

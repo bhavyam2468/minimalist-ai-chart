@@ -342,6 +342,7 @@ export function Turn({ chat, node }: { chat: Chat; node: Node; threadId?: string
 export function ThreadView({ chat, threadId }: { chat: Chat; threadId: string }) {
   const th = chat.threads[threadId];
   const patchThread = useApp((s) => s.patchThread);
+  const deleteThread = useApp((s) => s.deleteThread);
   const path = threadPath(chat, threadId);
   if (!th) return null;
   return (
@@ -351,7 +352,10 @@ export function ThreadView({ chat, threadId }: { chat: Chat; threadId: string })
           {th.collapsed ? <I.right size={12} /> : <I.down size={12} />}
         </button>
         <I.thread size={12} />
-        <span>thread · {path.filter((n) => n.role === "user").length || 0} turns · isolated context</span>
+        <span style={{ flex: 1 }} />
+        <button className="icon-btn sm" title="Delete thread" onClick={() => deleteThread(chat.id, threadId)}>
+          <I.trash size={12} />
+        </button>
       </div>
       {!th.collapsed && (
         <>

@@ -69,6 +69,7 @@ interface S {
 
   createThread: (chatId: string, anchorId: string, quote?: string) => string;
   patchThread: (chatId: string, id: string, patch: Partial<Thread>) => void;
+  deleteThread: (chatId: string, id: string) => void;
 
   putFile: (chatId: string, f: WFile) => void;
   setFileState: (chatId: string, path: string, state: WFile["state"]) => void;
@@ -210,6 +211,26 @@ export const useApp = create<S>((set, get) => ({
     }),
 
   createThread: (chatId, anchorId, quote) => {
+    /* One empty thread at a time: while a thread still has no messages,
+       asking for another one re-anchors the existing empty thread instead
+       of stacking up blanks. */
+    const empty = Object.values(get().chats[chatId]?.threads ?? {}).find((t) => t.rootIds.length === 0);
+    if (empty) {
+      get().patchChat(chatId, (c) => {
+        const cur = c.threads[empty.id];
+        c.threads = {
+          ...c.threads,
+          [empty.id]: {
+            ...cur,
+            anchorId,
+            quote: quote ?? cur.quote,
+            title: quote ? quote.slice(0, 48) : cur.title,
+            collapsed: false,
+          },
+        };
+      });
+      return empty.id;
+    }
     const id = uid("t");
     get().patchChat(chatId, (c) => {
       const th: Thread = { id, anchorId, title: quote ? quote.slice(0, 48) : "Deep dive", quote, rootIds: [], activeChild: {}, collapsed: false, createdAt: Date.now() };
@@ -219,6 +240,32 @@ export const useApp = create<S>((set, get) => ({
   },
   patchThread: (chatId, id, patch) =>
     get().patchChat(chatId, (c) => { c.threads = { ...c.threads, [id]: { ...c.threads[id], ...patch } }; }),
+  deleteThread: (chatId, id) => {
+    get().patchChat(chatId, (c) => {
+      const th = c.threads[id];
+      if (!th) return;
+      const walk = (nid: string) => {
+        const n = c.nodes[nid];
+        if (!n) return;
+        n.children.forEach(walk);
+        delete c.nodes[nid];
+      };
+      th.rootIds.forEach(walk);
+      const threads = { ...c.threads };
+      delete threads[id];
+      c.threads = threads;
+    });
+    const { activeThreadId, composerQuote } = get().ui;
+    if (activeThreadId === id || composerQuote?.threadId === id)
+      set((s) => ({
+        ...s,
+        ui: {
+          ...s.ui,
+          activeThreadId: activeThreadId === id ? null : s.ui.activeThreadId,
+          composerQuote: composerQuote?.threadId === id ? null : s.ui.composerQuote,
+        },
+      }));
+  },
 
   putFile: (chatId, f) => get().patchChat(chatId, (c) => { c.files = { ...c.files, [f.path]: f }; }),
   setFileState: (chatId, path, state) =>

@@ -355,3 +355,24 @@ html.lenis, html.lenis body { height: auto; }
 
 .empty-hint { color: var(--text-faint); font-size: var(--fs-sm); padding: 6px 8px; }
 
+
+/* thread inline composer — one line: plus · input · send */
+.composer.inline,
+.composer.inline[data-active="true"] {
+  max-width: none;
+  width: 100%;
+  padding: 4px 6px;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+.composer.inline .composer-row { gap: 2px; }
+.composer.inline textarea {
+  flex: 1; min-width: 0;
+  height: calc(var(--fs-md) * 1.55);
+  max-height: calc(var(--fs-md) * 1.55);
+  overflow-y: auto;
+  padding: 0 4px;
+}
+.composer.inline .chip { max-width: 132px; }
