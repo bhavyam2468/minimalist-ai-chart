@@ -1,37 +1,25 @@
 /* ===========================================================================
    skills.ts — Agent Skills, Anthropic SKILL.md style.
 
-   Level 1  name + description  -> always in the system prompt (~1 line each)
-   Level 2  body                -> only when `read_skill` is called, or when a
-                                   file upload auto-activates the skill
+   Level 1  name + description  -> listed in the system prompt (~1 line each)
+   Level 2  body                -> loaded when `read_skill` is called, when the
+                                   skill is pinned, or when a file upload
+                                   auto-activates it
    Level 3  resources           -> referenced sections read on demand
    ========================================================================= */
 
 export interface Skill {
   name: string;
   description: string;
-  always?: boolean;                 // level-2 body always injected
   triggers?: RegExp;                // auto-activated by file mime / extension
   body: string;
 }
 
 export const SKILLS: Skill[] = [
   {
-    name: "skill-finder",
-    description:
-      "Discover which skills exist and load them. Use at the start of any non-trivial task, or whenever the user mentions a file type, a workflow or a tool you are not sure how to drive.",
-    always: true,
-    body: `# skill-finder
-1. Call \`find_skills\` with a short intent phrase ("edit a spreadsheet", "research the web").
-2. Read at most two results with \`read_skill\`.
-3. Follow the body literally. Skills override your defaults.
-Never guess a workflow that a skill already documents.`,
-  },
-  {
     name: "context-management",
     description:
-      "Manage what is loaded in the working context: attach/detach files, compact the conversation, inspect token pressure. Always available.",
-    always: true,
+      "Manage what is loaded in the working context: attach/detach files, compact the conversation, inspect token pressure.",
     body: `# context-management
 Three states exist for every file:
 - **local**  — on the user's machine only. You cannot see it.

@@ -49,7 +49,7 @@ html.lenis, html.lenis body { height: auto; }
   padding: 10px var(--sp-4);
   white-space: pre-wrap;
   /* same reading face, size and leading as the AI's prose — one voice */
-  font-family: var(--font-prose);
+  font-family: var(--global-font);
   font-size: var(--fs-md);
   line-height: var(--lh-prose);
   animation: pop-in var(--t) var(--ease-out) both;
@@ -128,10 +128,10 @@ html.lenis, html.lenis body { height: auto; }
 
 .trace-summary-icon { display: inline-flex !important; align-items: center !important; flex-shrink: 0 !important; }
 .trace-summary-text { display: inline-flex !important; flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; white-space: nowrap !important; gap: 6px; }
-.trace-summary-text b { font-family: var(--mono); font-weight: 500; color: var(--text); }
+.trace-summary-text b { font-family: var(--global-font-mono); font-weight: 500; color: var(--text); }
 .trace-hint { color: var(--text-faint); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trace-time { color: var(--text-faint); font-family: var(--mono); font-size: 11px; margin-left: 2px; opacity: 0.85; white-space: nowrap; }
-.trace-err-badge { font-family: var(--mono); font-size: 11px; color: var(--err, #ef4444); white-space: nowrap; }
+.trace-time { color: var(--text-faint); font-family: var(--global-font-mono); font-size: 11px; margin-left: 2px; opacity: 0.85; white-space: nowrap; }
+.trace-err-badge { font-family: var(--global-font-mono); font-size: 11px; color: var(--err, #ef4444); white-space: nowrap; }
 .trace-caret { display: inline-flex !important; align-items: center !important; margin-left: 4px; color: var(--text-faint); opacity: 0.7; flex-shrink: 0 !important; }
 
 .trace-list {
@@ -147,11 +147,11 @@ html.lenis, html.lenis body { height: auto; }
   transition: background var(--t) var(--ease);
 }
 .trace-row:hover { background: var(--surface); color: var(--text-dim); }
-.trace-row b { font-weight: 500; color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-xs); }
+.trace-row b { font-weight: 500; color: var(--text-dim); font-family: var(--global-font-mono); font-size: var(--fs-xs); }
 .trace-row[data-running="true"] { animation: pulse 1.4s ease-in-out infinite; color: var(--text); }
 .trace-hint-row { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
-.trace-duration { margin-left: auto; font-family: var(--mono); font-size: 11px; opacity: 0.6; }
-.trace-row-toggle { font-family: var(--mono); font-size: 12px; opacity: 0.5; margin-left: 6px; }
+.trace-duration { margin-left: auto; font-family: var(--global-font-mono); font-size: 11px; opacity: 0.6; }
+.trace-row-toggle { font-family: var(--global-font-mono); font-size: 12px; opacity: 0.5; margin-left: 6px; }
 
 /* Status styling for individual tool rows: green when ok, red when error */
 .trace-row[data-status="done"] {
@@ -168,7 +168,7 @@ html.lenis, html.lenis body { height: auto; }
   color: var(--err, #ef4444);
 }
 .trace-badge {
-  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  font-family: var(--global-font-mono); font-size: 10px; text-transform: uppercase;
   padding: 1px 5px; border-radius: 3px; letter-spacing: 0.05em; font-weight: 600;
 }
 .trace-badge.ok { background: rgba(34, 197, 94, 0.15); color: var(--ok, #22c55e); }
@@ -182,7 +182,7 @@ html.lenis, html.lenis body { height: auto; }
 .trace-spinner.sm { width: 9px; height: 9px; }
 
 .trace-out {
-  font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-faint);
+  font-family: var(--global-font-mono); font-size: var(--fs-xs); color: var(--text-faint);
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-sm);
   padding: 8px 10px; margin-top: 4px; white-space: pre-wrap; max-height: 220px; overflow: auto;
 }
@@ -265,7 +265,7 @@ html.lenis, html.lenis body { height: auto; }
   width: 100%; resize: none; max-height: 220px; overflow-y: auto;
   padding: 4px 6px; font-size: var(--fs-md); line-height: var(--lh-prose);
   /* what you type reads like what you sent — same face as the bubbles */
-  font-family: var(--font-prose);
+  font-family: var(--global-font);
 }
 .composer-row { display: flex; align-items: center; gap: 4px; }
 .composer-row .grow { flex: 1; }
@@ -349,7 +349,7 @@ html.lenis, html.lenis body { height: auto; }
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 8px 11px; font-size: var(--fs-sm); width: 100%;
 }
-.field textarea { min-height: 90px; resize: vertical; font-family: var(--mono); }
+.field textarea { min-height: 90px; resize: vertical; font-family: var(--global-font-mono); }
 .btn {
   display: inline-flex; align-items: center; gap: 7px; height: var(--ctrl-h);
   padding: 0 14px; border-radius: var(--r-sm); font-size: var(--fs-sm);

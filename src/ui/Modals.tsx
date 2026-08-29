@@ -105,7 +105,6 @@ export function Modals() {
               <div style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }} onClick={() => setOpen(open === s.name ? null : s.name)}>
                 <I.book size={14} />
                 <b style={{ fontWeight: 520 }}>{s.name}</b>
-                {s.always && <span className="chip" data-on="true">always</span>}
                 <span style={{ flex: 1 }} />
                 <I.down size={13} />
               </div>

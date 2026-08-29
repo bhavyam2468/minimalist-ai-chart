@@ -15,7 +15,7 @@ const TOKENS = [
   "--bg", "--surface", "--surface-2", "--surface-3", "--line", "--line-soft",
   "--text", "--text-dim", "--text-faint", "--accent", "--accent-soft", "--accent-line",
   "--ok", "--warn", "--err", "--info", "--r", "--r-sm", "--r-xs", "--sp-2", "--sp-3",
-  "--sp-4", "--sp-5", "--font", "--font-prose", "--mono", "--fs", "--fs-sm", "--fs-xs", "--fs-lg", "--fs-xl", "--lh", "--lh-prose", "--shadow",
+  "--sp-4", "--sp-5", "--global-font", "--global-font-mono", "--fs", "--fs-sm", "--fs-xs", "--fs-lg", "--fs-xl", "--lh", "--lh-prose", "--shadow",
 ];
 
 export function themeCss(): string {
@@ -23,7 +23,7 @@ export function themeCss(): string {
   const vars = TOKENS.map((t) => `${t}: ${cs.getPropertyValue(t).trim()};`).join("\n  ");
   return `:root {\n  ${vars}\n}
 *{box-sizing:border-box}
-body{margin:0;background:var(--surface);color:var(--text);font-family:var(--font);font-size:var(--fs);line-height:1.6}
+body{margin:0;background:var(--surface);color:var(--text);font-family:var(--global-font);font-size:var(--fs);line-height:1.6}
 h1,h2,h3,h4{font-weight:560;letter-spacing:-.012em;margin:0 0 10px}
 h1{font-size:var(--fs-xl)} h2{font-size:var(--fs-lg)} h3{font-size:var(--fs)}
 p{margin:0 0 12px}

@@ -5,7 +5,7 @@
    ========================================================================= */
 
 .prose {
-  font-family: var(--font-prose);
+  font-family: var(--global-font);
   font-size: var(--fs-md);
   line-height: var(--lh-prose);
   color: var(--text);
@@ -25,7 +25,7 @@
 /* One reading face for human and AI alike; headings differ from body by
    size and weight, not by family. */
 .md-h {
-  margin: 0; font-family: var(--font-prose); font-weight: 700;
+  margin: 0; font-family: var(--global-font); font-weight: 700;
   letter-spacing: -.01em; line-height: 1.25; color: var(--text);
   text-wrap: balance;
 }
@@ -43,7 +43,7 @@
 .md-sup { vertical-align: .4em; font-size: .8em; }
 
 .md-code {
-  font-family: var(--mono); font-size: .84em;
+  font-family: var(--global-font-mono); font-size: .84em;
   background: var(--surface-2); border: 1px solid var(--line-soft);
   border-radius: 5px; padding: .12em .38em;
   color: var(--text);
@@ -118,11 +118,11 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line-soft);
   color: var(--text-faint); font-size: var(--fs-xs);
-  font-family: var(--mono); letter-spacing: .04em;
+  font-family: var(--global-font-mono); letter-spacing: .04em;
 }
 .md-pre code {
   display: block; padding: var(--sp-4);
-  font-family: var(--mono); font-size: .8em; line-height: 1.65;
+  font-family: var(--global-font-mono); font-size: .8em; line-height: 1.65;
   white-space: pre; overflow-x: auto; color: var(--text);
 }
 .tk-key { color: #c8a2e0; } .tk-str { color: #a8c98f; } .tk-num { color: #d7b28c; }
@@ -145,7 +145,7 @@
 
 /* ---- math -------------------------------------------------------------- */
 .md-math-block { overflow-x: auto; padding: var(--sp-3) 0; text-align: center; }
-.md-math-raw { font-family: var(--mono); font-size: .9em; color: var(--text-faint); }
+.md-math-raw { font-family: var(--global-font-mono); font-size: .9em; color: var(--text-faint); }
 
 /* ---- media ------------------------------------------------------------- */
 .md-img { max-width: 100%; border-radius: var(--r); border: 1px solid var(--line-soft); display: block; animation: fade-in var(--t-slow) var(--ease) both; }

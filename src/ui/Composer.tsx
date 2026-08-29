@@ -318,9 +318,9 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
             <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
               {SKILLS.map((s) => (
                 <button key={s.name} className="menu-item" onClick={() => toggleSkill(s.name)} title={s.description}>
-                  <span className="dot" data-state={pinned.includes(s.name) || s.always ? "context" : "known"} />
+                  <span className="dot" data-state={pinned.includes(s.name) ? "context" : "known"} />
                   {s.name}
-                  <span className="dim">{s.always ? "always" : pinned.includes(s.name) ? "pinned" : ""}</span>
+                  <span className="dim">{pinned.includes(s.name) ? "pinned" : ""}</span>
                 </button>
               ))}
             </div>

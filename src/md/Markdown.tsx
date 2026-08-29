@@ -267,7 +267,7 @@ function InlineToolBlock({
                 whiteSpace: "pre-wrap",
                 maxHeight: 240,
                 overflowY: "auto",
-                fontFamily: "var(--mono)",
+                fontFamily: "var(--global-font-mono)",
                 fontSize: "11px",
               }}
             >

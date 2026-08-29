@@ -84,7 +84,7 @@ export function bundleProject(entry: WFile, sibs: WFile[]): { doc: string; missi
   ${styles}
   ${ERROR_OVERLAY_SCRIPT}
 </head>
-<body style="background:var(--surface);color:var(--text);font-family:var(--font);margin:0;padding:16px">
+<body style="background:var(--surface);color:var(--text);font-family:var(--global-font);margin:0;padding:16px">
   <div id="root"></div>
   ${helperScripts}
   <script type="text/babel">
