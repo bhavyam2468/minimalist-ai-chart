@@ -94,7 +94,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, keyPrefix = ""): React.ReactNod
     const k = keyPrefix + i;
     switch (n.t) {
       case "text": return <Text key={k} v={n.v} animate={ctx.animate} />;
-      case "br": return <br key={k} />;
+      case "br": return <span key={k} className="hb" />;
       case "code": return <code key={k} className="md-code">{n.v}</code>;
       case "math": return <TeX key={k} expr={n.v} open={n.open} />;
       case "img": return <img key={k} className="md-img" src={n.src} alt={n.alt} loading="lazy" />;

@@ -298,7 +298,11 @@ export function Turn({ chat, node }: { chat: Chat; node: Node; threadId?: string
             </div>
           </div>
         ) : (
-          <div className="bubble">{node.content}</div>
+          <div className="bubble">
+            {node.content.split("\n").map((ln, i) => (
+              <span className="bline" key={i}>{ln.length ? ln : "​"}</span>
+            ))}
+          </div>
         )}
         <div className="acts">
           <Branches chat={chat} node={node} />

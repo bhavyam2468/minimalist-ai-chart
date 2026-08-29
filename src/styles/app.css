@@ -47,13 +47,16 @@ html.lenis, html.lenis body { height: auto; }
   border: 1px solid var(--line-soft);
   border-radius: var(--r);              /* identical on all four corners */
   padding: 7px var(--sp-4);
-  white-space: pre-wrap;
   /* same reading face, size and leading as the AI's prose — one voice */
   font-family: var(--global-font);
   font-size: var(--fs-md);
   line-height: var(--lh-prose);
   animation: pop-in var(--t) var(--ease-out) both;
 }
+/* hard Enter inside your own message opens like a paragraph break,
+   wrapped lines stay tight */
+.bubble .bline { display: block; white-space: pre-wrap; }
+.bubble .bline + .bline { margin-top: .9em; }
 .bubble.editing { width: 78%; max-width: 78%; }
 .bubble textarea { width: 100%; resize: none; display: block; }
 
