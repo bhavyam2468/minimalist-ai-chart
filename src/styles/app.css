@@ -35,7 +35,7 @@ html.lenis, html.lenis body { height: auto; }
    still scrolls under it, it just never comes to rest behind it.
    The column carries the reading size so the ch-based measure resolves
    against it. */
-.col { font-size: var(--fs-md); max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-5); }
+.col { font-size: var(--fs-md); max-width: var(--measure); margin: 0 auto; padding: var(--sp-6) var(--sp-4) 180px; display: flex; flex-direction: column; gap: var(--sp-6); }
 
 /* ------------------------------- messages ------------------------------- */
 .turn { display: flex; flex-direction: column; gap: 6px; position: relative; }
@@ -46,7 +46,7 @@ html.lenis, html.lenis body { height: auto; }
   background: var(--surface-2);
   border: 1px solid var(--line-soft);
   border-radius: var(--r);              /* identical on all four corners */
-  padding: 7px var(--sp-4);
+  padding: 8px var(--sp-4);
   /* same reading face, size and leading as the AI's prose — one voice */
   font-family: var(--global-font);
   font-size: var(--fs-md);
@@ -61,10 +61,12 @@ html.lenis, html.lenis body { height: auto; }
 .bubble textarea { width: 100%; resize: none; display: block; }
 
 /* Hover actions float in the gap between turns instead of adding a
-   phantom row to every message — they used to inflate each gap by ~24px. */
-.acts { display: flex; gap: 2px; align-items: center; opacity: 0; transition: opacity var(--t-fast) var(--ease); position: absolute; right: 0; top: 100%; margin-top: 1px; z-index: 3; }
+   phantom row to every message. AI actions hug the text's left edge,
+   user actions hug the bubble's right edge; the 32px column gap gives
+   the 24px row room without touching either message. */
+.acts { display: flex; gap: 2px; align-items: center; opacity: 0; transition: opacity var(--t-fast) var(--ease); position: absolute; left: 0; top: 100%; margin-top: 2px; z-index: 3; }
 .turn:hover .acts, .acts[data-force="true"] { opacity: 1; }
-.turn.user .acts { justify-content: flex-end; }
+.turn.user .acts { left: auto; right: 0; justify-content: flex-end; }
 
 .branch { display: inline-flex; align-items: center; gap: 2px; color: var(--text-faint); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 

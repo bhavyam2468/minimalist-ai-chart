@@ -92,11 +92,14 @@ export function parseInline(src: string): Inline[] {
       continue;
     }
 
-    /* inline math $...$  (ignore $12.50 style money) */
-    if (c === "$" && src[i + 1] !== "$" && /[^\s\d]/.test(src[i + 1] ?? "")) {
+    /* inline math $...$  (ignore $12.50 style money — but a TeX signature
+       like \ ^ _ { } inside wins over the money heuristic, so
+       $1.4\text{–}1.6\times$ still parses as math) */
+    if (c === "$" && src[i + 1] !== "$") {
       const close = findClose(src, i + 1, "$");
       const v = close === -1 ? src.slice(i + 1) : src.slice(i + 1, close);
-      if (close !== -1 || v.length < 220) {
+      const mathy = /[^\s\d]/.test(src[i + 1] ?? "") || /[\\^_{}]/.test(v);
+      if (mathy && (close !== -1 || v.length < 220)) {
         push(); out.push({ t: "math", v, open: close === -1 });
         i = close === -1 ? src.length : close + 1;
         continue;

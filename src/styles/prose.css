@@ -33,10 +33,11 @@
   text-wrap: balance;
 }
 .prose > *:first-child { margin-top: 0; }
-.md-h1 { font-size: 1.75em; }
-.md-h2 { font-size: 1.35em; }
-.md-h3 { font-size: 1.12em; }
-.md-h4, .md-h5, .md-h6 { font-size: 1em; color: var(--text-dim); text-transform: none; }
+/* major-third (1.25) modular scale over the 17px reading size */
+.md-h1 { font-size: 1.95em; }
+.md-h2 { font-size: 1.55em; }
+.md-h3 { font-size: 1.25em; }
+.md-h4, .md-h5, .md-h6 { font-size: 1.05em; color: var(--text-dim); text-transform: none; }
 
 .md-b { font-weight: 640; color: var(--text); }
 .md-i { font-style: italic; }
@@ -159,7 +160,8 @@
 .md-details { border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); overflow: hidden; }
 .md-summary {
   display: flex; align-items: center; gap: 8px; padding: 10px var(--sp-4);
-  cursor: pointer; color: var(--text); user-select: none; font-size: var(--fs);
+  cursor: pointer; color: var(--text); user-select: none;
+  font-size: var(--fs-md); font-weight: 600; letter-spacing: -.01em;
 }
 .md-summary:hover { background: var(--surface-2); }
 .md-summary svg { transition: transform var(--t) var(--ease); color: var(--text-faint); }

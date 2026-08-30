@@ -40,7 +40,7 @@
   --sp-2:           8px;
   --sp-3:           12px;
   --sp-4:           16px;
-  --sp-5:           22px;
+  --sp-5:           24px;
   --sp-6:           32px;
   --sp-7:           48px;
 
@@ -216,4 +216,23 @@ a { color: inherit; }
   display: inline-block; width: 7px; height: 1.05em; margin-left: 2px;
   vertical-align: -0.16em; border-radius: 2px;
   background: var(--accent); animation: caret 1s steps(1) infinite;
+}
+
+/* ---- shipping-grade details ------------------------------------------- */
+::selection { background: var(--accent-line); color: var(--text); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; border-radius: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }
