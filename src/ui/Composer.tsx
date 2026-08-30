@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { I } from "./Icons";
-import { useApp } from "../lib/store";
+import { connOf, useApp } from "../lib/store";
 import { send, stopGeneration } from "../lib/agent";
 import { ingest } from "../lib/ingest";
 import { SKILLS } from "../lib/skills";
@@ -285,6 +285,13 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
         {plusBtn}
         <button className="icon-btn" data-active={menu === "tools"} onClick={() => setMenu(menu === "tools" ? null : "tools")}><I.tools size={16} /></button>
         <span className="grow" />
+        <button
+          className="model-chip"
+          title={`${settings.provider} · change model in settings`}
+          onClick={() => setUI({ modal: "settings" })}
+        >
+          {connOf(settings).model}
+        </button>
         <button className="icon-btn" title="Skills" data-active={menu === "knowledge"} onClick={() => setMenu(menu === "knowledge" ? null : "knowledge")}><I.knowledge size={16} /></button>
         {sendBtn}
 

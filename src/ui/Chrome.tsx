@@ -20,6 +20,9 @@ export function Sidebar() {
   const setUI = useApp((s) => s.setUI);
   const settings = useApp((s) => s.settings);
   const setSettings = useApp((s) => s.setSettings);
+  const patchChat = useApp((s) => s.patchChat);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
 
   useEffect(() => { document.documentElement.dataset.theme = settings.theme; }, [settings.theme]);
 
@@ -42,7 +45,27 @@ export function Sidebar() {
       <div className="side-scroll">
         {order.filter((id) => chats[id]).map((id) => (
           <div key={id} className="side-item" data-active={id === activeId} onClick={() => selectChat(id)}>
-            <span>{chats[id].title || "untitled"}</span>
+            {renaming === id ? (
+              <input
+                autoFocus
+                className="rename-in"
+                value={draft}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => { patchChat(id, (c) => { c.title = draft.trim() || c.title; }); setRenaming(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") setRenaming(null);
+                }}
+              />
+            ) : (
+              <span
+                title="double-click to rename"
+                onDoubleClick={(e) => { e.stopPropagation(); setDraft(chats[id].title || ""); setRenaming(id); }}
+              >
+                {chats[id].title || "untitled"}
+              </span>
+            )}
             <button className="icon-btn sm" style={{ marginLeft: "auto" }} onClick={(e) => { e.stopPropagation(); deleteChat(id); }}><I.trash size={12} /></button>
           </div>
         ))}
