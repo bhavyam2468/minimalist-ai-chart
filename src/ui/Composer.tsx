@@ -205,7 +205,7 @@ export function Composer({ chatId, threadId, inline, centered }: { chatId: strin
       onFocus={() => setActive(true)}
       onBlur={() => setActive(text.trim().length > 0)}
       spellCheck={false}
-      placeholder={inline ? "reply in thread" : undefined}
+      placeholder={inline ? "reply in thread" : "ask anything — @ mentions files"}
     />
   );
   const plusBtn = (

@@ -16,7 +16,7 @@ const defaultSettings = (): Settings => ({
   provider: "openai",
   providers: {
     openai: { apiKey: DEFAULT_KEY, model: "gpt-5.4" },
-    gemini: { apiKey: "", model: "gemini-flash-latest" },
+    gemini: { apiKey: "", model: "gemma-4-31b-it" },
     custom: { apiKey: "", model: "", baseUrl: "" },
   },
   theme: "dark",
@@ -41,10 +41,11 @@ export const PROVIDERS: Record<
   },
   gemini: {
     label: "gemini",
-    /* Google's OpenAI-compatible endpoint, so the same client speaks both. */
+    /* Google's OpenAI-compatible endpoint, so the same client speaks both.
+       Gemma 4 sits on the free tier even when flash quotas run out. */
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    defaultModel: "gemini-flash-latest",
-    fallbacks: ["gemini-3.6-flash"],
+    defaultModel: "gemma-4-31b-it",
+    fallbacks: ["gemma-4-26b-a4b-it", "gemini-flash-latest"],
     keyHint: "AIza…",
   },
   custom: {
@@ -56,11 +57,12 @@ export const PROVIDERS: Record<
   },
 };
 
-/* Gemini retires model names; saved settings pointing at a dead one would
-   404 forever. Swap them for the live alias at load time. */
+/* Gemini retires model names and quotas expire; saved settings pointing at
+   a dead or quota-bound name would 404/429 forever. Swap them for the live
+   free-tier default at load time. */
 const DEAD_GEMINI = new Set([
   "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-pro",
-  "gemini-1.5-flash", "gemini-1.5-pro",
+  "gemini-1.5-flash", "gemini-1.5-pro", "gemini-flash-latest", "gemini-3.6-flash",
 ]);
 
 /** Resolve the active connection for the chosen provider. */

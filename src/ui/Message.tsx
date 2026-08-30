@@ -328,7 +328,12 @@ export function Turn({ chat, node }: { chat: Chat; node: Node; threadId?: string
           <Markdown text={node.content} streaming={streaming} animate={streaming} />
         </ErrorBoundary>
       )}
-      {node.error && <div className="trace-out" style={{ color: "var(--err)" }}>{node.error}</div>}
+      {node.error && (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <div className="trace-out" style={{ color: "var(--err)", flex: 1 }}>{node.error}</div>
+          <button className="btn" style={{ flex: "none", marginTop: 2 }} title="Retry this response" onClick={() => !busy && regenerate(chat.id, node.id)}>retry</button>
+        </div>
+      )}
       <ArtifactChips chat={chat} node={node} />
       {!streaming && (
         <div className="acts">
