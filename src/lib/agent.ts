@@ -18,6 +18,7 @@ import { runTool } from "./run-tool";
 import { mcpToolDefs } from "./mcp";
 import { buildMessages, cleanContentForLlm } from "./messages";
 import { streamChat } from "./stream";
+import { lintToolCalls, needsCorrective, correctivePrompt } from "./llm-lint";
 import { compactChat } from "./compact";
 import type { ToolCallRecord } from "./types";
 
@@ -58,55 +59,6 @@ export const stopGeneration = (chatId: string) => {
     if (s.streamId === streamId) s.streamId = null;
   });
 };
-
-/* --------------------------------------------- tool-call self-repair ----
-   Gemini-compatible streams occasionally glue two calls into one record
-   ("edit_fileopen_canvas" with both arg blobs welded). Split them back at
-   the client, and when anything still fails, re-query the model with an
-   automated corrective prompt carrying the exact tool syntax. */
-
-function firstBalancedObject(s: string): [string, string] {
-  const start = s.indexOf("{");
-  if (start === -1) return ["", s];
-  let depth = 0, inStr = false, esc = false;
-  for (let i = start; i < s.length; i++) {
-    const ch = s[i];
-    if (esc) { esc = false; continue; }
-    if (ch === "\\") { esc = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (ch === "{") depth++;
-    if (ch === "}") { depth--; if (depth === 0) return [s.slice(start, i + 1), s.slice(i + 1)]; }
-  }
-  return ["", s];
-}
-
-function repairToolCalls(recs: ToolCallRecord[], known: Set<string>): ToolCallRecord[] {
-  const out: ToolCallRecord[] = [];
-  const parse = (s: string) => { try { return JSON.parse(s); } catch { return { _raw: s }; } };
-  for (const r of recs) {
-    if (known.has(r.name)) { out.push(r); continue; }
-    let pair: [string, string] | null = null;
-    for (const n1 of known) {
-      if (r.name.startsWith(n1) && known.has(r.name.slice(n1.length))) { pair = [n1, r.name.slice(n1.length)]; break; }
-    }
-    if (pair) {
-      const [a1, rest] = firstBalancedObject(r.argsRaw);
-      const tail = rest.trim();
-      const a2 = tail.startsWith("{") ? firstBalancedObject(tail)[0] : "";
-      out.push({ ...r, name: pair[0], args: parse(a1 || r.argsRaw), argsRaw: a1 || r.argsRaw });
-      out.push({ ...r, id: r.id + ":2", name: pair[1], args: parse(a2 || "{}"), argsRaw: a2 || "{}" });
-    } else {
-      out.push(r);
-    }
-  }
-  return out;
-}
-
-function buildCorrective(err: any, tools: any[]): string {
-  const syntax = tools.map((t: any) => `- ${t.name} — ${t.description} args: ${JSON.stringify(t.parameters)}`).join("\n");
-  return `[auto-recovery] Your previous tool attempt was rejected: ${String(err?.body ?? err?.message ?? err).slice(0, 400)}\nRe-issue the intended action now. Rules: exactly one tool per call; tool names verbatim from the list below; arguments valid JSON matching the schema. Continue the task without addressing this note.\n\nAvailable tools:\n${syntax}`;
-}
 
 export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) {
   const st = S();
@@ -164,7 +116,7 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
         const hadTools = (S().chats[chatId].nodes[id]?.toolCalls ?? []).length > 0;
         if (autoRetries < 2 && hadTools && /400|invalid/i.test(`${e?.status ?? ""} ${e?.message ?? ""}`)) {
           autoRetries++;
-          corrective = buildCorrective(e, tools);
+          corrective = correctivePrompt([{ rule: "api-reject", message: String(e?.body ?? e?.message ?? e).slice(0, 400) }], tools);
           continue;
         }
         throw e;
@@ -182,9 +134,10 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
         try { args = t.args ? JSON.parse(t.args) : {}; } catch { args = { _raw: t.args }; }
         return { id: t.id, name: t.name, args, argsRaw: t.args || "{}", status: "running" as const };
       });
-      /* split glued calls (edit_fileopen_canvas -> edit_file + open_canvas) */
+      /* lint model-emitted calls: split glued records, report the rest */
       const known = new Set(tools.map((t) => t.name));
-      const records = repairToolCalls(rawRecords, known);
+      const linted = lintToolCalls(rawRecords, { known, tools });
+      const records = linted.records;
       S().updateNode(chatId, id, (n) => ({ toolCalls: [...(n.toolCalls || []), ...records] }));
 
       // Append inline tool call markers into accumulatedContent so collapsible appears right after preceding text!
@@ -239,12 +192,12 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
 
       if (ctl.signal.aborted) break;
 
-      /* anything still unrunnable gets the automated corrective prompt on
-         the next hop, carrying the exact tool syntax */
-      const bad = records.filter((r) => !known.has(r.name));
-      if (bad.length && autoRetries < 2) {
+      /* anything the linter could not fix gets the automated corrective
+         prompt on the next hop, carrying the exact tool syntax */
+      const open = needsCorrective(linted.diags);
+      if (open.length && autoRetries < 2) {
         autoRetries++;
-        corrective = buildCorrective(new Error(`unknown tool name(s): ${bad.map((r) => r.name).join(", ")}`), tools);
+        corrective = correctivePrompt(open, tools);
       }
       // continue the loop so the model can use the results
     }

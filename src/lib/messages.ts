@@ -9,10 +9,12 @@ A thread is a detour, not a fork of history: everything up to the anchor node
 is shared, then a marker explains that the rest is a side conversation that
 never re-enters the main one.
  */
-import { mainPath, threadPath } from "./store";
+import { mainPath, threadPath, useApp } from "./store";
 import { systemPrompt } from "./prompt";
 import { baseToolDefs } from "./tool-defs";
-import type { Chat, Node, ToolCallRecord } from "./types";
+import { mcpToolDefs } from "./mcp";
+import { isSaneCall } from "./llm-lint";
+import type { Chat, Node } from "./types";
 
 export function cleanContentForLlm(text?: string | null): string {
   return (text || "")
@@ -37,10 +39,9 @@ function nodeToMessage(c: Chat, n: Node): any[] {
   const out: any[] = [];
   /* Providers occasionally merge two calls into one malformed record
      (concatenated name, glued args). Resending that poisons the next hop
-     with a 400, so history only carries calls that name a declared tool. */
-  const declared = new Set(baseToolDefs().map((t) => t.name));
-  const sane = (t: ToolCallRecord) => /^[\w-]{1,64}$/.test(t.name) && (declared.has(t.name) || t.name.startsWith("mcp__"));
-  const calls = (n.toolCalls || []).filter((t) => t.status !== "running" && sane(t));
+     with a 400, so history only carries calls the linter deems sane. */
+  const known = new Set([...baseToolDefs(), ...mcpToolDefs(useApp.getState().settings.mcp)].map((t) => t.name));
+  const calls = (n.toolCalls || []).filter((t) => t.status !== "running" && isSaneCall(t, known));
   const cleanContent = cleanContentForLlm(n.content);
   if (calls.length) {
     out.push({
