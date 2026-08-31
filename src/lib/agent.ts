@@ -101,10 +101,12 @@ export async function generate({ chatId, parentId, threadId, nodeId }: GenOpts) 
       const hopBase = accumulatedContent;
       const out = await streamChat(cleaned, tools, (delta) => {
         onDelta(hopBase + delta);
-      }, ctl.signal);
+      }, ctl.signal, (r) => {
+        S().updateNode(chatId, id, { reasoning: r });
+      });
 
       accumulatedContent = hopBase + (out.content || "");
-      S().updateNode(chatId, id, { content: accumulatedContent });
+      S().updateNode(chatId, id, { content: accumulatedContent, reasoning: out.reasoning });
 
       if (ctl.signal.aborted) break;
 

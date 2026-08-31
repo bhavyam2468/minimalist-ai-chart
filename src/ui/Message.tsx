@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../md/Markdown";
 import { I } from "./Icons";
 import { siblings, threadPath, threadsFor, useApp } from "../lib/store";
@@ -28,6 +28,27 @@ function CopyBtn({ text }: { text: string }) {
       label={ok ? "Copied" : "Copy"}
       onClick={handleCopy}
     />
+  );
+}
+
+/* Chain-of-thought. While the model thinks, the trace flows into a
+   partially-collapsed peek (masked fade, auto-scroll). The moment the
+   answer starts/completes it collapses to a one-line "thought" row that
+   expands on click. */
+function Thinking({ text, live }: { text: string; live: boolean }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (live && box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [text, live]);
+  return (
+    <div className="think" data-live={live} data-open={open}>
+      <button className="think-head" onClick={() => !live && setOpen((o) => !o)}>
+        {live ? <span className="trace-spinner sm" /> : <span className="think-caret"><I.right size={11} /></span>}
+        <span>{live ? "thinking" : "thought"}</span>
+      </button>
+      <div className="think-body" ref={box}>{text}</div>
+    </div>
   );
 }
 
@@ -317,10 +338,11 @@ export function Turn({ chat, node }: { chat: Chat; node: Node; threadId?: string
 
   return (
     <div className="turn" data-node={node.id}>
+      {node.reasoning && <Thinking text={node.reasoning} live={streaming} />}
       <ErrorBoundary name="Tool trace">
         <ToolTrace node={node} />
       </ErrorBoundary>
-      {!node.content && streaming && !node.toolCalls?.length && (
+      {!node.content && streaming && !node.toolCalls?.length && !node.reasoning && (
         <div className="thinking"><i /><i /><i /></div>
       )}
       {node.content && (

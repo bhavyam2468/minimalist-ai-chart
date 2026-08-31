@@ -18,7 +18,7 @@ import { useApp, uid, connOf } from "./store";
 
 const S = () => useApp.getState();
 
-export interface StreamOut { content: string; toolCalls: { id: string; name: string; args: string }[]; }
+export interface StreamOut { content: string; toolCalls: { id: string; name: string; args: string }[]; reasoning?: string; }
 
 function extractInlineToolCalls(text: string): { id: string; name: string; args: string }[] {
   const calls: { id: string; name: string; args: string }[] = [];
@@ -67,7 +67,8 @@ export async function streamChat(
   messages: any[],
   tools: any[],
   onDelta: (t: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onReasoning?: (t: string) => void
 ): Promise<StreamOut> {
   const conn = connOf(S().settings);
   const { temperature } = S().settings;
@@ -118,6 +119,7 @@ export async function streamChat(
   const dec = new TextDecoder();
   let buf = "";
   let content = "";
+  let reasoning = "";
   const calls: Record<number, { id: string; name: string; args: string }> = {};
 
   while (true) {
@@ -135,6 +137,12 @@ export async function streamChat(
       try { j = JSON.parse(payload); } catch { continue; }
       const d = j.choices?.[0]?.delta;
       if (!d) continue;
+      /* chain-of-thought channel: reasoning_content is the de-facto field
+         across OpenAI-compatible providers (DeepSeek, Qwen, vLLM, OpenRouter
+         passthrough); `reasoning` is the common alias. It streams before
+         content begins. */
+      const rd = d.reasoning_content ?? d.reasoning;
+      if (rd) { reasoning += rd; onReasoning?.(reasoning); }
       if (d.content) { content += d.content; onDelta(content); }
       for (const tc of d.tool_calls ?? []) {
         const i = tc.index ?? 0;
@@ -150,9 +158,9 @@ export async function streamChat(
   if (!resultCalls.length && content) {
     const inlineCalls = extractInlineToolCalls(content);
     if (inlineCalls.length) {
-      return { content, toolCalls: inlineCalls };
+      return { content, toolCalls: inlineCalls, reasoning: reasoning || undefined };
     }
   }
 
-  return { content, toolCalls: resultCalls };
+  return { content, toolCalls: resultCalls, reasoning: reasoning || undefined };
 }

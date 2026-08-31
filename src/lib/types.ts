@@ -76,6 +76,7 @@ export interface Node {
   hidden?: boolean;
   summary?: string;
   error?: string;
+  reasoning?: string;
 }
 
 export interface Thread {
