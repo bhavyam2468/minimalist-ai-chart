@@ -20,6 +20,23 @@ const S = () => useApp.getState();
 
 export interface StreamOut { content: string; toolCalls: { id: string; name: string; args: string }[]; reasoning?: string; }
 
+/* Some providers (Gemma on the Gemini endpoint among them) stream the
+   chain-of-thought inside `content`, wrapped in a think tag, instead of on
+   the reasoning_content channel. Split a leading block out so it routes to
+   the thinking UI rather than the answer. */
+const THINK_TAG = "think|thinking|reasoning|thought|antthinking";
+function splitThink(raw: string): { reasoning: string; body: string } {
+  const m = raw.match(new RegExp(`^\\s*<(?:${THINK_TAG})>`, "i"));
+  if (!m) return { reasoning: "", body: raw };
+  const closeRe = new RegExp(`</(?:${THINK_TAG})>`, "i");
+  const close = raw.search(closeRe);
+  if (close === -1) return { reasoning: raw.slice(m[0].length), body: "" };
+  return {
+    reasoning: raw.slice(m[0].length, close),
+    body: raw.slice(close).replace(closeRe, ""),
+  };
+}
+
 function extractInlineToolCalls(text: string): { id: string; name: string; args: string }[] {
   const calls: { id: string; name: string; args: string }[] = [];
 
@@ -118,6 +135,7 @@ export async function streamChat(
   const reader = res.body!.getReader();
   const dec = new TextDecoder();
   let buf = "";
+  let raw = "";
   let content = "";
   let reasoning = "";
   const calls: Record<number, { id: string; name: string; args: string }> = {};
@@ -143,7 +161,13 @@ export async function streamChat(
          content begins. */
       const rd = d.reasoning_content ?? d.reasoning;
       if (rd) { reasoning += rd; onReasoning?.(reasoning); }
-      if (d.content) { content += d.content; onDelta(content); }
+      if (d.content) {
+        raw += d.content;
+        const sp = splitThink(raw);
+        if (sp.reasoning) { reasoning = sp.reasoning; onReasoning?.(reasoning); }
+        content = sp.body;
+        onDelta(content);
+      }
       for (const tc of d.tool_calls ?? []) {
         const i = tc.index ?? 0;
         const acc = (calls[i] ??= { id: tc.id || uid("call"), name: "", args: "" });
