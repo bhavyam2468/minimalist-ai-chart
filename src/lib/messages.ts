@@ -11,7 +11,8 @@ never re-enters the main one.
  */
 import { mainPath, threadPath } from "./store";
 import { systemPrompt } from "./prompt";
-import type { Chat, Node } from "./types";
+import { baseToolDefs } from "./tool-defs";
+import type { Chat, Node, ToolCallRecord } from "./types";
 
 export function cleanContentForLlm(text?: string | null): string {
   return (text || "")
@@ -34,7 +35,12 @@ function nodeToMessage(c: Chat, n: Node): any[] {
     return [{ role: "user", content: text }];
   }
   const out: any[] = [];
-  const calls = (n.toolCalls || []).filter((t) => t.status !== "running");
+  /* Providers occasionally merge two calls into one malformed record
+     (concatenated name, glued args). Resending that poisons the next hop
+     with a 400, so history only carries calls that name a declared tool. */
+  const declared = new Set(baseToolDefs().map((t) => t.name));
+  const sane = (t: ToolCallRecord) => /^[\w-]{1,64}$/.test(t.name) && (declared.has(t.name) || t.name.startsWith("mcp__"));
+  const calls = (n.toolCalls || []).filter((t) => t.status !== "running" && sane(t));
   const cleanContent = cleanContentForLlm(n.content);
   if (calls.length) {
     out.push({
